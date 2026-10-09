@@ -1,8 +1,25 @@
 <?php
 declare(strict_types=1);
 
+function cookieSegura(): bool
+{
+    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $forwardedProto = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+    $forwardedProtoHttps = $forwardedProto === 'https';
+    return $https || $forwardedProtoHttps || (($_SERVER['SERVER_PORT'] ?? '') === '443');
+}
+
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path' => '/',
+    'domain' => '',
+    'secure' => cookieSegura(),
+    'httponly' => true,
+    'samesite' => 'Lax',
+]);
+
 session_start();
-define('DEV_MODE', true);
+define('DEV_MODE', filter_var(getenv('KION_DEV_MODE') ?: false, FILTER_VALIDATE_BOOL));
 $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 
 function responderInicioSesion(bool $ok, string $message, ?string $redirect = null): never
@@ -34,12 +51,6 @@ function obtenerDestinoUsuario(array $usuario): string
         return 'src/php/modulos/home/dashboard_gerente.php'; // Ajusta esto si el gerente/cajero tienen otro panel
     }
     return 'src/php/componentes/catalogo.php';
-}
-
-function cookieSegura(): bool
-{
-    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
 }
 
 function borrarCookieRecordarme(): void
