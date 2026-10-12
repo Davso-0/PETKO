@@ -90,20 +90,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KION | Crear cuenta</title>
+    <title>PETKO | Crear cuenta</title>
     <style>
         :root {
-            --gold: #c9a444;
-            --gold-light: #e6c260;
-            --bg-card: rgba(12, 12, 12, 0.65);
-            --field-bg: rgba(255, 255, 255, 0.05);
-            --field-border: rgba(255, 255, 255, 0.15);
-            --text-main: #fff;
-            --text-muted: #a0a0a0;
-            --error-red: #efaaa5;
-            --error-bg: rgba(239, 170, 165, 0.12);
-            --success-green: #8bd19a;
-            --success-bg: rgba(139, 209, 154, 0.12);
+            /* Paleta Oficial PETKO */
+            --petko-yellow: #E5C051;
+            --petko-yellow-hover: #D4A72C;
+            --petko-blue: #1B6CA8;
+            --petko-navy: #0B2545;
+            
+            --bg-card: rgba(11, 22, 38, 0.78);
+            --field-bg: rgba(255, 255, 255, 0.07);
+            --field-border: rgba(255, 255, 255, 0.18);
+            --text-main: #FFFFFF;
+            --text-muted: #A3B8CC;
+            --error-red: #FF6B6B;
+            --error-bg: rgba(255, 107, 107, 0.15);
+            --success-green: #22C55E;
+            --success-bg: rgba(34, 197, 94, 0.15);
         }
         * { box-sizing: border-box; }
         html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
@@ -114,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             place-items: center;
             overflow: hidden;
             padding: 8px 14px;
-            background: #000;
+            background: #071A32;
             color: var(--text-main);
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             animation: pageEnter .4s ease backwards;
@@ -122,70 +126,164 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         body.page-exit { animation: pageExit .28s ease both; }
         #videoFondo, .velo { position: fixed; inset: 0; width: 100%; height: 100%; }
         #videoFondo { z-index: -2; object-fit: cover; }
-        .velo { z-index: -1; background: rgba(0, 0, 0, .65); }
+        .velo { z-index: -1; background: rgba(7, 26, 50, 0.65); }
+        
+        /* Botón Flotante Regresar */
+        .btn-back-home {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            height: 46px;
+            width: 46px;
+            padding: 0 13px;
+            border: 1px solid rgba(229, 192, 81, 0.35);
+            border-radius: 50px;
+            background: rgba(11, 22, 38, 0.85);
+            color: var(--petko-yellow);
+            text-decoration: none;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            overflow: hidden;
+            transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+            white-space: nowrap;
+        }
+        .btn-back-home svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2.2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            transition: transform 0.25s ease;
+        }
+        .btn-back-home span {
+            font-size: 13px;
+            font-weight: 700;
+            opacity: 0;
+            transform: translateX(-8px);
+            transition: opacity 0.25s ease 0.05s, transform 0.25s ease 0.05s;
+            color: #FFFFFF;
+        }
+        .btn-back-home:hover {
+            width: 155px;
+            border-color: var(--petko-yellow);
+            background: rgba(11, 22, 38, 0.95);
+            box-shadow: 0 10px 25px rgba(229, 192, 81, 0.25);
+        }
+        .btn-back-home:hover svg { transform: translateX(-2px); }
+        .btn-back-home:hover span { opacity: 1; transform: translateX(0); }
+
+        /* Tarjeta Principal y Efectos */
         .auth-card {
             width: min(420px, 100%);
             max-height: calc(100svh - 16px);
-            padding: 20px 24px;
-            border: 1px solid rgba(201, 164, 68, .25);
-            border-radius: 16px;
+            padding: 24px 28px;
+            border: 1px solid rgba(229, 192, 81, 0.35);
+            border-radius: 24px;
             background: var(--bg-card);
-            box-shadow: 0 20px 50px rgba(0, 0, 0, .6);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 24px rgba(27, 108, 168, 0.25);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.35s ease;
         }
-        .brand-header { margin-bottom: 10px; text-align: center; }
-        .brand-logo { margin: 0; color: #fff; font-size: 26px; font-weight: 800; letter-spacing: 3px; line-height: 1.1; }
-        .brand-subtitle { color: var(--text-muted); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; }
-        .form-title { margin: 0 0 11px; color: var(--gold-light); font-size: 18px; text-align: center; }
+        .auth-card:hover {
+            border-color: rgba(229, 192, 81, 0.55);
+            box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.85), 0 0 32px rgba(229, 192, 81, 0.18);
+        }
+        
+        .brand-header { margin-bottom: 12px; text-align: center; }
+        .brand-header img {
+            max-width: 190px;
+            width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+            filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5));
+            transition: transform 0.3s ease;
+        }
+        .brand-header img:hover { transform: scale(1.03); }
+        
+        .form-title { margin: 0 0 11px; color: var(--petko-yellow); font-size: 18px; font-weight: 700; text-align: center; }
         .name-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .form-group { min-width: 0; margin-bottom: 8px; }
-        label { display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 11px; }
+        label { display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 11px; transition: color 0.2s ease; }
+        .form-group:focus-within label { color: var(--petko-yellow); }
+
+        /* Inputs Dinámicos */
         input[type="email"], input[type="password"], input[type="text"] {
             width: 100%;
             min-width: 0;
             padding: 9px 12px;
             border: 1px solid var(--field-border);
-            border-radius: 8px;
+            border-radius: 9px;
             outline: none;
             background: var(--field-bg);
             color: var(--text-main);
             font: inherit;
             font-size: 13px;
+            transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.22s ease, background-color 0.22s ease, box-shadow 0.22s ease;
         }
-        input:focus { border-color: var(--gold-light); box-shadow: 0 0 0 2px rgba(201, 164, 68, .22); }
+        input[type="email"]:hover, input[type="password"]:hover, input[type="text"]:hover {
+            border-color: rgba(229, 192, 81, 0.5);
+            background: rgba(255, 255, 255, 0.10);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        }
+        input:focus {
+            border-color: var(--petko-yellow);
+            background: rgba(255, 255, 255, 0.12);
+            transform: translateY(-2px) scale(1.01);
+            box-shadow: 0 0 0 3px rgba(229, 192, 81, 0.35), 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
         input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
             -webkit-text-fill-color: var(--text-main);
-            box-shadow: 0 0 0 1000px #191815 inset;
+            box-shadow: 0 0 0 1000px #0B2545 inset;
             transition: background-color 9999s ease-out;
         }
+        
         .input-wrapper { position: relative; }
         .input-wrapper input { padding-right: 44px; }
-        .toggle-password { position: absolute; top: 50%; right: 6px; display: grid; width: 32px; height: 32px; padding: 0; transform: translateY(-50%); place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; }
-        .toggle-password:hover { color: var(--gold-light); }
+        .toggle-password { position: absolute; top: 50%; right: 6px; display: grid; width: 32px; height: 32px; padding: 0; transform: translateY(-50%); place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease; }
+        .toggle-password:hover { color: var(--petko-yellow); transform: translateY(-50%) scale(1.15) rotate(-5deg); }
         .toggle-password svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+        
         .password-help { margin: 1px 0 8px; }
         .password-help p { margin: 0 0 5px; color: var(--text-muted); font-size: 10px; }
         .password-rules { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-        .password-rules li { padding: 4px 7px; border: 1px solid rgba(255, 255, 255, .11); border-radius: 999px; background: rgba(255, 255, 255, .035); color: #aaa; font-size: 9px; line-height: 1.2; transition: color .18s, border-color .18s, background-color .18s; }
+        .password-rules li { padding: 4px 7px; border: 1px solid rgba(255, 255, 255, .15); border-radius: 999px; background: rgba(255, 255, 255, .04); color: var(--text-muted); font-size: 9px; line-height: 1.2; transition: all .18s; cursor: default; }
         .password-rules li::before { margin-right: 4px; content: '○'; color: #777; }
-        .password-rules li.valid { border-color: rgba(139, 209, 154, .32); background: rgba(139, 209, 154, .08); color: var(--success-green); }
+        .password-rules li.valid { border-color: rgba(34, 197, 94, .4); background: rgba(34, 197, 94, .12); color: var(--success-green); }
         .password-rules li.valid::before { content: '✓'; color: var(--success-green); }
+        .password-rules li:hover { transform: translateY(-1px); border-color: rgba(229, 192, 81, 0.4); color: #FFFFFF; }
+        
         .field-error { display: none; margin: -4px 0 7px; color: var(--error-red); font-size: 10px; }
         .field-error.visible { display: block; }
-        .check-row { display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 10px; color: var(--text-muted); font-size: 10px; line-height: 1.35; }
-        .check-row input { width: 14px; height: 14px; flex: 0 0 auto; margin: 0; accent-color: var(--gold); }
-        .check-row label { margin: 0; color: inherit; font-size: inherit; }
-        .btn-submit { width: 100%; min-height: 39px; border: 0; border-radius: 8px; background: linear-gradient(135deg, #e6c260 0%, #c9a444 100%); color: #17130a; cursor: pointer; font: inherit; font-size: 13px; font-weight: 750; transition: box-shadow .2s, transform .2s; }
-        .btn-submit:hover { box-shadow: 0 4px 15px rgba(201, 164, 68, .35); transform: translateY(-1px); }
+        
+        .check-row { display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 10px; color: var(--text-muted); font-size: 10px; line-height: 1.35; cursor: pointer; }
+        .check-row input { width: 14px; height: 14px; flex: 0 0 auto; margin: 0; accent-color: var(--petko-yellow); cursor: pointer; }
+        .check-row label { margin: 0; color: inherit; font-size: inherit; cursor: pointer; transition: color 0.2s ease; }
+        .check-row:hover label { color: var(--petko-yellow); }
+        
+        .btn-submit { width: 100%; min-height: 40px; border: 0; border-radius: 9px; background: linear-gradient(135deg, var(--petko-yellow) 0%, var(--petko-yellow-hover) 100%); color: #071A32; cursor: pointer; font: inherit; font-size: 14px; font-weight: 800; box-shadow: 0 6px 18px rgba(229, 192, 81, 0.25); transition: all .22s ease; }
+        .btn-submit:hover { box-shadow: 0 8px 22px rgba(229, 192, 81, 0.4); transform: translateY(-2px); }
         .btn-submit:disabled { cursor: wait; opacity: .7; transform: none; }
+        
         .form-footer { margin-top: 11px; color: var(--text-muted); font-size: 11px; text-align: center; }
-        .form-footer a { color: var(--gold-light); font-weight: 700; text-decoration: none; }
-        .form-footer a:hover { color: #f2d77f; text-decoration: underline; }
+        .form-footer a { color: var(--petko-yellow); font-weight: 700; text-decoration: none; transition: color 0.2s ease; }
+        .form-footer a:hover { color: #FFFFFF; text-decoration: underline; }
+        
         .notice { display: none; margin: 0 0 9px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; font-size: 11px; line-height: 1.35; }
         .notice.visible { display: block; animation: fadeIn .2s ease both; }
-        .notice.error { border-color: rgba(239, 170, 165, .35); background: var(--error-bg); color: var(--error-red); }
-        .notice.success { border-color: rgba(139, 209, 154, .35); background: var(--success-bg); color: var(--success-green); }
+        .notice.error { border-color: rgba(255, 107, 107, .35); background: var(--error-bg); color: var(--error-red); }
+        .notice.success { border-color: rgba(34, 197, 94, .35); background: var(--success-bg); color: var(--success-green); }
+        
         @keyframes pageEnter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pageExit { to { opacity: 0; transform: translateY(-5px); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
@@ -202,6 +300,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
+    <!-- Botón Flotante Regresar al Inicio -->
+    <a href="src/php/modulos/home/home.php" class="btn-back-home" title="Volver al inicio" aria-label="Volver al inicio">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>Volver al inicio</span>
+    </a>
+
     <video id="videoFondo" autoplay muted loop playsinline>
         <source src="src/videoEJEMPLO/22.mp4" type="video/mp4">
     </video>
@@ -209,8 +316,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <main class="auth-card">
         <header class="brand-header">
-            <h1 class="brand-logo">KION</h1>
-            <div class="brand-subtitle">Vet &amp; Agropecuario</div>
+            <img src="src/img/logos/4_fondo.png" alt="PETKO Veterinaria &amp; Ganadería">
         </header>
         <h2 class="form-title">Crear una cuenta</h2>
         <div class="notice" id="registerNotice" role="status" aria-live="polite"></div>
@@ -228,7 +334,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div class="form-group">
                 <label for="email">Correo electrónico</label>
-                <input id="email" name="email" type="email" placeholder="usuario@kion.com" autocomplete="email" required>
+                <input id="email" name="email" type="email" placeholder="usuario@petko.com" autocomplete="email" required>
             </div>
             <div class="form-group">
                 <label for="password">Contraseña</label>

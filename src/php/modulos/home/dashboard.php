@@ -405,8 +405,7 @@ try {
     <aside class="sidebar">
         <button class="sidebar-collapse-btn" id="btnCollapse" title="Colapsar menú"><i class="ph ph-caret-left"></i></button>
         <div class="brand">
-            <i class="ph-fill ph-paw-print"></i>
-            <div class="brand-text"><div>KION</div><div class="brand-sub" data-i18n="brand_sub">Administración General</div></div>
+            <img src="../../../img/petko%20loso%20sin%20fondo.png" alt="PETKO" style="max-height: 45px; width: auto; object-fit: contain;">
         </div>
         <nav class="nav-menu">
             <div class="nav-section-title" data-i18n="nav_section_panel">Panel</div>
