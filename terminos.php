@@ -12,11 +12,12 @@ $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
     <title>KION | Términos, condiciones y privacidad</title>
     <style>
         :root {
-            color-scheme: dark;
-            --gold: #c9a444;
-            --gold-light: #e6c260;
-            --text-main: #fff;
-            --text-muted: #c1c1c1;
+            color-scheme: light;
+            --green-primary: #16a34a;
+            --green-hover: #15803d;
+            --green-glow: rgba(22, 163, 74, .25);
+            --text-main: #0f172a;
+            --text-muted: #64748b;
         }
         * { box-sizing: border-box; }
         html, body { width: 100%; min-height: 100%; margin: 0; }
@@ -27,13 +28,13 @@ $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
             place-items: center;
             padding: 20px;
             overflow: hidden;
-            background: #000;
+            background: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 50%, #e0f2fe 100%);
             color: var(--text-main);
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
         }
         #videoFondo, .velo { position: fixed; inset: 0; width: 100%; height: 100%; }
-        #videoFondo { z-index: 0; object-fit: cover; }
-        .velo { z-index: 1; background: rgba(0, 0, 0, .7); }
+        #videoFondo { z-index: 0; object-fit: cover; display: none; }
+        .velo { z-index: 1; background: transparent; }
         .terms-card {
             position: relative;
             z-index: 2;
@@ -43,33 +44,34 @@ $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
             max-height: calc(100svh - 40px);
             flex-direction: column;
             padding: 28px 32px;
-            border: 1px solid rgba(201, 164, 68, .3);
+            border: 1px solid rgba(255, 255, 255, .9);
             border-radius: 18px;
-            background: rgba(12, 12, 12, .85);
-            box-shadow: 0 25px 60px rgba(0, 0, 0, .7);
+            background: rgba(255, 255, 255, .85);
+            color: var(--text-main);
+            box-shadow: 0 20px 50px rgba(15, 23, 42, .08), 0 2px 6px rgba(15, 23, 42, .04);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
         }
         .brand-header { flex: 0 0 auto; margin-bottom: 17px; text-align: center; }
-        .brand-logo { margin: 0 0 2px; font-size: 26px; font-weight: 800; letter-spacing: 3px; }
+        .brand-logo { margin: 0 0 2px; color: #0f172a; font-family: 'Fredoka', sans-serif; font-size: 28px; font-weight: 700; letter-spacing: 2px; }
         .brand-subtitle { color: var(--text-muted); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; }
-        h2 { margin: 0 0 16px; color: var(--gold-light); font-size: clamp(19px, 3vw, 24px); line-height: 1.3; text-align: center; }
+        h2 { margin: 0 0 16px; color: var(--green-hover); font-size: clamp(19px, 3vw, 24px); line-height: 1.3; text-align: center; }
         .terms-content {
             min-height: 0;
             max-height: 60vh;
             overflow-y: auto;
             padding-right: 12px;
-            color: #e8e8e8;
+            color: var(--text-main);
             font-size: 14px;
             line-height: 1.7;
-            scrollbar-color: var(--gold) rgba(255, 255, 255, .05);
+            scrollbar-color: var(--green-primary) #f1f5f9;
             scrollbar-width: thin;
         }
         .terms-content::-webkit-scrollbar { width: 6px; }
-        .terms-content::-webkit-scrollbar-thumb { background: #c9a444; border-radius: 10px; }
-        .terms-content::-webkit-scrollbar-track { background: rgba(255, 255, 255, .05); }
+        .terms-content::-webkit-scrollbar-thumb { background: var(--green-primary); border-radius: 10px; }
+        .terms-content::-webkit-scrollbar-track { background: #f1f5f9; }
         .terms-content section { margin: 0 0 22px; }
-        .terms-content h3 { margin: 0 0 8px; color: var(--gold-light); font-size: 15px; line-height: 1.45; }
+        .terms-content h3 { margin: 0 0 8px; color: var(--green-hover); font-size: 15px; line-height: 1.45; }
         .terms-content p { margin: 0 0 9px; }
         .terms-content ul { margin: 0 0 10px; padding-left: 22px; }
         .terms-content li { margin-bottom: 5px; }
@@ -79,14 +81,14 @@ $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
             padding: 10px 22px;
             border: 0;
             border-radius: 8px;
-            background: linear-gradient(135deg, #e6c260 0%, #c9a444 100%);
-            color: #17130a;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: #fff;
             cursor: pointer;
             font: inherit;
             font-weight: 750;
             text-decoration: none;
         }
-        .terms-button:hover { filter: brightness(1.08); }
+        .terms-button:hover { box-shadow: 0 8px 25px rgba(22, 163, 74, .35); filter: brightness(1.04); }
         @media (max-width: 540px) {
             body { padding: 10px; }
             .terms-card { width: 100%; max-height: calc(100vh - 20px); max-height: calc(100svh - 20px); padding: 20px 18px; }
