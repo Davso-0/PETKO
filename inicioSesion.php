@@ -281,20 +281,33 @@ if ($metodoPost) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KION | Iniciar sesión</title>
+    <title>PETKO | Iniciar sesión</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
     <style>
         :root {
-            --gold: #c9a444;
-            --gold-light: #e6c260;
-            --bg-card: rgba(12, 12, 12, 0.65);
-            --field-bg: rgba(255, 255, 255, 0.05);
-            --field-border: rgba(255, 255, 255, 0.15);
-            --text-main: #fff;
-            --text-muted: #a0a0a0;
-            --error-red: #efaaa5;
-            --error-bg: rgba(239, 170, 165, 0.12);
-            --success-green: #8bd19a;
-            --success-bg: rgba(139, 209, 154, 0.12);
+            --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 50%, #e0f2fe 100%);
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --card-border: rgba(255, 255, 255, 0.9);
+            --green-primary: #16a34a;
+            --green-hover: #15803d;
+            --green-glow: rgba(22, 163, 74, 0.25);
+            --field-bg: rgba(248, 250, 252, 0.8);
+            --field-border: #cbd5e1;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --error-red: #dc2626;
+            --error-bg: #fef2f2;
+            --success-green: #16a34a;
+            --success-bg: #f0fdf4;
+            --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+            --font-brand: 'Fredoka', sans-serif;
+            --bg-main: #f8fafc;
+            --gold: var(--green-primary);
+            --gold-light: var(--green-hover);
+            --bg-card: var(--card-bg);
         }
         * { box-sizing: border-box; }
         html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
@@ -409,17 +422,86 @@ if ($metodoPost) {
         }
         @media (max-width: 400px) { .auth-card { padding-right: 21px; padding-left: 21px; } }
         @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+        html, body { background: var(--bg-main); }
+        body { position: relative; isolation: isolate; color: var(--text-main); font-family: var(--font-main); }
+        input, button { font-family: var(--font-main); }
+        #videoFondo, .velo { display: none; }
+        .bg-viewport { position: fixed; z-index: -1; inset: 0; overflow: hidden; background: var(--bg-gradient); pointer-events: none; }
+        .bg-viewport::before, .bg-viewport::after { position: absolute; width: min(58vw, 680px); aspect-ratio: 1; border-radius: 50%; content: ''; filter: blur(60px); opacity: .85; animation: floatGlow 16s ease-in-out infinite alternate; }
+        .bg-viewport::before { top: -18%; left: -10%; background: radial-gradient(circle, #dcfce7 0%, rgba(220, 252, 231, .58) 35%, transparent 70%); }
+        .bg-viewport::after { right: -10%; bottom: -22%; background: radial-gradient(circle, #e0f2fe 0%, rgba(224, 242, 254, .7) 35%, transparent 70%); animation-delay: -8s; }
+        .bg-orb { position: absolute; top: 38%; left: 56%; width: min(34vw, 390px); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(187, 247, 208, .68), rgba(220, 252, 231, .18) 52%, transparent 72%); filter: blur(60px); animation: floatGlow 20s ease-in-out -4s infinite alternate; }
+        .floating-paw { position: absolute; bottom: -50px; width: 34px; height: 34px; fill: #16a34a; opacity: .12; animation: floatUp 18s linear infinite; }
+        .floating-paw:nth-of-type(2) { left: 12%; animation-delay: -3s; }
+        .floating-paw:nth-of-type(3) { left: 33%; width: 24px; height: 24px; animation-delay: -12s; }
+        .floating-paw:nth-of-type(4) { left: 69%; width: 29px; height: 29px; animation-delay: -7s; }
+        .floating-paw:nth-of-type(5) { left: 88%; width: 22px; height: 22px; animation-delay: -15s; }
+        .floating-paw:nth-of-type(6) { left: 49%; width: 20px; height: 20px; animation-delay: -10s; }
+        @keyframes floatGlow { from { transform: translate3d(-3%, -2%, 0) scale(.95); } to { transform: translate3d(5%, 4%, 0) scale(1.08); } }
+        @keyframes floatUp { 0% { transform: translate3d(0, 0, 0) rotate(-12deg); opacity: 0; } 12% { opacity: .12; } 82% { opacity: .12; } 100% { transform: translate3d(30px, -115vh, 0) rotate(24deg); opacity: 0; } }
+        .auth-card { position: relative; z-index: 1; width: min(420px, 100%); max-height: calc(100svh - 24px); overflow-y: auto; border: 1px solid var(--card-border); border-radius: 24px; background: var(--card-bg); box-shadow: 0 20px 50px rgba(15, 23, 42, .08), 0 2px 6px rgba(15, 23, 42, .04); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+        .brand-logo { color: #0f172a; }
+        .brand-badge { background: rgba(22, 163, 74, .1); border-color: rgba(22, 163, 74, .28); color: var(--green-hover); }
+        .form-title, .dialog-head h2, .role-picker h2 { color: #15803d; }
+        label, .dialog-copy, .form-footer, .login-divider { color: var(--text-muted); }
+        .check-row input { accent-color: var(--green-primary); }
+        .btn-submit, .dialog-submit { border-radius: 999px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #fff; font-weight: 700; }
+        .btn-submit:hover { box-shadow: 0 8px 25px rgba(22, 163, 74, .35); transform: translateY(-2px); }
+        .dialog-backdrop { background: rgba(226, 232, 240, .68); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+        .recovery-dialog, .role-picker { border: 1px solid rgba(22, 163, 74, .2); border-radius: 18px; background: rgba(255, 255, 255, .96); box-shadow: 0 20px 50px rgba(15, 23, 42, .12), 0 2px 6px rgba(15, 23, 42, .05); }
+        .dialog-close, .role-picker-close { color: var(--text-muted); }
+        .notice.error { border-color: rgba(220, 38, 38, .2); background: var(--error-bg); color: var(--error-red); }
+        .notice.success { border-color: rgba(22, 163, 74, .2); background: var(--success-bg); color: var(--success-green); }
+        @media (prefers-reduced-motion: reduce) { .bg-viewport::before, .bg-viewport::after, .bg-orb, .floating-paw { animation: none !important; } }
+        .brand-header { display: flex; flex-direction: column; align-items: center; }
+        .brand-badge { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 5px 11px; border: 1px solid rgba(34, 197, 94, .48); border-radius: 999px; background: rgba(34, 197, 94, .12); color: var(--green-primary); font-size: 10px; font-weight: 700; letter-spacing: .02em; }
+        .brand-badge i { font-size: 14px; }
+        .brand-logo { font-family: var(--font-brand); font-size: 28px; font-weight: 700; letter-spacing: 2px; }
+        .brand-subtitle { color: var(--text-muted); font-family: var(--font-main); }
+        .form-title, .dialog-head h2, .role-picker h2 { color: var(--success-green); font-family: var(--font-main); }
+        label, .dialog-copy, .form-footer, .login-divider { color: var(--text-muted); }
+        input[type="email"], input[type="password"], input[type="text"] { border-radius: 10px; background: rgba(255, 255, 255, .05); font-family: var(--font-main); }
+        input:focus { border-color: var(--green-primary); box-shadow: 0 0 12px var(--green-glow); }
+        input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus { -webkit-text-fill-color: var(--text-main); box-shadow: 0 0 0 1000px #0b2238 inset; }
+        .toggle-password { color: var(--text-muted); }
+        .toggle-password:hover { color: var(--green-primary); }
+        .toggle-password i { font-size: 19px; }
+        .toggle-password .ph-eye-slash { display: none; }
+        .toggle-password[aria-pressed="true"] .ph-eye { display: none; }
+        .toggle-password[aria-pressed="true"] .ph-eye-slash { display: inline; }
+        .forgot-link, .form-footer a { color: var(--green-primary); }
+        .forgot-link:hover, .form-footer a:hover { color: var(--success-green); }
+        .check-row input { accent-color: var(--green-primary); }
+        .btn-submit, .dialog-submit { border-radius: 12px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #052e16; font-weight: 700; }
+        .btn-submit:hover { box-shadow: 0 6px 20px var(--green-glow); transform: translateY(-2px); }
+        .dialog-backdrop, .role-overlay { background: rgba(2, 12, 24, .72); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+        .recovery-dialog, .role-picker { border: 1px solid rgba(34, 197, 94, .3); border-radius: 18px; background: rgba(11, 34, 56, .96); box-shadow: 0 25px 60px rgba(0, 0, 0, .5), 0 0 30px rgba(34, 197, 94, .08); }
+        .dialog-close, .role-picker-close { border-radius: 9px; color: var(--text-muted); }
+        .dialog-close:hover, .role-picker-close:hover { color: var(--green-primary); }
+        .btn-secondary { border-radius: 10px; }
+        .btn-secondary:hover { border-color: var(--green-primary); }
+        .role-picker h2 { color: var(--success-green); }
+        .role-option { border-radius: 10px; font-family: var(--font-main); }
+        .role-option:hover { border-color: var(--green-primary); color: var(--success-green); background: rgba(34, 197, 94, .1); }
+        .role-demo-link { color: var(--text-muted) !important; }
+        .notice.error { border-color: rgba(248, 113, 113, .35); background: var(--error-bg); color: var(--error-red); }
+        .notice.success { border-color: rgba(74, 222, 128, .35); background: var(--success-bg); color: var(--success-green); }
     </style>
 </head>
 <body>
-    <video id="videoFondo" autoplay muted loop playsinline>
-        <source src="src/videoEJEMPLO/20.mp4" type="video/mp4">
-    </video>
-    <div class="velo"></div>
+    <div class="bg-viewport" aria-hidden="true">
+        <span class="bg-orb"></span>
+        <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
+        <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
+        <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
+        <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
+        <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
+    </div>
 
     <main class="auth-card">
         <header class="brand-header">
-            <h1 class="brand-logo">KION</h1>
+            <span class="brand-badge"><i class="ph-fill ph-paw-print" aria-hidden="true"></i> Veterinaria &amp; Farmacia</span>
+            <h1 class="brand-logo">PETKO</h1>
             <div class="brand-subtitle">Vet &amp; Agropecuario</div>
         </header>
         <h2 class="form-title">Iniciar sesión</h2>
@@ -435,7 +517,7 @@ if ($metodoPost) {
                 <div class="input-wrapper">
                     <input id="contrasena" name="contrasena" type="password" placeholder="Tu contraseña" autocomplete="current-password" required>
                     <button class="toggle-password" type="button" aria-label="Mostrar contraseña" aria-pressed="false">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <i class="ph ph-eye" aria-hidden="true"></i><i class="ph ph-eye-slash" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
