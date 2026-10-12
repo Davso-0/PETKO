@@ -456,7 +456,8 @@ if ($metodoPost) {
         .brand-header { display: flex; flex-direction: column; align-items: center; }
         .brand-badge { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 5px 11px; border: 1px solid rgba(34, 197, 94, .48); border-radius: 999px; background: rgba(34, 197, 94, .12); color: var(--green-primary); font-size: 10px; font-weight: 700; letter-spacing: .02em; }
         .brand-badge i { font-size: 14px; }
-        .brand-logo { font-family: var(--font-brand); font-size: 28px; font-weight: 700; letter-spacing: 2px; }
+        .brand-logo { font-family: var(--font-brand); font-size: 28px; font-weight: 700; letter-spacing: .04em; line-height: 1; }
+        .brand-logo span { color: var(--green-primary); }
         .brand-subtitle { color: var(--text-muted); font-family: var(--font-main); }
         .form-title, .dialog-head h2, .role-picker h2 { color: var(--success-green); font-family: var(--font-main); }
         label, .dialog-copy, .form-footer, .login-divider { color: var(--text-muted); }
@@ -501,7 +502,7 @@ if ($metodoPost) {
     <main class="auth-card">
         <header class="brand-header">
             <span class="brand-badge"><i class="ph-fill ph-paw-print" aria-hidden="true"></i> Veterinaria &amp; Farmacia</span>
-            <h1 class="brand-logo">PETKO</h1>
+            <h1 class="brand-logo">PET<span>KO</span></h1>
             <div class="brand-subtitle">Vet &amp; Agropecuario</div>
         </header>
         <h2 class="form-title">Iniciar sesión</h2>

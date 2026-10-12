@@ -8,8 +8,9 @@ $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Términos, condiciones y política de privacidad de KION Vet & Agropecuario.">
-    <title>KION | Términos, condiciones y privacidad</title>
+    <meta name="description" content="Términos, condiciones y política de privacidad de PETKO Vet & Agropecuario.">
+    <title>PETKO | Términos, condiciones y privacidad</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             color-scheme: light;
@@ -53,7 +54,8 @@ $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
             -webkit-backdrop-filter: blur(20px);
         }
         .brand-header { flex: 0 0 auto; margin-bottom: 17px; text-align: center; }
-        .brand-logo { margin: 0 0 2px; color: #0f172a; font-family: 'Fredoka', sans-serif; font-size: 28px; font-weight: 700; letter-spacing: 2px; }
+        .brand-logo { margin: 0 0 2px; color: #0f172a; font-family: 'Fredoka', sans-serif; font-size: 28px; font-weight: 700; letter-spacing: 0.04em; line-height: 1; }
+        .brand-logo span { color: var(--green-primary); }
         .brand-subtitle { color: var(--text-muted); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; }
         h2 { margin: 0 0 16px; color: var(--green-hover); font-size: clamp(19px, 3vw, 24px); line-height: 1.3; text-align: center; }
         .terms-content {
@@ -107,7 +109,7 @@ $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
 
     <main class="terms-card">
         <header class="brand-header">
-            <h1 class="brand-logo">KION</h1>
+            <h1 class="brand-logo">PET<span>KO</span></h1>
             <div class="brand-subtitle">Vet &amp; Agropecuario</div>
         </header>
         <h2>Términos, Condiciones y Política de Privacidad</h2>
@@ -115,55 +117,55 @@ $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
         <div class="terms-content" tabindex="0" aria-label="Términos, condiciones y política de privacidad">
             <section>
                 <h3>1. Aceptación y alcance de los servicios</h3>
-                <p>KION es una plataforma de gestión y comercio orientada a actividades veterinarias y agropecuarias. Sus funciones pueden incluir un catálogo digital de productos, consulta de información y herramientas de gestión para usuarios, cajeros, gerentes y administradores.</p>
-                <p>Al crear una cuenta, marcar la casilla de aceptación o utilizar las funciones de KION, la persona usuaria declara que ha leído y acepta estos Términos y la Política de Privacidad. Si no está de acuerdo, debe abstenerse de registrarse o utilizar la plataforma.</p>
+                <p>PETKO es una plataforma de gestión y comercio orientada a actividades veterinarias y agropecuarias. Sus funciones pueden incluir un catálogo digital de productos, consulta de información y herramientas de gestión para usuarios, cajeros, gerentes y administradores.</p>
+                <p>Al crear una cuenta, marcar la casilla de aceptación o utilizar las funciones de PETKO, la persona usuaria declara que ha leído y acepta estos Términos y la Política de Privacidad. Si no está de acuerdo, debe abstenerse de registrarse o utilizar la plataforma.</p>
             </section>
 
             <section>
                 <h3>2. Cuentas de usuario, roles y autenticación</h3>
                 <p>Para registrarse se requiere tener al menos 18 años —o la mayoría de edad aplicable en el lugar de residencia—, proporcionar información completa y verídica y disponer de una dirección de correo electrónico válida. La persona usuaria debe mantener sus datos actualizados.</p>
-                <p>Las funciones disponibles dependen del rol asignado por KION. Los roles pueden incluir Usuario/Cliente, Cajero, Gerente y Administrador General. Los permisos de cada cuenta no deben transferirse ni utilizarse para acceder a funciones ajenas a sus responsabilidades.</p>
-                <p>Si se ofrece inicio de sesión con Google Identity, KION recibe de Google los datos de perfil necesarios para identificar y crear la cuenta, que pueden incluir nombre, apellidos y correo electrónico, según los permisos otorgados. La autenticación de Google se rige también por las condiciones y la política de privacidad de Google.</p>
-                <p>La persona usuaria es responsable de mantener confidenciales sus credenciales, cerrar sesión en dispositivos compartidos y notificar al operador de KION si sospecha de un acceso no autorizado.</p>
+                <p>Las funciones disponibles dependen del rol asignado por PETKO. Los roles pueden incluir Usuario/Cliente, Cajero, Gerente y Administrador General. Los permisos de cada cuenta no deben transferirse ni utilizarse para acceder a funciones ajenas a sus responsabilidades.</p>
+                <p>Si se ofrece inicio de sesión con Google Identity, PETKO recibe de Google los datos de perfil necesarios para identificar y crear la cuenta, que pueden incluir nombre, apellidos y correo electrónico, según los permisos otorgados. La autenticación de Google se rige también por las condiciones y la política de privacidad de Google.</p>
+                <p>La persona usuaria es responsable de mantener confidenciales sus credenciales, cerrar sesión en dispositivos compartidos y notificar al operador de PETKO si sospecha de un acceso no autorizado.</p>
             </section>
 
             <section>
                 <h3>3. Catálogo y productos agropecuarios y veterinarios</h3>
                 <p>El catálogo puede mostrar medicamentos veterinarios, alimentos, productos e insumos agropecuarios. La información publicada tiene fines informativos y de comercialización; no sustituye una evaluación, diagnóstico, receta o indicación profesional.</p>
-                <p>La adquisición y utilización de productos sujetos a receta, de uso especializado o que requieran criterio técnico debe realizarse con la supervisión de un profesional veterinario calificado y de acuerdo con las instrucciones del fabricante y la normativa aplicable. La persona usuaria es responsable del uso que dé a productos veterinarios o insumos agrícolas. KION no sustituye el consejo profesional ni asume responsabilidad por usos contrarios a las indicaciones o a la ley.</p>
+                <p>La adquisición y utilización de productos sujetos a receta, de uso especializado o que requieran criterio técnico debe realizarse con la supervisión de un profesional veterinario calificado y de acuerdo con las instrucciones del fabricante y la normativa aplicable. La persona usuaria es responsable del uso que dé a productos veterinarios o insumos agrícolas. PETKO no sustituye el consejo profesional ni asume responsabilidad por usos contrarios a las indicaciones o a la ley.</p>
                 <p>La disponibilidad, los precios, las descripciones y las existencias del catálogo pueden cambiar y están sujetos a confirmación al momento de la compra. La publicación de un producto no garantiza su disponibilidad ni constituye una oferta irrevocable.</p>
             </section>
 
             <section>
                 <h3>4. Política de privacidad y datos personales</h3>
-                <p>Para operar la plataforma, KION puede tratar los datos que la persona usuaria proporciona o genera al utilizarla, por ejemplo:</p>
+                <p>Para operar la plataforma, PETKO puede tratar los datos que la persona usuaria proporciona o genera al utilizarla, por ejemplo:</p>
                 <ul>
                     <li>Nombre, apellidos y dirección de correo electrónico.</li>
-                    <li>Credenciales almacenadas como un hash de contraseña; KION no necesita guardar la contraseña en texto legible.</li>
+                    <li>Credenciales almacenadas como un hash de contraseña; PETKO no necesita guardar la contraseña en texto legible.</li>
                     <li>Rol asignado y datos de cuenta necesarios para habilitar funciones.</li>
                     <li>Datos técnicos y registros de actividad o accesos, en la medida en que las funciones y la configuración del sistema los recopilen.</li>
                 </ul>
-                <p>Estos datos se utilizan para crear y administrar cuentas, autenticar a las personas usuarias, proteger la plataforma, prestar sus funciones y atender solicitudes. KION no vende datos personales. No los comparte con terceros para sus propios fines sin consentimiento, excepto cuando sea necesario para prestar una función solicitada (por ejemplo, autenticación de Google), exista una obligación legal o resulte necesario para proteger la plataforma y sus usuarios. Cuando corresponda, esos proveedores tratarán los datos conforme a sus propias políticas.</p>
-                <p>KION aplica medidas razonables para proteger la información y limitar su acceso a quienes lo necesiten para operar el servicio. Ningún sistema puede garantizar seguridad absoluta. Los datos se conservarán durante el tiempo necesario para los fines descritos o para cumplir obligaciones legales.</p>
-                <p>La persona usuaria puede solicitar acceso, rectificación, cancelación o eliminación y oponerse al tratamiento, sujeto a la legislación aplicable, las obligaciones de conservación y la verificación de identidad. El ejercicio de estos derechos puede solicitarse al responsable de KION mediante el canal oficial de atención informado por la entidad operadora.</p>
+                <p>Estos datos se utilizan para crear y administrar cuentas, autenticar a las personas usuarias, proteger la plataforma, prestar sus funciones y atender solicitudes. PETKO no vende datos personales. No los comparte con terceros para sus propios fines sin consentimiento, excepto cuando sea necesario para prestar una función solicitada (por ejemplo, autenticación de Google), exista una obligación legal o resulte necesario para proteger la plataforma y sus usuarios. Cuando corresponda, esos proveedores tratarán los datos conforme a sus propias políticas.</p>
+                <p>PETKO aplica medidas razonables para proteger la información y limitar su acceso a quienes lo necesiten para operar el servicio. Ningún sistema puede garantizar seguridad absoluta. Los datos se conservarán durante el tiempo necesario para los fines descritos o para cumplir obligaciones legales.</p>
+                <p>La persona usuaria puede solicitar acceso, rectificación, cancelación o eliminación y oponerse al tratamiento, sujeto a la legislación aplicable, las obligaciones de conservación y la verificación de identidad. El ejercicio de estos derechos puede solicitarse al responsable de PETKO mediante el canal oficial de atención informado por la entidad operadora.</p>
             </section>
 
             <section>
                 <h3>5. Cookies y sesiones persistentes («Recordarme»)</h3>
-                <p>KION utiliza cookies esenciales para mantener la sesión y facilitar medidas de seguridad, incluida la protección de solicitudes mediante tokens CSRF. Estas cookies son necesarias para que ciertas funciones de autenticación operen correctamente.</p>
-                <p>Si se selecciona «Recordarme», KION puede guardar en el navegador la cookie <code>kion_remember</code> para mantener el acceso hasta por 30 días. La cookie contiene un token aleatorio de acceso; la base de datos conserva su huella SHA-256 para validarlo, no la contraseña. La cookie se configura como HttpOnly y SameSite=Lax, y como Secure cuando la conexión HTTPS está detectada. El usuario puede eliminar cookies desde su navegador y revocar el acceso cerrando sesión; borrar la cookie puede impedir el reconocimiento automático de ese dispositivo.</p>
+                <p>PETKO utiliza cookies esenciales para mantener la sesión y facilitar medidas de seguridad, incluida la protección de solicitudes mediante tokens CSRF. Estas cookies son necesarias para que ciertas funciones de autenticación operen correctamente.</p>
+                <p>Si se selecciona «Recordarme», PETKO puede guardar en el navegador la cookie <code>kion_remember</code> para mantener el acceso hasta por 30 días. La cookie contiene un token aleatorio de acceso; la base de datos conserva su huella SHA-256 para validarlo, no la contraseña. La cookie se configura como HttpOnly y SameSite=Lax, y como Secure cuando la conexión HTTPS está detectada. El usuario puede eliminar cookies desde su navegador y revocar el acceso cerrando sesión; borrar la cookie puede impedir el reconocimiento automático de ese dispositivo.</p>
             </section>
 
             <section>
                 <h3>6. Seguridad, suspensión y conducta de la persona usuaria</h3>
-                <p>Está prohibido interferir con el funcionamiento de KION, intentar acceder a cuentas o datos ajenos, eludir controles de acceso, automatizar intentos de autenticación abusivos o explotar vulnerabilidades, incluidas técnicas como fuerza bruta, inyección SQL o falsificación de solicitudes (CSRF).</p>
-                <p>El operador de KION puede limitar, suspender o inhabilitar cuentas inactivas, fraudulentas, comprometidas o utilizadas para vulnerar la seguridad, incumplir estos términos o infringir la ley. Cuando sea razonablemente posible, se informará a la persona afectada y se permitirá solicitar una revisión.</p>
+                <p>Está prohibido interferir con el funcionamiento de PETKO, intentar acceder a cuentas o datos ajenos, eludir controles de acceso, automatizar intentos de autenticación abusivos o explotar vulnerabilidades, incluidas técnicas como fuerza bruta, inyección SQL o falsificación de solicitudes (CSRF).</p>
+                <p>El operador de PETKO puede limitar, suspender o inhabilitar cuentas inactivas, fraudulentas, comprometidas o utilizadas para vulnerar la seguridad, incumplir estos términos o infringir la ley. Cuando sea razonablemente posible, se informará a la persona afectada y se permitirá solicitar una revisión.</p>
             </section>
 
             <section>
                 <h3>7. Propiedad intelectual y contacto</h3>
-                <p>La marca KION, sus logotipos, el código fuente, el diseño visual y los contenidos propios de la plataforma están protegidos por los derechos de propiedad intelectual que correspondan. No se autoriza su reproducción o uso fuera de lo permitido por la ley o por autorización expresa de sus titulares.</p>
-                <p>Para consultas, soporte o solicitudes relacionadas con datos personales, incluida la atención de derechos ARCO cuando sean aplicables, utiliza el canal oficial de contacto que la entidad operadora de KION publique en la plataforma. Para verificar una solicitud, podrán requerirse datos razonables que acrediten la identidad de la persona titular.</p>
+                <p>La marca PETKO, sus logotipos, el código fuente, el diseño visual y los contenidos propios de la plataforma están protegidos por los derechos de propiedad intelectual que correspondan. No se autoriza su reproducción o uso fuera de lo permitido por la ley o por autorización expresa de sus titulares.</p>
+                <p>Para consultas, soporte o solicitudes relacionadas con datos personales, incluida la atención de derechos ARCO cuando sean aplicables, utiliza el canal oficial de contacto que la entidad operadora de PETKO publique en la plataforma. Para verificar una solicitud, podrán requerirse datos razonables que acrediten la identidad de la persona titular.</p>
                 <p>Estos términos deben interpretarse conforme a la legislación aplicable al operador y a la persona usuaria. Las disposiciones imperativas de protección al consumidor y de datos personales prevalecen cuando correspondan.</p>
             </section>
         </div>
