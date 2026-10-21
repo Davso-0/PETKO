@@ -361,6 +361,18 @@ $rutasImagenesAntiguas = [
                                 </span>
                             <?php endif; ?>
                         </div>
+                        <div class="tarjeta__acciones">
+                            <button type="button" class="btn-agregar js-add-cart"
+                                    data-id="<?= $idProd ?>" data-nombre="<?= $nombre ?>" data-precio="<?= $precio ?>"
+                                    data-img="<?= $imgAttr ?>" data-stock="<?= $stock ?>"<?= $agotado ? ' disabled' : '' ?>>
+                                <i class="ph ph-shopping-cart-plus" aria-hidden="true"></i>
+                                <span data-i18n="<?= $agotado ? 'btn_out' : 'btn_add' ?>"><?= $agotado ? 'Sin stock' : 'Agregar al carrito' ?></span>
+                            </button>
+                            <button type="button" class="btn-apartar js-apartar"<?= $agotado ? ' disabled' : '' ?>>
+                                <i class="ph ph-bookmark-simple" aria-hidden="true"></i>
+                                <span data-i18n="btn_reserve">Apartar producto</span>
+                            </button>
+                        </div>
                     </div>
                 </article>
                 <?php endforeach; ?>

@@ -651,11 +651,39 @@ body.dark-mode::after {
     border-radius: 32px;
     padding: 22px 18px 24px;
     box-shadow: var(--shadow-sm);
-    height: fit-content;
-    position: sticky;
-    top: 92px;
     min-width: 0;
-    overflow: hidden;
+    /* Acompaña al usuario bajo el header fijo (74px + 20px de aire) */
+    --filtros-top: calc(74px + 20px);
+    position: sticky;
+    top: var(--filtros-top);
+    align-self: start;
+    height: max-content;
+    /* El menú puede ser más alto que la pantalla: sin este tope, la lista
+       de categorías quedaría fuera de la vista mientras está fijo. */
+    max-height: calc(100vh - var(--filtros-top) - 20px);
+    max-height: calc(100dvh - var(--filtros-top) - 20px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(11, 37, 69, 0.25) transparent;
+}
+
+.filtros::-webkit-scrollbar {
+    width: 6px;
+}
+
+.filtros::-webkit-scrollbar-thumb {
+    background: rgba(11, 37, 69, 0.25);
+    border-radius: 999px;
+}
+
+.dark-mode .filtros {
+    scrollbar-color: rgba(147, 197, 253, 0.3) transparent;
+}
+
+.dark-mode .filtros::-webkit-scrollbar-thumb {
+    background: rgba(147, 197, 253, 0.3);
 }
 
 .filtros__busqueda {
@@ -1521,6 +1549,19 @@ body.is-navegando .catalogo {
     color: var(--ink-soft);
     cursor: not-allowed;
     box-shadow: none;
+}
+
+.tarjeta__acciones {
+    display: grid;
+    gap: 8px;
+}
+
+.tarjeta__acciones .btn-apartar {
+    width: 100%;
+    padding: 10px 16px;
+    font-size: calc(13px * var(--fs));
+    text-align: center;
+    line-height: 1.25;
 }
 
 /* ------------------------------------------------------------------
@@ -3306,6 +3347,8 @@ body.modal-abierto {
 
     .filtros {
         position: static;
+        max-height: none;
+        overflow: hidden;
         border-radius: 28px;
         padding: 18px;
     }
@@ -3493,6 +3536,12 @@ body.modal-abierto {
     .btn-agregar {
         font-size: calc(12.5px * var(--fs));
         padding: 10px 8px;
+        gap: 6px;
+    }
+
+    .tarjeta__acciones .btn-apartar {
+        font-size: calc(12px * var(--fs));
+        padding: 8px;
         gap: 6px;
     }
 

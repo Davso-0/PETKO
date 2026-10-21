@@ -1045,7 +1045,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>`;
         }).join('');
+        sincronizarApartarTarjetas();
     }
+
+    function sincronizarApartarTarjetas() {
+        document.querySelectorAll('.tarjeta').forEach(tarjeta => {
+            const btn = tarjeta.querySelector('.js-apartar');
+            if (!btn) return;
+            const apartado = estaApartado(tarjeta.dataset.id);
+            const clave = apartado ? 'btn_reserved' : 'btn_reserve';
+            const texto = btn.querySelector('span');
+            btn.classList.toggle('is-apartado', apartado);
+            btn.disabled = (parseInt(tarjeta.dataset.stock, 10) || 0) <= 0 && !apartado;
+            btn.querySelector('i').className = `${apartado ? 'ph-fill' : 'ph'} ph-bookmark-simple`;
+            texto.dataset.i18n = clave;
+            texto.textContent = t(clave);
+        });
+    }
+
+    document.addEventListener('click', e => {
+        const btn = e.target.closest('.js-apartar');
+        const tarjeta = btn && !btn.disabled && btn.closest('.tarjeta');
+        if (!tarjeta) return;
+        const producto = datosTarjeta(tarjeta);
+        if (estaApartado(producto.id)) {
+            openCart();
+            return;
+        }
+        apartarProducto(producto);
+    });
 
     if (apartadosLista) {
         apartadosLista.addEventListener('click', e => {
