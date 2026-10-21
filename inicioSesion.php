@@ -181,25 +181,82 @@ if ($metodoPost) {
         $correoRecuperacion = $_POST['correo_recuperacion'] ?? '';
         $correoRecuperacion = is_string($correoRecuperacion) ? trim($correoRecuperacion) : '';
         if (!filter_var($correoRecuperacion, FILTER_VALIDATE_EMAIL)) {
-            responderInicioSesion(false, 'Escribe un correo electrónico válido.', null);
+            responderInicioSesion(false, 'Escribe un correo electrónico válido.');
         }
 
+        $hostSolicitud = $_SERVER['HTTP_HOST'] ?? '';
+        $esEntornoLocal = (defined('DEV_MODE') && DEV_MODE === true)
+            || in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)
+            || (is_string($hostSolicitud) && str_contains($hostSolicitud, 'localhost'));
+
         try {
-            $consultaRecuperacion = $pdo->prepare('SELECT id_usuario FROM usuarios WHERE correo = ? AND estado = \'ACTIVO\' LIMIT 1');
+            $consultaRecuperacion = $pdo->prepare("SELECT id_usuario, nombre FROM usuarios WHERE correo = ? AND estado = 'ACTIVO' LIMIT 1");
             $consultaRecuperacion->execute([$correoRecuperacion]);
-            $idUsuarioRecuperacion = $consultaRecuperacion->fetchColumn();
-            if ($idUsuarioRecuperacion) {
+            $usuarioRec = $consultaRecuperacion->fetch();
+            if ($usuarioRec) {
                 $tokenRecuperacion = bin2hex(random_bytes(32));
-                $guardarRecuperacion = $pdo->prepare('UPDATE usuarios SET recovery_token = ?, recovery_expires_at = ? WHERE id_usuario = ?');
+                $tokenHash = hash('sha256', $tokenRecuperacion);
+                $guardarRecuperacion = $pdo->prepare('UPDATE usuarios SET recovery_token = ?, recovery_expires_at = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 1 HOUR) WHERE id_usuario = ?');
                 $guardarRecuperacion->execute([
-                    hash('sha256', $tokenRecuperacion),
-                    date('Y-m-d H:i:s', time() + 3600),
-                    $idUsuarioRecuperacion,
+                    $tokenHash,
+                    $usuarioRec['id_usuario'],
                 ]);
+
+                $host = $_SERVER['SERVER_NAME'] ?? '';
+                if (!is_string($host) || !preg_match('/\A[a-zA-Z0-9.-]+\z/', $host)) {
+                    throw new RuntimeException('KION recuperación: nombre de servidor inválido.');
+                }
+                $protocolo = cookieSegura() ? 'https' : 'http';
+                $puertoServidor = $_SERVER['HTTP_X_FORWARDED_PORT'] ?? $_SERVER['SERVER_PORT'] ?? '';
+                $puerto = is_string($puertoServidor) && ctype_digit($puertoServidor) ? (int)$puertoServidor : 0;
+                $puertoUrl = $puerto > 0 && $puerto <= 65535
+                    && (($protocolo === 'https' && $puerto !== 443) || ($protocolo === 'http' && $puerto !== 80))
+                    ? ':' . $puerto
+                    : '';
+                $rutaDir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
+                $enlaceRecuperacion = $protocolo . '://' . $host . $puertoUrl . $rutaDir
+                    . '/recuperar.php?token=' . rawurlencode($tokenRecuperacion);
+
+                if ($esEntornoLocal) {
+                    error_log('KION ENLACE DE PRUEBA: ' . $enlaceRecuperacion);
+                    responderInicioSesion(
+                        true,
+                        'Entorno local detectado: Redirigiendo a la pantalla para restablecer contraseña...',
+                        $enlaceRecuperacion
+                    );
+                }
+
+                $nombreHtml = htmlspecialchars((string)$usuarioRec['nombre'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $enlaceHtml = htmlspecialchars($enlaceRecuperacion, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $asunto = 'Restablece tu contraseña - PETKO / KION';
+                $cabeceras = [
+                    'MIME-Version: 1.0',
+                    'Content-type: text/html; charset=UTF-8',
+                    'From: PETKO Vet & Agro <no-reply@kion.com>',
+                    'Reply-To: soporte@kion.com',
+                    'X-Mailer: PHP/' . PHP_VERSION,
+                ];
+                $mensajeHtml = '<!doctype html><html lang="es"><body style="font-family:Arial,sans-serif;background-color:#f8fafc;padding:20px;color:#0f172a;">'
+                    . '<div style="max-width:480px;margin:0 auto;background:#ffffff;padding:30px;border-radius:16px;border:1px solid #cbd5e1;box-shadow:0 4px 12px rgba(0,0,0,0.05);">'
+                    . '<h2 style="color:#16a34a;margin-top:0;">PETKO Vet &amp; Agro</h2>'
+                    . '<p>Hola <strong>' . $nombreHtml . '</strong>,</p>'
+                    . '<p>Recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>'
+                    . '<p>Haz clic en el siguiente botón para ingresar tu nueva contraseña. Este enlace caduca en <strong>1 hora</strong>:</p>'
+                    . '<div style="text-align:center;margin:28px 0;"><a href="' . $enlaceHtml . '" style="background:#16a34a;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;display:inline-block;">Restablecer contraseña</a></div>'
+                    . '<p style="font-size:12px;color:#64748b;">Si no realizaste esta solicitud, puedes ignorar este mensaje de manera segura.</p>'
+                    . '</div></body></html>';
+
+                $mailEnviado = @mail($correoRecuperacion, $asunto, $mensajeHtml, implode("\r\n", $cabeceras));
+                if (!$mailEnviado) {
+                    error_log('KION recuperación: el servicio mail() no está configurado o no pudo enviar el correo.');
+                }
             }
-            responderInicioSesion(true, 'Se han enviado las instrucciones de recuperación a tu correo electrónico.');
+            responderInicioSesion(true, 'Si el correo está registrado, recibirás un enlace de recuperación en tu bandeja de entrada.');
         } catch (PDOException $e) {
             error_log('KION recuperación de contraseña: ' . $e->getMessage());
+            responderInicioSesion(false, 'No fue posible procesar la solicitud. Inténtalo de nuevo.');
+        } catch (RuntimeException $e) {
+            error_log($e->getMessage());
             responderInicioSesion(false, 'No fue posible procesar la solicitud. Inténtalo de nuevo.');
         }
     }

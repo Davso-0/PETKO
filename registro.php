@@ -32,10 +32,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $contrasena = is_string($contrasena) ? $contrasena : '';
     $confirmacion = $_POST['confirm_password'] ?? '';
     $confirmacion = is_string($confirmacion) ? $confirmacion : '';
-    $aceptoTerminos = isset($_POST['terms']) && is_string($_POST['terms']) && $_POST['terms'] === '1';
+    if (!isset($_POST['acepto_terminos'])
+        || !is_string($_POST['acepto_terminos'])
+        || $_POST['acepto_terminos'] !== '1') {
+        responderRegistro(false, 'Debes aceptar los Términos y Condiciones para poder registrarte.');
+    }
 
-    if ($nombre === '' || $apellido === '' || $correo === '' || $contrasena === '' || $confirmacion === '' || !$aceptoTerminos) {
-        responderRegistro(false, 'Completa todos los campos y acepta los Términos y Condiciones y la Política de Privacidad.');
+    if ($nombre === '' || $apellido === '' || $correo === '' || $contrasena === '' || $confirmacion === '') {
+        responderRegistro(false, 'Completa todos los campos requeridos.');
     }
     if (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {
         responderRegistro(false, 'Escribe un correo electrónico válido.');
@@ -299,6 +303,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .form-footer a:hover { color: var(--success-green); }
         .btn-submit { border-radius: 12px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #052e16; font-weight: 700; }
         .btn-submit:hover { box-shadow: 0 6px 20px var(--green-glow); transform: translateY(-2px); }
+        .btn-submit:disabled {
+            background: #94a3b8 !important;
+            cursor: not-allowed !important;
+            opacity: 0.65;
+            box-shadow: none !important;
+            transform: none !important;
+        }
         .notice.error { border-color: rgba(248, 113, 113, .35); background: var(--error-bg); color: var(--error-red); }
         .notice.success { border-color: rgba(74, 222, 128, .35); background: var(--success-bg); color: var(--success-green); }
         .terms-modal { background: rgba(2, 12, 24, .72); }
@@ -367,10 +378,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <small class="field-error" id="confirmPasswordError" aria-live="polite">Las contraseñas no coinciden.</small>
             <div class="check-row">
-                <input id="terms" name="terms" type="checkbox" value="1" required>
-                <label for="terms">Acepto los <a href="terminos.php" id="openTermsLink" target="_blank" rel="noopener">Términos y Condiciones y la Política de Privacidad</a>.</label>
+                <input id="aceptoTerminos" name="acepto_terminos" type="checkbox" value="1" required>
+                <label for="aceptoTerminos">Acepto los <a href="#" id="abrirModalTerminos">Términos y Condiciones y la Política de Privacidad</a>.</label>
             </div>
-            <button class="btn-submit" type="submit">Crear cuenta</button>
+            <button class="btn-submit" type="submit" id="btnRegistro" disabled>Crear cuenta</button>
         </form>
         <div class="form-footer">¿Ya tienes cuenta? <a href="inicioSesion.php">Inicia sesión</a></div>
     </main>
@@ -387,11 +398,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         const confirmPasswordInput = document.getElementById('confirm_password');
         const confirmPasswordError = document.getElementById('confirmPasswordError');
         const registerNotice = document.getElementById('registerNotice');
-        const registerButton = registerForm.querySelector('.btn-submit');
-        const termsCheckbox = document.getElementById('terms');
+        const registerButton = document.getElementById('btnRegistro');
+        const termsCheckbox = document.getElementById('aceptoTerminos');
         const termsModal = document.getElementById('termsModal');
         const termsFrame = document.getElementById('termsFrame');
-        const openTermsLink = document.getElementById('openTermsLink');
+        const openTermsLink = document.getElementById('abrirModalTerminos');
         let previousFocus = null;
         const passwordRules = {
             length: (value) => value.length >= 8,
@@ -413,7 +424,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             confirmPasswordError.classList.toggle('visible', mismatch);
             confirmPasswordInput.setAttribute('aria-invalid', String(mismatch));
         }
+        function updateRegisterButton() {
+            registerButton.disabled = !termsCheckbox.checked;
+        }
 
+        updateRegisterButton();
+        termsCheckbox.addEventListener('change', updateRegisterButton);
         document.querySelectorAll('.toggle-password').forEach((button) => {
             button.addEventListener('click', () => {
                 const input = button.parentElement.querySelector('input');
@@ -434,7 +450,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             termsModal.classList.remove('visible');
             termsModal.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
-            if (accepted) termsCheckbox.checked = true;
+            if (accepted) {
+                termsCheckbox.checked = true;
+                termsCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
             if (previousFocus instanceof HTMLElement) previousFocus.focus();
         }
         openTermsLink.addEventListener('click', (event) => {
@@ -489,7 +508,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 confirmPasswordInput.focus();
                 return;
             }
-            if (!registerForm.elements.terms.checked) {
+            if (!termsCheckbox.checked) {
                 showNotice('Debes aceptar los Términos y Condiciones y la Política de Privacidad.', 'error');
                 return;
             }
@@ -511,7 +530,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (error) {
                 showNotice('No fue posible conectar con el servidor. Inténtalo de nuevo.', 'error');
             } finally {
-                registerButton.disabled = false;
+                updateRegisterButton();
             }
         });
 
