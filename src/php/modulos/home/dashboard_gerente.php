@@ -12,7 +12,14 @@ header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
 
-if (!isset($_SESSION['usuario']) && !isset($_GET['action'])) {
+// Guardia de sesión: si no hay sesión activa, redirigir (o devolver JSON en AJAX)
+if (!isset($_SESSION['usuario'])) {
+    if (isset($_GET['action'])) {
+        ob_end_clean();
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'msg' => '[SESIÓN EXPIRADA] Tu sesión ha caducado. Vuelve a iniciar sesión.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     header('Location: ../../../../inicioSesion.php');
     exit;
 }
@@ -41,9 +48,52 @@ if (isset($pdo) && $pdo instanceof PDO && $id_usuario_actual > 0) {
     $stG->execute([$id_usuario_actual]);
     $gerente = $stG->fetch(PDO::FETCH_ASSOC) ?: null;
 }
-$id_sucursal = (int)($gerente['id_sucursal'] ?? 0);
-$nombreGerente = trim(($gerente['nombre'] ?? 'Gerente') . ' ' . ($gerente['apellido'] ?? ''));
-$esGerente = stripos((string)($gerente['rol'] ?? ''), 'gerente') !== false;
+
+// Determinar rol: Admin o Gerente
+$rolDB       = (string)($gerente['rol'] ?? $_SESSION['usuario']['rol'] ?? '');
+$esGerente   = stripos($rolDB, 'gerente') !== false;
+$esAdmin     = stripos($rolDB, 'admin') !== false;
+
+$id_sucursal = (int)($gerente['id_sucursal'] ?? $_SESSION['usuario']['id_sucursal'] ?? 0);
+
+// Si es Admin sin sucursal asignada, tomar la primera sucursal activa disponible
+if (($esAdmin || ($id_sucursal <= 0)) && isset($pdo) && $pdo instanceof PDO) {
+    $sucursalForzada = (int)($_SESSION['sucursal_gerente'] ?? 0);
+    if ($sucursalForzada > 0) {
+        $id_sucursal = $sucursalForzada;
+    } elseif ($id_sucursal <= 0) {
+        $stFallback = $pdo->query("SELECT id_sucursal FROM sucursales WHERE estado='ACTIVA' ORDER BY id_sucursal LIMIT 1");
+        $id_sucursal = (int)($stFallback ? $stFallback->fetchColumn() : 0);
+    }
+}
+
+$nombreGerente = trim(($gerente['nombre'] ?? $_SESSION['usuario']['nombre'] ?? 'Usuario') . ' ' . ($gerente['apellido'] ?? $_SESSION['usuario']['apellido'] ?? ''));
+if ($nombreGerente === '') $nombreGerente = 'Gerente';
+
+// Helper para procesamiento seguro de imágenes de producto (subida física o URL)
+function procesarSubidaImagen(?array $file, string $urlTexto = ''): ?string {
+    if ($file && isset($file['error']) && $file['error'] === UPLOAD_ERR_OK && $file['size'] > 0) {
+        $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+        
+        if (isset($allowed[$mime])) {
+            $ext = $allowed[$mime];
+            $dirDestino = __DIR__ . '/../../../img/productos/';
+            if (!is_dir($dirDestino)) {
+                @mkdir($dirDestino, 0777, true);
+            }
+            $nombreArchivo = 'prod_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+            $destino = $dirDestino . $nombreArchivo;
+            if (move_uploaded_file($file['tmp_name'], $destino)) {
+                return '../../img/productos/' . $nombreArchivo;
+            }
+        }
+    }
+    $urlTexto = trim($urlTexto);
+    return $urlTexto !== '' ? $urlTexto : null;
+}
 
 // --------------------------------------------------------------
 // API (AJAX) — todas las acciones quedan restringidas a $id_sucursal
@@ -57,13 +107,14 @@ if (isset($_GET['action'])) {
         }
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         
-        // 1. Validar explícitamente el rol desde la sesión
-        $rolSesion = $_SESSION['usuario']['rol'] ?? '';
-        $esGerente = stripos((string)$rolSesion, 'gerente') !== false;
+        // 1. Validar rol: permitir Gerente Y Admin
+        if (!$esGerente && !$esAdmin) {
+            throw new RuntimeException('[ACCESO DENEGADO] No tienes permisos para acceder a este panel.');
+        }
 
-        // 2. Bloquear si no es gerente o si no tiene sucursal
-        if (!$esGerente || $id_sucursal <= 0) {
-            throw new RuntimeException('[ACCESO DENEGADO] No tienes permisos de gerente o no tienes una sucursal asignada. Contacta al administrador.');
+        // 2. Si aún no hay sucursal resuelta, bloquear
+        if ($id_sucursal <= 0) {
+            throw new RuntimeException('[ACCESO DENEGADO] No hay ninguna sucursal activa disponible. Crea una primero desde el panel de Administrador.');
         }
 
         if ($action === 'get_metrics') {
@@ -106,7 +157,7 @@ if (isset($_GET['action'])) {
 
         } elseif ($action === 'get_productos') {
             $q = trim($_GET['q'] ?? '');
-            $sql = "SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.id_categoria, p.precio, p.estado,
+            $sql = "SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.imagen_url, p.id_categoria, p.precio, p.estado,
                            COALESCE(c.nombre,'Sin categoría') AS categoria, i.existencias, i.stock_minimo
                     FROM productos p
                     JOIN inventarios i ON i.id_producto=p.id_producto AND i.id_sucursal=?
@@ -126,10 +177,12 @@ if (isset($_GET['action'])) {
             $stockMin = max(0, (int)($_POST['stock_minimo'] ?? 5));
             if ($codigo === '' || $nombre === '') throw new Exception('[ERROR DE USUARIO] El código y el nombre son obligatorios.');
 
+            $imagenUrl = procesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
+
             $pdo->beginTransaction();
             try {
-                $pdo->prepare("INSERT INTO productos(codigo,nombre,descripcion,id_categoria,precio,estado) VALUES(?,?,?,?,?,'ACTIVO')")
-                    ->execute([$codigo, $nombre, $descripcion ?: null, $categoria > 0 ? $categoria : null, $precio]);
+                $pdo->prepare("INSERT INTO productos(codigo,nombre,descripcion,id_categoria,precio,estado,imagen_url) VALUES(?,?,?,?,?,'ACTIVO',?)")
+                    ->execute([$codigo, $nombre, $descripcion ?: null, $categoria > 0 ? $categoria : null, $precio, $imagenUrl ?: null]);
                 $newId = (int)$pdo->lastInsertId();
                 $pdo->prepare("INSERT INTO inventarios(id_producto,id_sucursal,existencias,stock_minimo) VALUES(?,?,?,?)")
                     ->execute([$newId, $id_sucursal, $existInicial, $stockMin]);
@@ -150,8 +203,15 @@ if (isset($_GET['action'])) {
             $chk->execute([$id, $id_sucursal]);
             if (!$chk->fetchColumn()) throw new Exception('[ERROR DE USUARIO] Este producto no pertenece a tu sucursal.');
 
-            $pdo->prepare("UPDATE productos SET codigo=?,nombre=?,descripcion=?,id_categoria=?,precio=?,estado=? WHERE id_producto=?")
-                ->execute([$codigo, $nombre, $descripcion ?: null, $categoria > 0 ? $categoria : null, $precio, $estado, $id]);
+            $imagenUrl = procesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
+            if ($imagenUrl === null && !isset($_POST['imagen_url'])) {
+                $stAct = $pdo->prepare("SELECT imagen_url FROM productos WHERE id_producto=?");
+                $stAct->execute([$id]);
+                $imagenUrl = $stAct->fetchColumn() ?: null;
+            }
+
+            $pdo->prepare("UPDATE productos SET codigo=?,nombre=?,descripcion=?,id_categoria=?,precio=?,estado=?,imagen_url=? WHERE id_producto=?")
+                ->execute([$codigo, $nombre, $descripcion ?: null, $categoria > 0 ? $categoria : null, $precio, $estado, $imagenUrl ?: null, $id]);
             $pdo->prepare("UPDATE inventarios SET stock_minimo=? WHERE id_producto=? AND id_sucursal=?")
                 ->execute([$stockMin, $id, $id_sucursal]);
             $out = ['ok' => true, 'msg' => 'Producto actualizado correctamente.'];
@@ -543,8 +603,23 @@ if (isset($_GET['action'])) {
 // --------------------------------------------------------------
 if ($id_sucursal <= 0) {
     ob_end_clean();
-    echo '<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:60px;text-align:center;color:#6c4630;">
-    <h2>Tu usuario no tiene una sucursal asignada</h2><p>Contacta al administrador para que te asigne una sucursal.</p></body>';
+    echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>KION · Sin Sucursal</title><style>
+    body { font-family: "Segoe UI", system-ui, sans-serif; background: #fffaf6; color: #38281f; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .card { background: #fff; padding: 40px; border-radius: 16px; border: 1px solid #eeddd1; text-align: center; max-width: 440px; box-shadow: 0 10px 30px rgba(80,50,30,0.08); }
+    h2 { font-size: 22px; color: #6c4630; margin-bottom: 10px; }
+    p { font-size: 14px; color: #7a6355; margin-bottom: 24px; line-height: 1.5; }
+    .btn { display: inline-block; padding: 10px 20px; border-radius: 8px; font-weight: 600; text-decoration: none; margin: 0 6px; font-size: 13.5px; }
+    .btn-main { background: #6c4630; color: #fff; }
+    .btn-sub { background: #f4ece4; color: #6c4630; }
+    </style></head><body>
+    <div class="card">
+        <h2>Tu usuario no tiene una sucursal asignada</h2>
+        <p>Para ingresar al panel de gerencia debes tener una sucursal vinculada. Contacta al administrador general.</p>
+        <div>
+            <a href="home.php" class="btn btn-main">Volver al inicio</a>
+            <a href="cerrarSesion.php" class="btn btn-sub">Cerrar sesión</a>
+        </div>
+    </div></body></html>';
     exit;
 }
 $stSuc = $pdo->prepare("SELECT nombre FROM sucursales WHERE id_sucursal=?");
@@ -716,6 +791,7 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
             <div class="nav-section-title" data-i18n="nav_section_caja">Caja</div>
             <button class="nav-btn" id="btnIrPOS"><i class="ph ph-monitor"></i><span class="nav-label" data-i18n="nav_pos">Punto de Venta</span></button>
             <div class="nav-section-title" data-i18n="nav_section_nav">Navegación</div>
+            <a class="nav-btn" href="../../componentes/catalogo.php"><i class="ph ph-storefront"></i><span class="nav-label" data-i18n="nav_catalogo">Ir al Catálogo</span></a>
             <a class="nav-btn" href="home.php"><i class="ph ph-house"></i><span class="nav-label" data-i18n="nav_home">Volver a Home</span></a>
             <a class="nav-btn" href="cerrarSesion.php" style="color:var(--danger)"><i class="ph ph-sign-out"></i><span class="nav-label" data-i18n="nav_logout">Cerrar sesión</span></a>
         </nav>
@@ -903,7 +979,7 @@ const I18N = {
         brand_sub: 'Gerencia de Sucursal', role_chip: 'Gerente', branch_prefix: 'Sucursal',
         nav_section_panel: 'Panel', nav_section_gestion: 'Gestión', nav_section_caja: 'Caja', nav_section_nav: 'Navegación',
         nav_dash: 'Panel Principal', nav_sucursal: 'Mi Sucursal', nav_inventario: 'Inventario', nav_productos: 'Productos',
-        nav_cajas: 'Cajas', nav_ventas: 'Ventas', nav_pos: 'Punto de Venta', nav_home: 'Volver a Home', nav_logout: 'Cerrar sesión',
+        nav_cajas: 'Cajas', nav_ventas: 'Ventas', nav_pos: 'Punto de Venta', nav_catalogo: 'Ir al Catálogo', nav_home: 'Volver a Home', nav_logout: 'Cerrar sesión',
         topbar_dash: 'Panel Principal', topbar_sucursal: 'Mi Sucursal', topbar_inventario: 'Inventario', topbar_productos: 'Productos',
         topbar_cajas: 'Cajas', topbar_ventas: 'Ventas', topbar_pos: 'Punto de Venta',
         dash_title: 'Resumen de Operaciones', dash_sub: 'Métricas en tiempo real de tu sucursal.',
@@ -937,7 +1013,7 @@ const I18N = {
         brand_sub: 'Branch Management', role_chip: 'Manager', branch_prefix: 'Branch',
         nav_section_panel: 'Overview', nav_section_gestion: 'Management', nav_section_caja: 'Register', nav_section_nav: 'Navigation',
         nav_dash: 'Dashboard', nav_sucursal: 'My Branch', nav_inventario: 'Inventory', nav_productos: 'Products',
-        nav_cajas: 'Registers', nav_ventas: 'Sales', nav_pos: 'Point of Sale', nav_home: 'Back to Home', nav_logout: 'Log out',
+        nav_cajas: 'Registers', nav_ventas: 'Sales', nav_pos: 'Point of Sale', nav_catalogo: 'Go to Catalog', nav_home: 'Back to Home', nav_logout: 'Log out',
         topbar_dash: 'Dashboard', topbar_sucursal: 'My Branch', topbar_inventario: 'Inventory', topbar_productos: 'Products',
         topbar_cajas: 'Registers', topbar_ventas: 'Sales', topbar_pos: 'Point of Sale',
         dash_title: 'Operations Overview', dash_sub: 'Real-time metrics for your branch.',
@@ -1098,7 +1174,13 @@ async function loadProductos() {
         const q = $('#prodSearch').value;
         const { data } = await request(`get_productos&q=${encodeURIComponent(q)}`);
         $('#tblProductos').innerHTML = data.length ? data.map(x => `<tr>
-            <td><b>${escapeHtml(x.codigo)}</b></td><td>${escapeHtml(x.nombre)}</td><td>${escapeHtml(x.categoria)}</td>
+            <td>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <img src="${x.imagen_url ? escapeHtml(x.imagen_url) : 'https://placehold.co/100x100?text=Sin+Imagen'}" style="width:36px; height:36px; border-radius:8px; object-fit:cover; border:1px solid var(--border-soft);">
+                    <b>${escapeHtml(x.codigo)}</b>
+                </div>
+            </td>
+            <td><b>${escapeHtml(x.nombre)}</b></td><td>${escapeHtml(x.categoria)}</td>
             <td>${money(x.precio)}</td><td>${x.existencias}</td>
             <td><span class="badge ${x.estado==='ACTIVO'?'b-green':'b-red'}">${escapeHtml(x.estado)}</span></td>
             <td><button class="chip-btn" data-edit-prod='${JSON.stringify(x).replace(/'/g,'&#39;')}'>${t('editar')}</button></td>
@@ -1113,12 +1195,18 @@ async function productoModal(record = null) {
     const catOptions = categorias.map(c => `<option value="${c.id_categoria}" ${record && +record.id_categoria===+c.id_categoria?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('');
     const editing = !!record;
     const L = currentLang === 'en'
-        ? { titleNew:'New Product', titleEdit:'Edit Product', codigo:'Code *', nombre:'Name *', desc:'Description', cat:'Category', precio:'Base price *', minStock:'Minimum stock', initStock:'Initial stock', estado:'Status', required:'Code and name are required.' }
-        : { titleNew:'Nuevo Producto', titleEdit:'Editar Producto', codigo:'Código *', nombre:'Nombre *', desc:'Descripción', cat:'Categoría', precio:'Precio base *', minStock:'Stock mínimo', initStock:'Existencia inicial', estado:'Estado', required:'Código y nombre son obligatorios.' };
+        ? { titleNew:'New Product', titleEdit:'Edit Product', img:'Product Image', codigo:'Code *', nombre:'Name *', desc:'Description', cat:'Category', precio:'Base price *', minStock:'Minimum stock', initStock:'Initial stock', estado:'Status', required:'Code and name are required.' }
+        : { titleNew:'Nuevo Producto', titleEdit:'Editar Producto', img:'Imagen del Producto', codigo:'Código *', nombre:'Nombre *', desc:'Descripción', cat:'Categoría', precio:'Precio base *', minStock:'Stock mínimo', initStock:'Existencia inicial', estado:'Estado', required:'Código y nombre son obligatorios.' };
 
     const { value: form } = await Swal.fire({
         title: editing ? L.titleEdit : L.titleNew,
         html: `<div style="text-align:left;">
+            <div style="text-align:center; margin-bottom:12px;">
+                <img id="swal-preview" class="swal-preview-img" src="${editing && record.imagen_url ? escapeHtml(record.imagen_url) : 'https://placehold.co/150x150?text=Sin+Imagen'}" style="max-width:140px; max-height:140px; object-fit:cover; border-radius:12px; border:2px solid var(--border-soft); box-shadow:var(--shadow-sm);">
+            </div>
+            <label><b>${L.img}</b></label>
+            <input type="file" id="swal-file" accept="image/jpeg,image/png,image/webp,image/gif" class="swal2-file" style="width:100%; margin:4px 0 8px; font-size:12.5px; border-radius:8px;">
+            <input id="swal-img" class="swal2-input" style="width:100%;margin:2px 0 12px; font-size:13px;" value="${editing?escapeHtml(record.imagen_url||''):''}" placeholder="O pega un enlace de imagen (https://...)">
             <label><b>${L.codigo}</b></label><input id="swal-codigo" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.codigo):''}">
             <label><b>${L.nombre}</b></label><input id="swal-nombre" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.nombre):''}">
             <label><b>${L.desc}</b></label><input id="swal-desc" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.descripcion||''):''}">
@@ -1130,14 +1218,38 @@ async function productoModal(record = null) {
             ${editing ? `<label><b>${L.estado}</b></label><select id="swal-estado" class="swal2-input" style="width:100%;margin:6px 0;"><option ${record.estado==='ACTIVO'?'selected':''}>ACTIVO</option><option ${record.estado==='INACTIVO'?'selected':''}>INACTIVO</option></select>` : ''}
         </div>`,
         confirmButtonText: t('guardar'), confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar'),
+        didOpen: () => {
+            const preview = document.getElementById('swal-preview');
+            const fileIn = document.getElementById('swal-file');
+            const urlIn = document.getElementById('swal-img');
+
+            fileIn.addEventListener('change', e => {
+                if (e.target.files && e.target.files[0]) {
+                    preview.src = URL.createObjectURL(e.target.files[0]);
+                }
+            });
+            urlIn.addEventListener('input', e => {
+                const val = e.target.value.trim();
+                if (val) {
+                    preview.src = val;
+                } else if (fileIn.files && fileIn.files[0]) {
+                    preview.src = URL.createObjectURL(fileIn.files[0]);
+                } else {
+                    preview.src = 'https://placehold.co/150x150?text=Sin+Imagen';
+                }
+            });
+        },
         preConfirm: () => {
             const codigo = document.getElementById('swal-codigo').value.trim();
             const nombre = document.getElementById('swal-nombre').value.trim();
             if (!codigo || !nombre) { Swal.showValidationMessage(L.required); return false; }
+            const fileEl = document.getElementById('swal-file');
             const out = {
                 codigo, nombre, descripcion: document.getElementById('swal-desc').value,
                 id_categoria: document.getElementById('swal-cat').value, precio: document.getElementById('swal-precio').value,
-                stock_minimo: document.getElementById('swal-min').value
+                stock_minimo: document.getElementById('swal-min').value,
+                imagen_url: document.getElementById('swal-img').value.trim(),
+                imagen_archivo: (fileEl.files && fileEl.files[0]) ? fileEl.files[0] : null
             };
             if (editing) { out.id = record.id_producto; out.estado = document.getElementById('swal-estado').value; }
             else { out.existencias = document.getElementById('swal-exist').value; }
@@ -1146,7 +1258,14 @@ async function productoModal(record = null) {
     });
     if (!form) return;
     try {
-        const fd = new FormData(); Object.entries(form).forEach(([k,v]) => fd.append(k,v));
+        const fd = new FormData();
+        Object.entries(form).forEach(([k,v]) => {
+            if (k === 'imagen_archivo') {
+                if (v) fd.append('imagen_archivo', v);
+            } else if (v !== null && v !== undefined) {
+                fd.append(k, v);
+            }
+        });
         const d = await request(editing ? 'update_producto' : 'create_producto', { method:'POST', body: fd });
         notify(d.msg); loadProductos(); loadInventario(); loadDashboard();
     } catch (e) { notify(e.message, 'error'); }

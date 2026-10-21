@@ -40,6 +40,31 @@ if (isset($pdo) && $pdo instanceof PDO && $id_usuario_actual > 0) {
 $esAdmin = $admin && stripos((string)($admin['rol'] ?? ''), 'admin') !== false && ($admin['estado'] ?? '') !== 'INACTIVO';
 $nombreAdmin = trim(($admin['nombre'] ?? 'Administrador') . ' ' . ($admin['apellido'] ?? ''));
 
+// Helper para procesamiento seguro de imágenes de producto (subida física o URL)
+function procesarSubidaImagen(?array $file, string $urlTexto = ''): ?string {
+    if ($file && isset($file['error']) && $file['error'] === UPLOAD_ERR_OK && $file['size'] > 0) {
+        $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+        
+        if (isset($allowed[$mime])) {
+            $ext = $allowed[$mime];
+            $dirDestino = __DIR__ . '/../../../img/productos/';
+            if (!is_dir($dirDestino)) {
+                @mkdir($dirDestino, 0777, true);
+            }
+            $nombreArchivo = 'prod_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+            $destino = $dirDestino . $nombreArchivo;
+            if (move_uploaded_file($file['tmp_name'], $destino)) {
+                return '../../img/productos/' . $nombreArchivo;
+            }
+        }
+    }
+    $urlTexto = trim($urlTexto);
+    return $urlTexto !== '' ? $urlTexto : null;
+}
+
 // API AJAX
 if (isset($_GET['action'])) {
     $action = $_GET['action'];
@@ -82,6 +107,28 @@ if (isset($_GET['action'])) {
                 ->execute([$nombre, trim($_POST['direccion'] ?? ''), $tel, trim($_POST['contacto'] ?? ''), $est, $id]);
             $out = ['ok' => true, 'msg' => 'Datos de la sucursal actualizados.'];
 
+        } elseif ($action === 'delete_sucursal') {
+            $id = (int)($_POST['id'] ?? 0);
+            if (!$id) throw new Exception('[ERROR DE USUARIO] ID de sucursal inválido.');
+            // Si la sucursal tiene ventas registradas, la desactivamos para preservar el historial fiscal
+            $stV = $pdo->prepare("SELECT COUNT(*) FROM ventas WHERE id_sucursal=?");
+            $stV->execute([$id]);
+            if ($stV->fetchColumn() > 0) {
+                $pdo->prepare("UPDATE sucursales SET estado='INACTIVA' WHERE id_sucursal=?")->execute([$id]);
+                $out = ['ok' => true, 'msg' => 'La sucursal tiene ventas históricas asociadas. Se marcó como INACTIVA para proteger los reportes.'];
+            } else {
+                $pdo->beginTransaction();
+                try {
+                    $pdo->prepare("DELETE FROM inventarios WHERE id_sucursal=?")->execute([$id]);
+                    $pdo->prepare("DELETE FROM cajeros WHERE id_sucursal=?")->execute([$id]);
+                    $pdo->prepare("DELETE FROM cajas WHERE id_sucursal=?")->execute([$id]);
+                    $pdo->prepare("UPDATE usuarios SET id_sucursal=NULL WHERE id_sucursal=?")->execute([$id]);
+                    $pdo->prepare("DELETE FROM sucursales WHERE id_sucursal=?")->execute([$id]);
+                    $pdo->commit();
+                    $out = ['ok' => true, 'msg' => 'Sucursal eliminada permanentemente.'];
+                } catch (Exception $e) { $pdo->rollBack(); throw $e; }
+            }
+
         } elseif ($action === 'get_gerentes') {
             $st = $pdo->query("SELECT u.id_usuario,u.nombre,u.apellido,u.correo,u.estado,r.nombre AS rol,COALESCE(s.nombre,'-- Ninguna --') AS sucursal,u.id_sucursal,u.id_rol FROM usuarios u LEFT JOIN roles r ON r.id_rol=u.id_rol LEFT JOIN sucursales s ON s.id_sucursal=u.id_sucursal WHERE r.nombre NOT LIKE '%cliente%' AND r.nombre NOT LIKE '%usuario%' ORDER BY u.id_usuario");
             $out = ['ok' => true, 'data' => $st->fetchAll(PDO::FETCH_ASSOC)];
@@ -113,10 +160,12 @@ if (isset($_GET['action'])) {
             $id = (int)($_POST['id'] ?? 0); $codigo = trim($_POST['codigo'] ?? ''); $nombre = trim($_POST['nombre'] ?? '');
             $descripcion = trim($_POST['descripcion'] ?? ''); $categoria = (int)($_POST['id_categoria'] ?? 0);
             $precio = (float)str_replace(',', '.', $_POST['precio'] ?? '0');
-            $imagenUrl = trim($_POST['imagen_url'] ?? '');
             $estado = ($_POST['estado'] ?? 'ACTIVO') === 'INACTIVO' ? 'INACTIVO' : 'ACTIVO';
             $sucs = $_POST['sucursales'] ?? [];
             if ($codigo === '' || $nombre === '') throw new Exception('[ERROR DE USUARIO] El código y el nombre son obligatorios.');
+
+            // Resolver imagen: archivo físico subido tiene prioridad sobre texto URL
+            $imagenUrl = procesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
 
             $pdo->beginTransaction();
             try {
@@ -130,6 +179,12 @@ if (isset($_GET['action'])) {
                     }
                     $out = ['ok' => true, 'msg' => 'Producto registrado exitosamente.'];
                 } else {
+                    // Si se está editando y no se envió nueva imagen, conservar la existente si no se pasó url vacía explícita
+                    if ($imagenUrl === null && !isset($_POST['imagen_url'])) {
+                        $stAct = $pdo->prepare("SELECT imagen_url FROM productos WHERE id_producto=?");
+                        $stAct->execute([$id]);
+                        $imagenUrl = $stAct->fetchColumn() ?: null;
+                    }
                     $pdo->prepare("UPDATE productos SET codigo=?,nombre=?,descripcion=?,id_categoria=?,precio=?,estado=?,imagen_url=? WHERE id_producto=?")
                         ->execute([$codigo, $nombre, $descripcion ?: null, $categoria > 0 ? $categoria : null, $precio, $estado, $imagenUrl ?: null, $id]);
                     if (!empty($sucs)) {
@@ -147,9 +202,17 @@ if (isset($_GET['action'])) {
 
         } elseif ($action === 'delete_producto') {
             $id = (int)($_POST['id'] ?? 0);
-            $pdo->prepare("DELETE FROM inventarios WHERE id_producto=?")->execute([$id]);
-            $pdo->prepare("DELETE FROM productos WHERE id_producto=?")->execute([$id]);
-            $out = ['ok' => true, 'msg' => 'Producto eliminado permanentemente.'];
+            // Comprobar si tiene ventas en detalle_ventas
+            $stV = $pdo->prepare("SELECT COUNT(*) FROM detalle_ventas WHERE id_producto=?");
+            $stV->execute([$id]);
+            if ($stV->fetchColumn() > 0) {
+                $pdo->prepare("UPDATE productos SET estado='INACTIVO' WHERE id_producto=?")->execute([$id]);
+                $out = ['ok' => true, 'msg' => 'El producto cuenta con ventas en el historial; se marcó como INACTIVO para preservar las ventas.'];
+            } else {
+                $pdo->prepare("DELETE FROM inventarios WHERE id_producto=?")->execute([$id]);
+                $pdo->prepare("DELETE FROM productos WHERE id_producto=?")->execute([$id]);
+                $out = ['ok' => true, 'msg' => 'Producto eliminado permanentemente.'];
+            }
 
         } elseif ($action === 'get_producto_detalle') {
             $id = (int)($_GET['id'] ?? 0);
@@ -418,6 +481,7 @@ try {
             <button class="nav-btn" data-target="view-productos"><i class="ph ph-tag"></i><span class="nav-label" data-i18n="nav_productos">Productos</span></button>
             <button class="nav-btn" data-target="view-ventas"><i class="ph ph-chart-line-up"></i><span class="nav-label" data-i18n="nav_ventas">Ventas</span></button>
             <div class="nav-section-title" data-i18n="nav_section_nav">Navegación</div>
+            <a class="nav-btn" href="../../componentes/catalogo.php"><i class="ph ph-storefront"></i><span class="nav-label" data-i18n="nav_catalogo">Ir al Catálogo</span></a>
             <a class="nav-btn" href="home.php"><i class="ph ph-house"></i><span class="nav-label" data-i18n="nav_home">Volver a Home</span></a>
             <a class="nav-btn" href="cerrarSesion.php" style="color:var(--danger)"><i class="ph ph-sign-out"></i><span class="nav-label" data-i18n="nav_logout">Cerrar sesión</span></a>
         </nav>
@@ -564,7 +628,7 @@ const I18N = {
         brand_sub: 'Administración General', role_chip: 'Admin', eyebrow_panel: 'Panel principal',
         nav_section_panel: 'Panel', nav_section_gestion: 'Gestión', nav_section_nav: 'Navegación',
         nav_general: 'Resumen General', nav_sucursales: 'Sucursales', nav_personal: 'Personal', nav_inventario: 'Inventario',
-        nav_productos: 'Productos', nav_ventas: 'Ventas', nav_home: 'Volver a Home', nav_logout: 'Cerrar sesión',
+        nav_productos: 'Productos', nav_ventas: 'Ventas', nav_catalogo: 'Ir al Catálogo', nav_home: 'Volver a Home', nav_logout: 'Cerrar sesión',
         greeting: 'Hola, administración', greeting_sub: 'Este es el pulso operativo de KION al día de hoy.', btn_actualizar: 'Actualizar',
         kpi_tag_red: 'Red', kpi_tag_equipo: 'Equipo', kpi_tag_catalogo: 'Catálogo', kpi_tag_hoy: 'Hoy', ventas_realizadas: 'ventas realizadas', ventas_lbl: 'ventas',
         th_sucursales: 'Sucursales', chart_ventas: 'Ventas (7 días)', chart_ventas_sub: 'Ingresos consolidados de toda la red',
@@ -584,13 +648,13 @@ const I18N = {
         editar: 'Editar', ver_stock: 'Ver stock', ver: 'Ver', guardar: 'Guardar', cancelar: 'Cancelar', si_eliminar: 'Sí, eliminar',
         sin_registros: 'No hay registros.', panel_actualizado: 'Panel actualizado.', inv_saludable: 'Todo el inventario está en niveles saludables.',
         sin_datos: 'Sin datos.', no_asignado: 'No está asignado a ninguna sucursal.',
-        modal_prod_new: 'Nuevo Producto', modal_prod_edit: 'Editar Producto', img_url: 'URL de Imagen', desc_lbl: 'Descripción', asign_suc: 'Asignar a sucursales:'
+        modal_prod_new: 'Nuevo Producto', modal_prod_edit: 'Editar Producto', img_url: 'Imagen del Producto (subir archivo o ingresar URL)', desc_lbl: 'Descripción', asign_suc: 'Asignar a sucursales:'
     },
     en: {
         brand_sub: 'General Administration', role_chip: 'Admin', eyebrow_panel: 'Main panel',
         nav_section_panel: 'Overview', nav_section_gestion: 'Management', nav_section_nav: 'Navigation',
         nav_general: 'Dashboard', nav_sucursales: 'Branches', nav_personal: 'Staff', nav_inventario: 'Inventory',
-        nav_productos: 'Products', nav_ventas: 'Sales', nav_home: 'Back to Home', nav_logout: 'Log out',
+        nav_productos: 'Products', nav_ventas: 'Sales', nav_catalogo: 'Go to Catalog', nav_home: 'Back to Home', nav_logout: 'Log out',
         greeting: 'Hello, admin', greeting_sub: "Here's KION's operating pulse for today.", btn_actualizar: 'Refresh',
         kpi_tag_red: 'Network', kpi_tag_equipo: 'Team', kpi_tag_catalogo: 'Catalog', kpi_tag_hoy: 'Today', ventas_realizadas: 'sales made', ventas_lbl: 'sales',
         th_sucursales: 'Branches', chart_ventas: 'Sales (7 days)', chart_ventas_sub: 'Consolidated revenue across the network',
@@ -859,9 +923,11 @@ async function productoModal(record = null) {
         title: editing ? t('modal_prod_edit') : t('modal_prod_new'),
         html: `<div style="text-align:left;">
             <div style="text-align:center; margin-bottom:12px;">
-                <img id="swal-preview" class="swal-preview-img" src="${editing && record.imagen_url ? escapeHtml(record.imagen_url) : 'https://placehold.co/150x150?text=Sin+Imagen'}">
+                <img id="swal-preview" class="swal-preview-img" src="${editing && record.imagen_url ? escapeHtml(record.imagen_url) : 'https://placehold.co/150x150?text=Sin+Imagen'}" style="max-width:140px; max-height:140px; object-fit:cover; border-radius:12px; border:2px solid var(--border-soft); box-shadow:var(--shadow-sm);">
             </div>
-            <label><b>${t('img_url')}</b></label><input id="swal-img" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.imagen_url||''):''}" placeholder="https://...">
+            <label><b>${t('img_url')}</b></label>
+            <input type="file" id="swal-file" accept="image/jpeg,image/png,image/webp,image/gif" class="swal2-file" style="width:100%; margin:4px 0 8px; font-size:12.5px; border-radius:8px;">
+            <input id="swal-img" class="swal2-input" style="width:100%;margin:2px 0 12px; font-size:13px;" value="${editing?escapeHtml(record.imagen_url||''):''}" placeholder="O pega un enlace de imagen (https://...)">
             <div style="display:flex; gap:10px;">
                 <div style="flex:1"><label><b>${t('th_codigo')} *</b></label><input id="swal-codigo" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.codigo):''}"></div>
                 <div style="flex:2"><label><b>${t('th_producto')} *</b></label><input id="swal-nombre" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.nombre):''}"></div>
@@ -882,8 +948,24 @@ async function productoModal(record = null) {
         </div>`,
         confirmButtonText: t('guardar'), confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar'), width: 550,
         didOpen: () => {
-            document.getElementById('swal-img').addEventListener('input', e => {
-                document.getElementById('swal-preview').src = e.target.value.trim() || 'https://placehold.co/150x150?text=Sin+Imagen';
+            const preview = document.getElementById('swal-preview');
+            const fileIn = document.getElementById('swal-file');
+            const urlIn = document.getElementById('swal-img');
+
+            fileIn.addEventListener('change', e => {
+                if (e.target.files && e.target.files[0]) {
+                    preview.src = URL.createObjectURL(e.target.files[0]);
+                }
+            });
+            urlIn.addEventListener('input', e => {
+                const val = e.target.value.trim();
+                if (val) {
+                    preview.src = val;
+                } else if (fileIn.files && fileIn.files[0]) {
+                    preview.src = URL.createObjectURL(fileIn.files[0]);
+                } else {
+                    preview.src = 'https://placehold.co/150x150?text=Sin+Imagen';
+                }
             });
         },
         preConfirm: () => {
@@ -891,10 +973,12 @@ async function productoModal(record = null) {
             const nombre = document.getElementById('swal-nombre').value.trim();
             if (!codigo || !nombre) { Swal.showValidationMessage('Código y nombre son obligatorios.'); return false; }
             const sucs = Array.from(document.querySelectorAll('.swal-suc-chk:checked')).map(c => c.value);
+            const fileEl = document.getElementById('swal-file');
             const out = { 
                 codigo, 
                 nombre, 
                 imagen_url: document.getElementById('swal-img').value.trim(),
+                imagen_archivo: (fileEl.files && fileEl.files[0]) ? fileEl.files[0] : null,
                 descripcion: document.getElementById('swal-desc').value.trim(), 
                 id_categoria: document.getElementById('swal-cat').value, 
                 precio: document.getElementById('swal-precio').value, 
@@ -907,7 +991,15 @@ async function productoModal(record = null) {
     if (!form) return;
     try {
         const fd = new FormData();
-        Object.entries(form).forEach(([k,v]) => { if (k === 'sucursales') { v.forEach(s => fd.append('sucursales[]', s)); } else { fd.append(k, v); } });
+        Object.entries(form).forEach(([k,v]) => {
+            if (k === 'sucursales') {
+                v.forEach(s => fd.append('sucursales[]', s));
+            } else if (k === 'imagen_archivo') {
+                if (v) fd.append('imagen_archivo', v);
+            } else if (v !== null && v !== undefined) {
+                fd.append(k, v);
+            }
+        });
         const d = await request(editing ? 'update_producto' : 'create_producto', { method:'POST', body: fd });
         notify(d.msg); loadProductos(); loadInventario(); loadDashboard();
     } catch (e) { notify(e.message, 'error'); }

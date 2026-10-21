@@ -222,7 +222,8 @@ if (isset($_GET['action'])) {$action = $_GET['action'];$out = ['ok' => false, 'm
             <button class="nav-btn" data-target="view-config"><i class="ph ph-gear"></i><span class="nav-label">Configuración</span></button>
             <div class="nav-section-title">Navegación</div>
             <a class="nav-btn" href="../../componentes/catalogo.php"><i class="ph ph-storefront"></i><span class="nav-label">Ir al Catálogo</span></a>
-            <a class="nav-btn" href="../../../../inicioSesion.php" style="color:var(--danger)"><i class="ph ph-sign-out"></i><span class="nav-label">Cerrar sesión</span></a>
+            <a class="nav-btn" href="home.php"><i class="ph ph-house"></i><span class="nav-label">Volver a Home</span></a>
+            <a class="nav-btn" href="cerrarSesion.php" style="color:var(--danger)"><i class="ph ph-sign-out"></i><span class="nav-label">Cerrar sesión</span></a>
         </nav>
     </aside>
     <div class="sidebar-scrim" id="sidebarScrim"></div>
@@ -238,7 +239,7 @@ if (isset($_GET['action'])) {$action = $_GET['action'];$out = ['ok' => false, 'm
                 <div class="user-profile">
                     <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--coffee-main)"></i>
                     <span><?= htmlspecialchars($nombreCompleto) ?></span>
-                    <span class="role-chip">Cliente</span>
+                    <span class="role-chip"><?= htmlspecialchars($usuario_data['rol'] ?? 'Cliente') ?></span>
                 </div>
             </div>
         </header>
