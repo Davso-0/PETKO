@@ -110,7 +110,6 @@ if (isset($_GET['action'])) {
         } elseif ($action === 'delete_sucursal') {
             $id = (int)($_POST['id'] ?? 0);
             if (!$id) throw new Exception('[ERROR DE USUARIO] ID de sucursal inválido.');
-            // Si la sucursal tiene ventas registradas, la desactivamos para preservar el historial fiscal
             $stV = $pdo->prepare("SELECT COUNT(*) FROM ventas WHERE id_sucursal=?");
             $stV->execute([$id]);
             if ($stV->fetchColumn() > 0) {
@@ -147,14 +146,50 @@ if (isset($_GET['action'])) {
             try { $data = $pdo->query("SELECT id_categoria, nombre FROM categorias ORDER BY nombre")->fetchAll(PDO::FETCH_ASSOC); } catch (Exception $e) { $data = []; }
             $out = ['ok' => true, 'data' => $data];
 
-        } elseif ($action === 'get_productos') {
+        } elseif ($action === 'get_gestion_productos') {
+            // NUEVO ENDPOINT UNIFICADO PARA LA VISTA DE TARJETAS
             $q = trim($_GET['q'] ?? '');
-            $sql = "SELECT p.id_producto,p.codigo,p.nombre,p.descripcion,p.imagen_url,p.id_categoria,p.precio,p.estado,COALESCE(c.nombre, 'Sin categoría') AS categoria FROM productos p LEFT JOIN categorias c ON c.id_categoria=p.id_categoria";
+            $sid = (int)($_GET['sucursal'] ?? 0);
+            $stockFilter = $_GET['stock'] ?? ''; // 'bajo', 'agotado', ''
+            $cat = (int)($_GET['categoria'] ?? 0);
+
             $params = [];
-            if ($q !== '') { $sql .= " WHERE p.codigo LIKE ? OR p.nombre LIKE ?"; $params[] = "%$q%"; $params[] = "%$q%"; }
-            $sql .= " ORDER BY p.nombre ASC LIMIT 200";
+            $sql = "SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.imagen_url, p.precio, p.estado, 
+                           COALESCE(c.nombre, 'Sin categoría') AS categoria, p.id_categoria 
+                    FROM productos p 
+                    LEFT JOIN categorias c ON c.id_categoria=p.id_categoria 
+                    WHERE 1=1";
+
+            if ($q !== '') { $sql .= " AND (p.codigo LIKE ? OR p.nombre LIKE ?)"; $params[] = "%$q%"; $params[] = "%$q%"; }
+            if ($cat > 0) { $sql .= " AND p.id_categoria=?"; $params[] = $cat; }
+            $sql .= " ORDER BY p.nombre ASC LIMIT 300";
+            
             $st = $pdo->prepare($sql); $st->execute($params);
-            $out = ['ok' => true, 'data' => $st->fetchAll(PDO::FETCH_ASSOC)];
+            $productos = $st->fetchAll(PDO::FETCH_ASSOC);
+
+            // Obtener inventarios para calcular totales
+            $result = [];
+            foreach ($productos as $p) {
+                $stInv = $pdo->prepare("SELECT i.id_sucursal, s.nombre AS sucursal, i.existencias, i.stock_minimo 
+                                        FROM inventarios i 
+                                        JOIN sucursales s ON s.id_sucursal = i.id_sucursal 
+                                        WHERE i.id_producto = ?" . ($sid > 0 ? " AND i.id_sucursal = $sid" : ""));
+                $stInv->execute([$p['id_producto']]);
+                $invs = $stInv->fetchAll(PDO::FETCH_ASSOC);
+                
+                $totalExistencias = array_sum(array_column($invs, 'existencias'));
+                $minStock = $invs ? min(array_column($invs, 'stock_minimo')) : 5;
+
+                // Aplicar filtros de stock
+                if ($stockFilter === 'agotado' && $totalExistencias > 0) continue;
+                if ($stockFilter === 'bajo' && $totalExistencias > $minStock) continue;
+
+                $p['total_existencias'] = $totalExistencias;
+                $p['stock_minimo'] = $minStock;
+                $p['detalle_stock'] = $invs;
+                $result[] = $p;
+            }
+            $out = ['ok' => true, 'data' => $result];
 
         } elseif ($action === 'create_producto' || $action === 'update_producto') {
             $id = (int)($_POST['id'] ?? 0); $codigo = trim($_POST['codigo'] ?? ''); $nombre = trim($_POST['nombre'] ?? '');
@@ -164,7 +199,6 @@ if (isset($_GET['action'])) {
             $sucs = $_POST['sucursales'] ?? [];
             if ($codigo === '' || $nombre === '') throw new Exception('[ERROR DE USUARIO] El código y el nombre son obligatorios.');
 
-            // Resolver imagen: archivo físico subido tiene prioridad sobre texto URL
             $imagenUrl = procesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
 
             $pdo->beginTransaction();
@@ -179,7 +213,6 @@ if (isset($_GET['action'])) {
                     }
                     $out = ['ok' => true, 'msg' => 'Producto registrado exitosamente.'];
                 } else {
-                    // Si se está editando y no se envió nueva imagen, conservar la existente si no se pasó url vacía explícita
                     if ($imagenUrl === null && !isset($_POST['imagen_url'])) {
                         $stAct = $pdo->prepare("SELECT imagen_url FROM productos WHERE id_producto=?");
                         $stAct->execute([$id]);
@@ -202,17 +235,57 @@ if (isset($_GET['action'])) {
 
         } elseif ($action === 'delete_producto') {
             $id = (int)($_POST['id'] ?? 0);
-            // Comprobar si tiene ventas en detalle_ventas
-            $stV = $pdo->prepare("SELECT COUNT(*) FROM detalle_ventas WHERE id_producto=?");
-            $stV->execute([$id]);
-            if ($stV->fetchColumn() > 0) {
-                $pdo->prepare("UPDATE productos SET estado='INACTIVO' WHERE id_producto=?")->execute([$id]);
-                $out = ['ok' => true, 'msg' => 'El producto cuenta con ventas en el historial; se marcó como INACTIVO para preservar las ventas.'];
-            } else {
-                $pdo->prepare("DELETE FROM inventarios WHERE id_producto=?")->execute([$id]);
-                $pdo->prepare("DELETE FROM productos WHERE id_producto=?")->execute([$id]);
-                $out = ['ok' => true, 'msg' => 'Producto eliminado permanentemente.'];
+            
+            // VALIDACIÓN ESTRICTA: Solo eliminar si el stock es exactamente 0 en TODAS las sucursales
+            $stStock = $pdo->prepare("SELECT COALESCE(SUM(existencias), 0) FROM inventarios WHERE id_producto=?");
+            $stStock->execute([$id]);
+            $totalStock = (int)$stStock->fetchColumn();
+            
+            if ($totalStock > 0) {
+                throw new Exception("[ACCIÓN DENEGADA] No puedes eliminar este producto. Aún existen $totalStock unidades repartidas en tus sucursales. Debes ajustar el stock a 0 antes de eliminar.");
             }
+
+            $pdo->beginTransaction();
+            try {
+                // 1. Desvincular de las ventas para que el historial (montos y totales) se mantenga intacto
+                $pdo->prepare("UPDATE detalle_ventas SET id_producto = NULL WHERE id_producto=?")->execute([$id]);
+                
+                // 2. Eliminar registros de inventario
+                $pdo->prepare("DELETE FROM inventarios WHERE id_producto=?")->execute([$id]);
+                
+                // 3. Eliminar el producto permanentemente de la base de datos
+                $pdo->prepare("DELETE FROM productos WHERE id_producto=?")->execute([$id]);
+                
+                $pdo->commit();
+                $out = ['ok' => true, 'msg' => 'Producto eliminado permanentemente.'];
+            } catch (Exception $e) { 
+                $pdo->rollBack(); 
+                throw $e; 
+            }
+
+        } elseif ($action === 'ajustar_stock') {
+            // NUEVO ENDPOINT PARA MODIFICAR CANTIDADES COMO GERENTE
+            $id_p = (int)($_POST['id_producto'] ?? 0);
+            $id_s = (int)($_POST['id_sucursal'] ?? 0);
+            $cant = (int)($_POST['cantidad'] ?? 0);
+            $tipo = $_POST['tipo'] ?? '';
+            
+            if (!$id_p || !$id_s) throw new Exception('[ERROR] Debes seleccionar un producto y una sucursal.');
+            if ($cant < 0) throw new Exception('[ERROR] No puedes ingresar cantidades negativas.');
+
+            $st = $pdo->prepare("SELECT existencias FROM inventarios WHERE id_producto=? AND id_sucursal=?");
+            $st->execute([$id_p, $id_s]);
+            $row = $st->fetch();
+            
+            if (!$row) throw new Exception("[ERROR] Este producto no está asignado a la sucursal seleccionada. Edita el producto para asignarlo primero.");
+
+            $nueva = (int)$row['existencias'];
+            if ($tipo === 'entrada') $nueva += $cant;
+            elseif ($tipo === 'salida') $nueva = max(0, $nueva - $cant);
+            elseif ($tipo === 'reemplazo') $nueva = $cant;
+
+            $pdo->prepare("UPDATE inventarios SET existencias=? WHERE id_producto=? AND id_sucursal=?")->execute([$nueva, $id_p, $id_s]);
+            $out = ['ok' => true, 'msg' => "Stock actualizado correctamente. Nueva existencia: $nueva unidades."];
 
         } elseif ($action === 'get_producto_detalle') {
             $id = (int)($_GET['id'] ?? 0);
@@ -253,6 +326,7 @@ if (isset($_GET['action'])) {
             }
 
         } elseif ($action === 'get_inventarios') {
+            // Mantenido para no romper la lista de atencion pendiente (lowStockList)
             $q = trim($_GET['q'] ?? ''); $sid = (int)($_GET['sucursal'] ?? 0);
             $sql = "SELECT i.id_inventario,p.nombre AS producto,p.codigo,s.nombre AS sucursal,i.existencias,i.stock_minimo,p.precio,CASE WHEN i.existencias<=0 THEN 'AGOTADO' WHEN i.existencias<=i.stock_minimo THEN 'BAJO' ELSE 'OK' END AS nivel FROM inventarios i JOIN productos p ON p.id_producto=i.id_producto JOIN sucursales s ON s.id_sucursal=i.id_sucursal WHERE 1=1";
             $params = [];
@@ -451,6 +525,23 @@ try {
         .dark-mode .swal2-popup { background: var(--bg-surface); color: var(--ink); }
         .dark-mode .swal2-input, .dark-mode .swal2-select, .dark-mode .swal2-textarea { background: var(--bg-app); color: var(--ink); border-color: var(--border-soft); }
 
+        /* Diseño Catálogo Técnico (NUEVO) */
+        .prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .prod-card { background: var(--bg-surface); border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.2s ease, transform 0.2s ease; }
+        .prod-card:hover { box-shadow: var(--shadow-md); transform: translateY(-3px); border-color: var(--coffee-light); }
+        .prod-card-img { height: 160px; width: 100%; object-fit: cover; border-bottom: 1px solid var(--border-soft); background: var(--bg-app); }
+        .prod-card-body { padding: 16px; flex: 1; display: flex; flex-direction: column; }
+        .prod-meta { font-size: 11px; color: var(--ink-faint); display: flex; justify-content: space-between; margin-bottom: 6px; font-weight: 700; text-transform: uppercase; }
+        .prod-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; line-height: 1.3; color: var(--ink); }
+        .prod-price { font-size: 20px; font-family: var(--font-display); font-weight: 600; color: var(--coffee-main); margin-bottom: 12px; }
+        .prod-stock-info { background: var(--bg-app); border-radius: 8px; padding: 10px; font-size: 12px; margin-bottom: 16px; border: 1px dashed var(--border-soft); }
+        .prod-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; }
+        .btn-card { padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 700; text-align: center; border: 1px solid var(--border-soft); background: var(--bg-surface); color: var(--ink-soft); transition: 0.2s; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;}
+        .btn-card:hover { background: var(--coffee-light); color: var(--coffee-main); }
+        .btn-card-del:hover { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bg); }
+        .btn-card-full { grid-column: span 2; background: var(--coffee-main); color: #fff; border-color: var(--coffee-main); }
+        .btn-card-full:hover { background: var(--coffee-gradient); color: #fff; opacity: 0.9; }
+
         @media (max-width: 1180px) { .grid-2col { grid-template-columns: 1fr; } }
         @media (max-width: 980px) {
             .app-layout { grid-template-columns: 1fr; }
@@ -477,8 +568,8 @@ try {
             <div class="nav-section-title" data-i18n="nav_section_gestion">Gestión</div>
             <button class="nav-btn" data-target="view-sucursales"><i class="ph ph-storefront"></i><span class="nav-label" data-i18n="nav_sucursales">Sucursales</span></button>
             <button class="nav-btn" data-target="view-personal"><i class="ph ph-users-three"></i><span class="nav-label" data-i18n="nav_personal">Personal</span></button>
-            <button class="nav-btn" data-target="view-inventario"><i class="ph ph-package"></i><span class="nav-label" data-i18n="nav_inventario">Inventario</span></button>
-            <button class="nav-btn" data-target="view-productos"><i class="ph ph-tag"></i><span class="nav-label" data-i18n="nav_productos">Productos</span></button>
+            <!-- REEMPLAZO UNIFICADO -->
+            <button class="nav-btn" data-target="view-gestion-productos"><i class="ph ph-package"></i><span class="nav-label" data-i18n="nav_gestion_productos">Gestión de Productos</span></button>
             <button class="nav-btn" data-target="view-ventas"><i class="ph ph-chart-line-up"></i><span class="nav-label" data-i18n="nav_ventas">Ventas</span></button>
             <div class="nav-section-title" data-i18n="nav_section_nav">Navegación</div>
             <a class="nav-btn" href="../../componentes/catalogo.php"><i class="ph ph-storefront"></i><span class="nav-label" data-i18n="nav_catalogo">Ir al Catálogo</span></a>
@@ -519,7 +610,7 @@ try {
                 <div class="kpi-grid">
                     <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-storefront kpi-icon"></i><span class="kpi-tag" data-i18n="kpi_tag_red">Red</span></div><div class="kpi-val" id="metricSucursales"><?= number_format($ts) ?></div><div class="kpi-label" data-i18n="th_sucursales">Sucursales</div></div>
                     <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-users-three kpi-icon"></i><span class="kpi-tag" data-i18n="kpi_tag_equipo">Equipo</span></div><div class="kpi-val" id="metricUsuarios"><?= number_format($tu) ?></div><div class="kpi-label" data-i18n="nav_personal">Personal</div></div>
-                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-package kpi-icon"></i><span class="kpi-tag" data-i18n="kpi_tag_catalogo">Catálogo</span></div><div class="kpi-val" id="metricProductos"><?= number_format($tp) ?></div><div class="kpi-label" data-i18n="nav_productos">Productos</div></div>
+                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-package kpi-icon"></i><span class="kpi-tag" data-i18n="kpi_tag_catalogo">Catálogo</span></div><div class="kpi-val" id="metricProductos"><?= number_format($tp) ?></div><div class="kpi-label" data-i18n="nav_productos_old">Productos</div></div>
                     <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-money kpi-icon"></i><span class="kpi-tag" data-i18n="kpi_tag_hoy">Hoy</span></div><div class="kpi-val" id="metricIngresos">$<?= number_format($ih, 2) ?></div><div class="kpi-label" id="metricVentasCount"><?= number_format($vh) ?> <span data-i18n="ventas_realizadas">ventas realizadas</span></div></div>
                 </div>
                 <div class="grid-2col">
@@ -527,7 +618,7 @@ try {
                     <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="chart_pagos">Métodos de pago</h2><p class="panel-sub" data-i18n="chart_pagos_sub">Distribución histórica</p></div></div><div class="donut-wrap"><canvas id="paymentChart"></canvas><div class="donut-center"><div class="num" id="donutVentasCount"><?= number_format($vh) ?></div><div class="lbl" data-i18n="ventas_lbl">ventas</div></div></div></div>
                 </div>
                 <div class="grid-2col">
-                    <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="atencion_title">Atención pendiente</h2><p class="panel-sub" data-i18n="atencion_sub">Productos bajos o agotados</p></div><button class="chip-btn" data-goto="view-inventario" data-i18n="ir_inventario">Ir al inventario</button></div><div id="lowStockList" class="stock-list" data-i18n="cargando">Cargando...</div></div>
+                    <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="atencion_title">Atención pendiente</h2><p class="panel-sub" data-i18n="atencion_sub">Productos bajos o agotados</p></div><button class="chip-btn" data-goto="view-gestion-productos" data-i18n="ir_inventario">Ir al inventario</button></div><div id="lowStockList" class="stock-list" data-i18n="cargando">Cargando...</div></div>
                     <div class="panel">
                         <div class="panel-head"><div><h2 class="panel-title" data-i18n="salud_inv_title">Salud del Inventario</h2><p class="panel-sub" data-i18n="salud_inv_sub">Métricas globales de mercancía</p></div></div>
                         <div class="info-strip"><div><div class="kpi-label" data-i18n="total_unidades">Total de Unidades Físicas</div><div class="kpi-val" style="font-size:22px; margin-top:4px;" id="metricInventarioTotal"><?= number_format($ti) ?></div></div><i class="ph-fill ph-cube kpi-icon"></i></div>
@@ -554,30 +645,33 @@ try {
                 <div class="panel"><table><thead><tr><th data-i18n="nav_personal">Personal</th><th data-i18n="th_rol">Rol</th><th data-i18n="th_sucursal">Sucursal</th><th data-i18n="th_estado">Estado</th><th></th></tr></thead><tbody id="personalTable"></tbody></table></div>
             </section>
 
-            <!-- INVENTARIO -->
-            <section id="view-inventario" class="view-section">
-                <div class="header-row"><div><h1 class="title"><i class="ph ph-package"></i> <span data-i18n="nav_inventario">Inventario</span></h1><p class="subtitle" data-i18n="inv_sub">Consulta las existencias de todas las sucursales.</p></div></div>
-                <div class="panel">
-                    <div class="form-inline" style="margin-bottom:16px;">
-                        <input class="search-input" id="inventorySearch" type="search" data-i18n-placeholder="placeholder_buscar_producto" placeholder="Producto o código...">
-                        <select class="select-input" id="inventoryBranch"><option value="" data-i18n="todas_sucursales">Todas las sucursales</option></select>
-                    </div>
-                    <table><thead><tr><th data-i18n="th_producto">Producto</th><th data-i18n="th_sucursal">Sucursal</th><th data-i18n="th_existencia">Existencia</th><th data-i18n="th_precio">Precio</th><th data-i18n="th_nivel">Nivel</th></tr></thead><tbody id="inventarioTable"></tbody></table>
-                </div>
-            </section>
-
-            <!-- PRODUCTOS -->
-            <section id="view-productos" class="view-section">
+           <!-- GESTIÓN DE PRODUCTOS UNIFICADA -->
+            <section id="view-gestion-productos" class="view-section">
                 <div class="header-row">
-                    <div><h1 class="title"><i class="ph ph-tag"></i> <span data-i18n="prod_title">Catálogo Global</span></h1><p class="subtitle" data-i18n="prod_sub">Registra los productos base de todo el sistema.</p></div>
-                    <button class="btn-primary" id="addProducto"><i class="ph ph-plus"></i> <span data-i18n="btn_add_producto">Agregar producto</span></button>
+                    <div>
+                        <h1 class="title"><i class="ph ph-package"></i> <span data-i18n="nav_gestion_productos">Gestión de Productos</span></h1>
+                        <p class="subtitle" data-i18n="gestion_prod_sub">Catálogo técnico e inventario unificado. Controla existencias y catálogo en un solo lugar.</p>
+                    </div>
+                    <button class="btn-primary" id="addProductoUnified"><i class="ph ph-plus"></i> <span data-i18n="btn_add_producto">Nuevo Producto</span></button>
                 </div>
-                <div class="panel">
-                    <div class="form-inline" style="margin-bottom:16px;"><input class="search-input" id="productsSearch" type="search" data-i18n-placeholder="placeholder_buscar_producto" placeholder="Buscar producto o código..."></div>
-                    <table><thead><tr><th data-i18n="th_codigo">Código</th><th data-i18n="th_producto">Producto</th><th data-i18n="th_categoria">Categoría</th><th data-i18n="th_precio">Precio</th><th data-i18n="th_estado">Estado</th><th></th></tr></thead><tbody id="productosTable"></tbody></table>
+                
+                <div class="panel" style="background: transparent; border: none; padding: 0; box-shadow: none;">
+                    <!-- Barra de herramientas avanzada POS (Sin botón CSV) -->
+                    <div class="form-inline" style="margin-bottom:20px; background: var(--bg-surface); padding: 16px; border-radius: var(--radius); border: 1px solid var(--border-soft); box-shadow: var(--shadow-sm);">
+                        <input class="search-input" id="gpSearch" data-i18n-placeholder="placeholder_buscar_producto" placeholder="Buscar por nombre o código..." style="flex:1; min-width: 200px;">
+                        <select class="select-input" id="gpBranch"><option value="" data-i18n="todas_sucursales">Todas las sucursales</option></select>
+                        <select class="select-input" id="gpCategory"><option value="" data-i18n="todas_categorias">Todas las categorías</option></select>
+                        <select class="select-input" id="gpStock">
+                            <option value="" data-i18n="cualquier_stock">Cualquier nivel de stock</option>
+                            <option value="bajo" data-i18n="stock_bajo">Stock Bajo</option>
+                            <option value="agotado" data-i18n="stock_agotado">Agotados</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Contenedor de Tarjetas -->
+                    <div class="prod-grid" id="gpGrid"></div>
                 </div>
             </section>
-
             <!-- VENTAS -->
             <section id="view-ventas" class="view-section">
                 <div class="header-row"><div><h1 class="title"><i class="ph ph-chart-line-up"></i> <span data-i18n="ven_title">Historial de Ventas</span></h1><p class="subtitle" data-i18n="ven_sub">Supervisa las ventas de toda la red.</p></div></div>
@@ -627,8 +721,8 @@ const I18N = {
     es: {
         brand_sub: 'Administración General', role_chip: 'Admin', eyebrow_panel: 'Panel principal',
         nav_section_panel: 'Panel', nav_section_gestion: 'Gestión', nav_section_nav: 'Navegación',
-        nav_general: 'Resumen General', nav_sucursales: 'Sucursales', nav_personal: 'Personal', nav_inventario: 'Inventario',
-        nav_productos: 'Productos', nav_ventas: 'Ventas', nav_catalogo: 'Ir al Catálogo', nav_home: 'Volver a Home', nav_logout: 'Cerrar sesión',
+        nav_general: 'Resumen General', nav_sucursales: 'Sucursales', nav_personal: 'Personal', 
+        nav_gestion_productos: 'Gestión de Productos', nav_productos_old: 'Productos', nav_ventas: 'Ventas', nav_catalogo: 'Ir al Catálogo', nav_home: 'Volver a Home', nav_logout: 'Cerrar sesión',
         greeting: 'Hola, administración', greeting_sub: 'Este es el pulso operativo de KION al día de hoy.', btn_actualizar: 'Actualizar',
         kpi_tag_red: 'Red', kpi_tag_equipo: 'Equipo', kpi_tag_catalogo: 'Catálogo', kpi_tag_hoy: 'Hoy', ventas_realizadas: 'ventas realizadas', ventas_lbl: 'ventas',
         th_sucursales: 'Sucursales', chart_ventas: 'Ventas (7 días)', chart_ventas_sub: 'Ingresos consolidados de toda la red',
@@ -639,22 +733,26 @@ const I18N = {
         suc_sub: 'Crea, consulta, modifica y elimina puntos de venta.', btn_add_sucursal: 'Agregar sucursal',
         th_sucursal: 'Sucursal', th_direccion: 'Dirección', th_telefono: 'Teléfono', th_contacto: 'Contacto', th_estado: 'Estado',
         per_sub: 'Registra gerentes/cajeros y asígnalos a una sucursal.', btn_add_personal: 'Agregar personal', th_rol: 'Rol',
-        inv_sub: 'Consulta las existencias de todas las sucursales.', placeholder_buscar_producto: 'Buscar producto o código...',
-        todas_sucursales: 'Todas las sucursales', th_producto: 'Producto', th_existencia: 'Existencia', th_precio: 'Precio', th_nivel: 'Nivel',
-        prod_title: 'Catálogo Global', prod_sub: 'Registra los productos base de todo el sistema.', btn_add_producto: 'Agregar producto',
+        placeholder_buscar_producto: 'Buscar producto o código...',
+        todas_sucursales: 'Todas las sucursales', todas_categorias: 'Todas las categorías', cualquier_stock: 'Cualquier nivel de stock',
+        stock_bajo: 'Stock Bajo / Crítico', stock_agotado: 'Agotados (0 stock)',
+        gestion_prod_sub: 'Catálogo técnico e inventario unificado. Controla existencias y catálogo en un solo lugar.', btn_add_producto: 'Nuevo Producto',
         th_codigo: 'Código', th_categoria: 'Categoría',
         ven_title: 'Historial de Ventas', ven_sub: 'Supervisa las ventas de toda la red.',
         th_folio: 'Folio', th_fecha: 'Fecha', th_pago: 'Pago', th_total: 'Total',
         editar: 'Editar', ver_stock: 'Ver stock', ver: 'Ver', guardar: 'Guardar', cancelar: 'Cancelar', si_eliminar: 'Sí, eliminar',
         sin_registros: 'No hay registros.', panel_actualizado: 'Panel actualizado.', inv_saludable: 'Todo el inventario está en niveles saludables.',
         sin_datos: 'Sin datos.', no_asignado: 'No está asignado a ninguna sucursal.',
-        modal_prod_new: 'Nuevo Producto', modal_prod_edit: 'Editar Producto', img_url: 'Imagen del Producto (subir archivo o ingresar URL)', desc_lbl: 'Descripción', asign_suc: 'Asignar a sucursales:'
+        modal_prod_new: 'Nuevo Producto', modal_prod_edit: 'Editar Producto', img_url: 'Imagen del Producto (subir archivo o ingresar URL)', desc_lbl: 'Descripción', asign_suc: 'Asignar a sucursales:',
+        funcion_csv_desarrollo: 'Función de exportación CSV en desarrollo.',
+        ajustar_stock_title: 'Ajustar Stock', sucursal_destino: 'Sucursal Destino', tipo_movimiento: 'Tipo de movimiento', cantidad_piezas: 'Cantidad de piezas',
+        mov_entrada: 'Entrada de mercancía (Sumar)', mov_salida: 'Salida / Merma (Restar)', mov_reemplazo: 'Ajuste Fijo (Reemplazar total)', aplicar_ajuste: 'Aplicar Ajuste'
     },
     en: {
         brand_sub: 'General Administration', role_chip: 'Admin', eyebrow_panel: 'Main panel',
         nav_section_panel: 'Overview', nav_section_gestion: 'Management', nav_section_nav: 'Navigation',
-        nav_general: 'Dashboard', nav_sucursales: 'Branches', nav_personal: 'Staff', nav_inventario: 'Inventory',
-        nav_productos: 'Products', nav_ventas: 'Sales', nav_catalogo: 'Go to Catalog', nav_home: 'Back to Home', nav_logout: 'Log out',
+        nav_general: 'Dashboard', nav_sucursales: 'Branches', nav_personal: 'Staff', 
+        nav_gestion_productos: 'Product Management', nav_productos_old: 'Products', nav_ventas: 'Sales', nav_catalogo: 'Go to Catalog', nav_home: 'Back to Home', nav_logout: 'Log out',
         greeting: 'Hello, admin', greeting_sub: "Here's KION's operating pulse for today.", btn_actualizar: 'Refresh',
         kpi_tag_red: 'Network', kpi_tag_equipo: 'Team', kpi_tag_catalogo: 'Catalog', kpi_tag_hoy: 'Today', ventas_realizadas: 'sales made', ventas_lbl: 'sales',
         th_sucursales: 'Branches', chart_ventas: 'Sales (7 days)', chart_ventas_sub: 'Consolidated revenue across the network',
@@ -665,16 +763,20 @@ const I18N = {
         suc_sub: 'Create, view, edit and delete store branches.', btn_add_sucursal: 'Add branch',
         th_sucursal: 'Branch', th_direccion: 'Address', th_telefono: 'Phone', th_contacto: 'Contact', th_estado: 'Status',
         per_sub: 'Register managers/cashiers and assign them to a branch.', btn_add_personal: 'Add staff', th_rol: 'Role',
-        inv_sub: 'Check stock levels across all branches.', placeholder_buscar_producto: 'Search product or code...',
-        todas_sucursales: 'All branches', th_producto: 'Product', th_existencia: 'Stock', th_precio: 'Price', th_nivel: 'Level',
-        prod_title: 'Global Catalog', prod_sub: 'Register the base products for the whole system.', btn_add_producto: 'Add product',
+        placeholder_buscar_producto: 'Search product or code...',
+        todas_sucursales: 'All branches', todas_categorias: 'All categories', cualquier_stock: 'Any stock level',
+        stock_bajo: 'Low / Critical Stock', stock_agotado: 'Out of stock (0)',
+        gestion_prod_sub: 'Technical catalog and unified inventory. Control stock and catalog in one place.', btn_add_producto: 'New Product',
         th_codigo: 'Code', th_categoria: 'Category',
         ven_title: 'Sales History', ven_sub: 'Monitor sales across the whole network.',
         th_folio: 'ID', th_fecha: 'Date', th_pago: 'Payment', th_total: 'Total',
         editar: 'Edit', ver_stock: 'View stock', ver: 'View', guardar: 'Save', cancelar: 'Cancel', si_eliminar: 'Yes, delete',
         sin_registros: 'No records.', panel_actualizado: 'Dashboard refreshed.', inv_saludable: 'All inventory is at healthy levels.',
         sin_datos: 'No data.', no_asignado: 'Not assigned to any branch.',
-        modal_prod_new: 'New Product', modal_prod_edit: 'Edit Product', img_url: 'Image URL', desc_lbl: 'Description', asign_suc: 'Assign to branches:'
+        modal_prod_new: 'New Product', modal_prod_edit: 'Edit Product', img_url: 'Image URL', desc_lbl: 'Description', asign_suc: 'Assign to branches:',
+        funcion_csv_desarrollo: 'CSV export feature in development.',
+        ajustar_stock_title: 'Adjust Stock', sucursal_destino: 'Target Branch', tipo_movimiento: 'Movement type', cantidad_piezas: 'Quantity',
+        mov_entrada: 'Inbound (Add)', mov_salida: 'Outbound (Subtract)', mov_reemplazo: 'Fixed Adjustment (Replace)', aplicar_ajuste: 'Apply Adjustment'
     }
 };
 let currentLang = localStorage.getItem('kion-admin-lang') || 'es';
@@ -701,7 +803,7 @@ $('#sidebarScrim').addEventListener('click', () => appLayout.classList.remove('m
 
 const navButtons = document.querySelectorAll('.nav-btn[data-target]');
 const views = document.querySelectorAll('.view-section');
-const titleKeys = { 'view-general':'nav_general', 'view-sucursales':'nav_sucursales', 'view-personal':'nav_personal', 'view-inventario':'nav_inventario', 'view-productos':'prod_title', 'view-ventas':'ven_title' };
+const titleKeys = { 'view-general':'nav_general', 'view-sucursales':'nav_sucursales', 'view-personal':'nav_personal', 'view-gestion-productos':'nav_gestion_productos', 'view-ventas':'ven_title' };
 function switchView(targetId) {
     views.forEach(v => v.classList.remove('active'));
     navButtons.forEach(b => b.classList.remove('active'));
@@ -713,8 +815,7 @@ function switchView(targetId) {
     if (targetId === 'view-general') loadDashboard();
     if (targetId === 'view-sucursales') loadSucursales();
     if (targetId === 'view-personal') loadPersonal();
-    if (targetId === 'view-inventario') loadInventario();
-    if (targetId === 'view-productos') loadProductos();
+    if (targetId === 'view-gestion-productos') loadGestionProductos();
     if (targetId === 'view-ventas') loadVentas();
 }
 navButtons.forEach(btn => btn.addEventListener('click', e => switchView(e.currentTarget.dataset.target)));
@@ -865,46 +966,105 @@ document.addEventListener('click', async e => {
     }
 });
 
-// -------- INVENTARIO --------
-async function loadBranchSelects() {
+// -------- GESTIÓN UNIFICADA DE PRODUCTOS --------
+async function loadFiltrosGP() {
     try {
-        const { data } = await request('get_sucursales_simple');
-        const options = data.map(x => `<option value="${x.id_sucursal}">${escapeHtml(x.nombre)}</option>`).join('');
-        ['#inventoryBranch','#salesBranch'].forEach(s => $(s).innerHTML = `<option value="">${t('todas_sucursales')}</option>` + options);
-    } catch (e) {}
+        const [cats, sucs] = await Promise.all([request('get_categorias'), request('get_sucursales_simple')]);
+        const catLabel = t('todas_categorias');
+        const sucLabel = t('todas_sucursales');
+        $('#gpCategory').innerHTML = `<option value="">${catLabel}</option>` + cats.data.map(c => `<option value="${c.id_categoria}">${escapeHtml(c.nombre)}</option>`).join('');
+        $('#gpBranch').innerHTML = `<option value="">${sucLabel}</option>` + sucs.data.map(s => `<option value="${s.id_sucursal}">${escapeHtml(s.nombre)}</option>`).join('');
+    } catch(e) {}
 }
-async function loadInventario() {
-    try {
-        const q = $('#inventorySearch').value, suc = $('#inventoryBranch').value;
-        const { data } = await request(`get_inventarios&q=${encodeURIComponent(q)}&sucursal=${encodeURIComponent(suc)}`);
-        $('#inventarioTable').innerHTML = data.length ? data.map(x => {
-            const cls = x.nivel === 'OK' ? 'b-green' : (x.nivel === 'BAJO' ? 'b-yellow' : 'b-red');
-            return `<tr><td><b>${escapeHtml(x.producto)}</b><br><small style="color:var(--ink-faint)">${escapeHtml(x.codigo)}</small></td><td>${escapeHtml(x.sucursal)}</td><td><b>${escapeHtml(x.existencias)}</b> <small>/ mín. ${escapeHtml(x.stock_minimo)}</small></td><td>${money(x.precio)}</td><td><span class="badge ${cls}">${escapeHtml(x.nivel)}</span></td></tr>`;
-        }).join('') : empty(5);
-    } catch (e) { notify(e.message, 'error'); }
-}
-['#inventorySearch','#inventoryBranch'].forEach(s => $(s).addEventListener('input', loadInventario));
 
-// -------- PRODUCTOS --------
-async function loadProductos() {
+async function loadGestionProductos() {
     try {
-        const q = $('#productsSearch').value;
-        const { data } = await request(`get_productos&q=${encodeURIComponent(q)}`);
-        $('#productosTable').innerHTML = data.length ? data.map(x => `<tr>
-            <td>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <img src="${x.imagen_url ? escapeHtml(x.imagen_url) : 'https://placehold.co/100x100?text=Sin+Imagen'}" style="width:36px; height:36px; border-radius:8px; object-fit:cover; border:1px solid var(--border-soft);">
-                    <b>${escapeHtml(x.codigo)}</b>
+        const q = $('#gpSearch').value;
+        const suc = $('#gpBranch').value;
+        const cat = $('#gpCategory').value;
+        const stock = $('#gpStock').value;
+
+        const { data } = await request(`get_gestion_productos&q=${encodeURIComponent(q)}&sucursal=${suc}&categoria=${cat}&stock=${stock}`);
+        
+        $('#gpGrid').innerHTML = data.length ? data.map(x => {
+            const statusCls = x.estado === 'ACTIVO' ? 'color: var(--success);' : 'color: var(--danger);';
+            const img = x.imagen_url ? escapeHtml(x.imagen_url) : 'https://placehold.co/300x200?text=Sin+Imagen';
+            const stockCls = x.total_existencias <= 0 ? 'color: var(--danger);' : (x.total_existencias <= x.stock_minimo ? 'color: var(--warning);' : 'color: var(--success);');
+            
+            const desglose = x.detalle_stock.map(s => `${s.sucursal}: ${s.existencias}`).join(' | ') || 'Sin inventario asignado';
+
+            return `
+            <div class="prod-card">
+                <img src="${img}" class="prod-card-img" alt="${escapeHtml(x.nombre)}">
+                <div class="prod-card-body">
+                    <div class="prod-meta"><span>${escapeHtml(x.codigo)}</span> <span style="${statusCls}">${escapeHtml(x.estado)}</span></div>
+                    <h3 class="prod-title">${escapeHtml(x.nombre)}</h3>
+                    <div class="prod-meta" style="color:var(--ink); opacity:0.8;">${escapeHtml(x.categoria)}</div>
+                    <div class="prod-price">${money(x.precio)}</div>
+                    
+                    <div class="prod-stock-info" title="${escapeHtml(desglose)}">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                            <strong>Stock Total:</strong>
+                            <strong style="${stockCls}">${x.total_existencias} u.</strong>
+                        </div>
+                        <div style="color:var(--ink-faint); font-size:10.5px;">Mínimo recomendado: ${x.stock_minimo} u.</div>
+                    </div>
+
+                    <div class="prod-actions">
+                        <button class="btn-card" data-edit-prod='${JSON.stringify(x).replace(/'/g,'&#39;')}'><i class="ph ph-pencil-simple"></i> ${t('editar')}</button>
+                        <button class="btn-card btn-card-del" data-del-prod="${x.id_producto}"><i class="ph ph-trash"></i> Borrar</button>
+                        <button class="btn-card btn-card-full" data-ajustar-stock="${x.id_producto}" data-nombre="${escapeHtml(x.nombre)}"><i class="ph ph-arrows-left-right"></i> Ajustar Stock</button>
+                    </div>
                 </div>
-            </td>
-            <td><b>${escapeHtml(x.nombre)}</b></td><td>${escapeHtml(x.categoria)}</td><td>${money(x.precio)}</td>
-            <td>${statusBadge(x.estado)}</td>
-            <td class="row-actions"><button class="chip-btn" data-view-prod="${x.id_producto}">${t('ver_stock')}</button><button class="chip-btn" data-edit-prod='${JSON.stringify(x).replace(/'/g,'&#39;')}'>${t('editar')}</button><button class="icon-x" data-del-prod="${x.id_producto}"><i class="ph ph-trash"></i></button></td>
-        </tr>`).join('') : empty(6);
+            </div>`;
+        }).join('') : `<div style="grid-column: 1 / -1; text-align:center; padding: 40px; color:var(--ink-faint);">${t('sin_registros')}</div>`;
     } catch (e) { notify(e.message, 'error'); }
 }
-$('#productsSearch').addEventListener('input', loadProductos);
 
+['#gpSearch', '#gpBranch', '#gpCategory', '#gpStock'].forEach(s => $(s).addEventListener('change', loadGestionProductos));
+$('#gpSearch').addEventListener('input', (e) => { clearTimeout(window.searchT); window.searchT = setTimeout(loadGestionProductos, 300); });
+
+async function ajustarStockModalAdmin(id_producto, nombre_producto) {
+    const { data: sucs } = await request('get_sucursales_simple');
+    if(!sucs.length) { notify('No hay sucursales activas.', 'error'); return; }
+    const options = sucs.map(s => `<option value="${s.id_sucursal}">${escapeHtml(s.nombre)}</option>`).join('');
+
+    const { value: form } = await Swal.fire({
+        title: t('ajustar_stock_title'),
+        html: `
+            <div style="text-align:left; font-size:14px;">
+                <p style="margin-bottom:12px; color:var(--coffee-main); font-weight:600;">${nombre_producto}</p>
+                <label><b>${t('sucursal_destino')}</b></label>
+                <select id="swal-s" class="swal2-input" style="width:100%;margin:8px 0 16px;">${options}</select>
+                <label><b>${t('tipo_movimiento')}</b></label>
+                <select id="swal-t" class="swal2-input" style="width:100%;margin:8px 0 16px;">
+                    <option value="entrada">${t('mov_entrada')}</option>
+                    <option value="salida">${t('mov_salida')}</option>
+                    <option value="reemplazo">${t('mov_reemplazo')}</option>
+                </select>
+                <label><b>${t('cantidad_piezas')}</b></label>
+                <input id="swal-c" type="number" min="0" value="1" class="swal2-input" style="width:100%;margin-top:8px;">
+            </div>
+        `,
+        confirmButtonText: t('aplicar_ajuste'), confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar'),
+        preConfirm: () => ({
+            id_producto,
+            id_sucursal: document.getElementById('swal-s').value,
+            tipo: document.getElementById('swal-t').value,
+            cantidad: document.getElementById('swal-c').value
+        })
+    });
+    
+    if (form) {
+        try {
+            const fd = new FormData(); Object.entries(form).forEach(([k,v]) => fd.append(k,v));
+            const d = await request('ajustar_stock', { method:'POST', body: fd });
+            notify(d.msg); loadGestionProductos(); loadDashboard();
+        } catch (e) { notify(e.message, 'error'); }
+    }
+}
+
+// CREAR/EDITAR PRODUCTO (Formulario Mantenido)
 async function productoModal(record = null) {
     const editing = !!record;
     let categorias = [], sucursales = [], asignadas = [];
@@ -1001,31 +1161,40 @@ async function productoModal(record = null) {
             }
         });
         const d = await request(editing ? 'update_producto' : 'create_producto', { method:'POST', body: fd });
-        notify(d.msg); loadProductos(); loadInventario(); loadDashboard();
+        notify(d.msg); 
+        if (typeof loadGestionProductos === 'function') loadGestionProductos();
+        loadDashboard();
     } catch (e) { notify(e.message, 'error'); }
 }
-$('#addProducto').addEventListener('click', () => productoModal());
+
+$('#addProductoUnified').addEventListener('click', () => productoModal());
 document.addEventListener('click', async e => {
     const editBtn = e.target.closest('[data-edit-prod]');
     if (editBtn) productoModal(JSON.parse(editBtn.dataset.editProd));
     const delBtn = e.target.closest('[data-del-prod]');
     if (delBtn) {
-        const conf = await Swal.fire({ title:'¿Eliminar producto?', text:'Se eliminará el producto y su inventario asociado.', icon:'warning', showCancelButton:true, confirmButtonColor:'var(--danger)', confirmButtonText:t('si_eliminar'), cancelButtonText:t('cancelar') });
+        const conf = await Swal.fire({ title:'¿Eliminar producto?', text:'Solo procederá si el stock global es 0.', icon:'warning', showCancelButton:true, confirmButtonColor:'var(--danger)', confirmButtonText:t('si_eliminar'), cancelButtonText:t('cancelar') });
         if (!conf.isConfirmed) return;
         try {
             const fd = new FormData(); fd.append('id', delBtn.dataset.delProd);
             const d = await request('delete_producto', { method:'POST', body:fd });
-            notify(d.msg); loadProductos(); loadInventario(); loadDashboard();
+            notify(d.msg); 
+            if (typeof loadGestionProductos === 'function') loadGestionProductos(); 
+            loadDashboard();
         } catch (err) { notify(err.message, 'error'); }
     }
-    const viewBtn = e.target.closest('[data-view-prod]');
-    if (viewBtn) {
-        try {
-            const { data } = await request(`get_producto_detalle&id=${viewBtn.dataset.viewProd}`);
-            Swal.fire({ title: 'Stock por sucursal', html: data.length ? `<table style="width:100%;text-align:left;"><tr><th>Sucursal</th><th style="text-align:right">Existencias</th></tr>${data.map(x=>`<tr><td>${escapeHtml(x.sucursal)}</td><td style="text-align:right"><b>${x.existencias}</b></td></tr>`).join('')}</table>` : `<p>${t('no_asignado')}</p>` });
-        } catch (err) { notify(err.message, 'error'); }
-    }
+    const btnAjustar = e.target.closest('[data-ajustar-stock]');
+    if (btnAjustar) ajustarStockModalAdmin(btnAjustar.dataset.ajustarStock, btnAjustar.dataset.nombre);
 });
+
+
+async function loadBranchSelects() {
+    try {
+        const { data } = await request('get_sucursales_simple');
+        const options = data.map(x => `<option value="${x.id_sucursal}">${escapeHtml(x.nombre)}</option>`).join('');
+        $('#salesBranch').innerHTML = `<option value="">${t('todas_sucursales')}</option>` + options;
+    } catch (e) {}
+}
 
 // -------- VENTAS --------
 async function loadVentas() {
@@ -1067,6 +1236,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     loadBranchSelects();
     loadDashboard();
+    loadFiltrosGP();
 });
 </script>
 </body>
