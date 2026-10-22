@@ -147,10 +147,9 @@ if (isset($_GET['action'])) {
             $out = ['ok' => true, 'data' => $data];
 
         } elseif ($action === 'get_gestion_productos') {
-            // NUEVO ENDPOINT UNIFICADO PARA LA VISTA DE TARJETAS
             $q = trim($_GET['q'] ?? '');
             $sid = (int)($_GET['sucursal'] ?? 0);
-            $stockFilter = $_GET['stock'] ?? ''; // 'bajo', 'agotado', ''
+            $stockFilter = $_GET['stock'] ?? '';
             $cat = (int)($_GET['categoria'] ?? 0);
 
             $params = [];
@@ -264,7 +263,6 @@ if (isset($_GET['action'])) {
             }
 
         } elseif ($action === 'ajustar_stock') {
-            // NUEVO ENDPOINT PARA MODIFICAR CANTIDADES COMO GERENTE
             $id_p = (int)($_POST['id_producto'] ?? 0);
             $id_s = (int)($_POST['id_sucursal'] ?? 0);
             $cant = (int)($_POST['cantidad'] ?? 0);
@@ -326,7 +324,6 @@ if (isset($_GET['action'])) {
             }
 
         } elseif ($action === 'get_inventarios') {
-            // Mantenido para no romper la lista de atencion pendiente (lowStockList)
             $q = trim($_GET['q'] ?? ''); $sid = (int)($_GET['sucursal'] ?? 0);
             $sql = "SELECT i.id_inventario,p.nombre AS producto,p.codigo,s.nombre AS sucursal,i.existencias,i.stock_minimo,p.precio,CASE WHEN i.existencias<=0 THEN 'AGOTADO' WHEN i.existencias<=i.stock_minimo THEN 'BAJO' ELSE 'OK' END AS nivel FROM inventarios i JOIN productos p ON p.id_producto=i.id_producto JOIN sucursales s ON s.id_sucursal=i.id_sucursal WHERE 1=1";
             $params = [];
@@ -391,163 +388,257 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>KION · Panel de Administración</title>
 
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <style>
         :root {
-            --bg-app: oklch(96.5% 0.014 72); --bg-surface: oklch(100% 0 0); --bg-panel: oklch(99% 0.006 75);
-            --ink: oklch(24% 0.028 50); --ink-soft: oklch(42% 0.030 48); --ink-faint: oklch(58% 0.022 50); --border-soft: oklch(89% 0.016 65);
-            --coffee-main: oklch(32% 0.040 50); --coffee-light: oklch(91% 0.018 60);
-            --coffee-gradient: linear-gradient(155deg, oklch(40% 0.045 48), oklch(26% 0.035 52));
-            --success: oklch(34% 0.06 152); --success-bg: oklch(94% 0.035 152);
-            --danger: oklch(50% 0.14 25); --danger-bg: oklch(95% 0.035 20);
-            --warning: oklch(42% 0.09 70); --warning-bg: oklch(95% 0.045 90);
-            --sky: oklch(38% 0.07 240); --sky-bg: oklch(95% 0.022 235);
-            --font-display: 'Fraunces', serif; --font-body: 'Plus Jakarta Sans', sans-serif;
-            --shadow-sm: 0 4px 12px rgba(0,0,0,0.05); --shadow-md: 0 8px 24px rgba(0,0,0,0.08); --shadow-lg: 0 16px 40px rgba(0,0,0,0.12);
-            --radius: 14px; --sidebar-w: 264px; --sidebar-w-collapsed: 84px;
-            --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            /* Colores inspirados en el Catálogo */
+            --navy: #0B2545; 
+            --navy-deep: #071A32; 
+            --navy-soft: #16365F; 
+            --clinic: #1B6CA8;
+            --mint: #E8F6EE; 
+            --green: #22C55E; 
+            --green-deep: #16A34A; 
+            --green-glow: rgba(34, 197, 94, 0.38);
+            
+            --bg-app: #F3F6F8; 
+            --bg-surface: #FFFFFF; 
+            --bg-panel: #F7FBFD;
+            
+            --ink: #142033; 
+            --ink-soft: #5A6B7D; 
+            --ink-faint: #8A9BAE;
+            --border-soft: #D5E0EA;
+            
+            --success: #16A34A; 
+            --success-bg: #E8F6EE;
+            --danger: #E11D48; 
+            --danger-bg: #FFE4E6;
+            --warning: #F59E0B; 
+            --warning-bg: #FFFBEB;
+
+            --font-display: "Fredoka", "Plus Jakarta Sans", sans-serif;
+            --font-lux: "Fraunces", Georgia, serif;
+            --font-body: "Plus Jakarta Sans", sans-serif;
+
+            --shadow-sm: 0 6px 18px rgba(11, 37, 69, 0.06);
+            --shadow-md: 0 16px 36px rgba(11, 37, 69, 0.10);
+            --shadow-lux: 0 1px 2px rgba(11, 37, 69, 0.04), 0 8px 24px -8px rgba(11, 37, 69, 0.08);
+            --shadow-lux-hover: 0 2px 4px rgba(11, 37, 69, 0.04), 0 28px 56px -18px rgba(11, 37, 69, 0.22);
+            
+            --radius: 28px; 
+            --radius-pill: 999px;
+            --sidebar-w: 264px; 
+            --sidebar-w-collapsed: 84px;
+            --ease-lux: cubic-bezier(0.22, 1, 0.36, 1);
         }
         body.dark-mode {
-            --bg-app: oklch(20% 0.01 250); --bg-surface: oklch(25% 0.01 250); --bg-panel: oklch(23% 0.01 250);
-            --ink: oklch(95% 0.01 250); --ink-soft: oklch(75% 0.01 250); --ink-faint: oklch(62% 0.01 250); --border-soft: oklch(35% 0.01 250);
-            --coffee-main: oklch(80% 0.03 60); --coffee-light: oklch(30% 0.02 250);
-            --coffee-gradient: linear-gradient(155deg, oklch(40% 0.045 48), oklch(20% 0.035 52));
-            --success-bg: oklch(25% 0.04 152); --danger-bg: oklch(30% 0.06 20); --warning-bg: oklch(30% 0.05 85); --sky-bg: oklch(26% 0.03 235);
+            --bg-app: #111827; 
+            --bg-surface: #1E293B; 
+            --bg-panel: #172033;
+            --ink: #F4F7FB; 
+            --ink-soft: #A9B8C7; 
+            --ink-faint: #64748B;
+            --border-soft: #334155;
+            --navy: #0A1C33; 
+            --navy-deep: #050E1A;
+            --shadow-sm: 0 6px 18px rgba(0, 0, 0, 0.35);
+            --shadow-md: 0 16px 36px rgba(0, 0, 0, 0.5);
+            --shadow-lux: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -10px rgba(0, 0, 0, 0.5);
+            --shadow-lux-hover: 0 2px 4px rgba(0, 0, 0, 0.3), 0 30px 60px -18px rgba(0, 0, 0, 0.7);
+            --success-bg: rgba(34,197,94,0.15);
+            --danger-bg: rgba(225,29,72,0.15);
+            --warning-bg: rgba(245,158,11,0.15);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html { scroll-behavior: smooth; }
-        body { font-family: var(--font-body); background: var(--bg-app); color: var(--ink); transition: background .3s ease, color .3s ease; }
+        body { 
+            font-family: var(--font-body); 
+            background: var(--bg-app); 
+            color: var(--ink); 
+            transition: background .3s ease, color .3s ease; 
+            background-image:
+                radial-gradient(circle at 10% 0%, rgba(34, 197, 94, 0.08), transparent 40%),
+                radial-gradient(circle at 90% 100%, rgba(27, 108, 168, 0.08), transparent 40%);
+            background-attachment: fixed;
+        }
         button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
         @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes wave { 0%,60%,100% { transform: rotate(0deg); } 10% { transform: rotate(16deg); } 20% { transform: rotate(-8deg); } 30% { transform: rotate(16deg); } 40% { transform: rotate(-4deg); } }
-        .view-section { display: none; animation: fadeIn .38s var(--ease-expo) forwards; }
+        .view-section { display: none; animation: fadeIn .45s var(--ease-lux) forwards; }
         .view-section.active { display: block; }
         .wave { display: inline-block; transform-origin: 70% 70%; animation: wave 2.2s ease-in-out .3s 1; }
 
-        .app-layout { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; transition: grid-template-columns .35s var(--ease-expo); }
+        .app-layout { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; transition: grid-template-columns .35s var(--ease-lux); }
         .app-layout.is-collapsed { grid-template-columns: var(--sidebar-w-collapsed) 1fr; }
 
-        .sidebar { position: sticky; top: 0; height: 100vh; background: var(--bg-surface); border-right: 1px solid var(--border-soft); padding: 22px 16px; display: flex; flex-direction: column; gap: 26px; z-index: 40; transition: padding .35s var(--ease-expo), background .3s ease; }
-        .brand { display: flex; align-items: center; gap: 12px; font-family: var(--font-display); font-size: 19px; font-weight: 600; padding: 0 8px; position: relative; }
-        .brand i { font-size: 26px; color: var(--coffee-main); flex: none; }
+        .sidebar { position: sticky; top: 0; height: 100vh; background: var(--bg-surface); border-right: 1px solid var(--border-soft); padding: 22px 16px; display: flex; flex-direction: column; gap: 26px; z-index: 40; transition: padding .35s var(--ease-lux), background .3s ease; }
+        .brand { display: flex; align-items: center; gap: 12px; font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--navy); padding: 0 8px; position: relative; }
+        .dark-mode .brand { color: #F4F7FB; }
+        .brand i { font-size: 28px; color: var(--green); flex: none; }
         .brand-text { overflow: hidden; white-space: nowrap; transition: opacity .2s ease; }
-        .brand-sub { font-size: 10.5px; letter-spacing: .6px; color: var(--ink-faint); font-weight: 700; text-transform: uppercase; margin-top: 1px; }
+        .brand-sub { font-size: 11px; letter-spacing: .6px; color: var(--ink-faint); font-weight: 700; text-transform: uppercase; margin-top: 1px; font-family: var(--font-body); }
         .app-layout.is-collapsed .brand-text, .app-layout.is-collapsed .nav-label, .app-layout.is-collapsed .nav-section-title { opacity: 0; width: 0; pointer-events: none; }
 
-        .sidebar-collapse-btn { position: absolute; top: 26px; right: -13px; width: 26px; height: 26px; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border-soft); color: var(--coffee-main); display: grid; place-items: center; box-shadow: var(--shadow-sm); z-index: 41; transition: transform .3s var(--ease-expo); }
+        .sidebar-collapse-btn { position: absolute; top: 26px; right: -13px; width: 26px; height: 26px; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border-soft); color: var(--navy); display: grid; place-items: center; box-shadow: var(--shadow-sm); z-index: 41; transition: transform .3s var(--ease-lux); }
         .app-layout.is-collapsed .sidebar-collapse-btn { transform: rotate(180deg); }
 
         .nav-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--ink-faint); font-weight: 700; padding: 4px 12px 6px; white-space: nowrap; }
         .nav-menu { display: flex; flex-direction: column; gap: 6px; }
-        .nav-btn { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: var(--radius); font-weight: 600; font-size: 14px; color: var(--ink-soft); transition: background .2s var(--ease-expo), color .2s ease, transform .2s var(--ease-expo); white-space: nowrap; }
-        .nav-btn i { font-size: 19px; flex: none; }
-        .nav-btn:hover { background: var(--bg-app); color: var(--ink); transform: translateX(2px); }
-        .nav-btn.active { background: var(--coffee-gradient); color: #fff; box-shadow: var(--shadow-sm); }
+        .nav-btn { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: var(--radius-pill); font-weight: 600; font-size: 14px; color: var(--ink-soft); transition: background .2s var(--ease-lux), color .2s ease, transform .2s var(--ease-lux); white-space: nowrap; }
+        .nav-btn i { font-size: 20px; flex: none; }
+        .nav-btn:hover { background: var(--mint); color: var(--navy); transform: translateX(2px); }
+        .dark-mode .nav-btn:hover { background: rgba(255,255,255,0.06); color: #F4F7FB; }
+        .nav-btn.active { position: relative; background: var(--navy); color: #fff; font-weight: 700; box-shadow: 0 8px 16px rgba(11, 37, 69, 0.22), inset 4px 0 0 var(--green); }
+        .nav-btn.active i { color: var(--green); }
+        .dark-mode .nav-btn.active { background: rgba(34, 197, 94, 0.16); box-shadow: inset 0 0 0 1.5px rgba(34, 197, 94, 0.55), 0 8px 18px rgba(0, 0, 0, 0.35); }
 
-        .sidebar-scrim { display: none; position: fixed; inset: 0; background: rgba(20,16,12,.45); z-index: 39; opacity: 0; transition: opacity .3s ease; }
+        .sidebar-scrim { display: none; position: fixed; inset: 0; background: rgba(7, 26, 50, 0.48); backdrop-filter: blur(3px); z-index: 39; opacity: 0; transition: opacity .3s ease; }
 
-        .topbar { height: 70px; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; border-bottom: 1px solid var(--border-soft); background: var(--bg-panel); position: sticky; top: 0; z-index: 30; backdrop-filter: blur(10px); }
-        .topbar-title-block .eyebrow { font-size: 11.5px; color: var(--ink-faint); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
-        .topbar-title-block .title-main { font-family: var(--font-display); font-size: 20px; font-weight: 600; }
-        .hamburger-btn { display: none; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border-soft); background: var(--bg-surface); align-items: center; justify-content: center; font-size: 18px; }
+        .topbar { height: 76px; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; border-bottom: 4px solid var(--green); background: linear-gradient(180deg, var(--navy-deep) 0%, var(--navy) 100%); position: sticky; top: 0; z-index: 30; box-shadow: 0 10px 28px rgba(7, 26, 50, 0.28); color: white; }
+        .topbar-title-block .eyebrow { font-size: 11.5px; color: rgba(255,255,255,0.72); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+        .topbar-title-block .title-main { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: 0.04em; }
+        .hamburger-btn { display: none; width: 38px; height: 38px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); align-items: center; justify-content: center; font-size: 18px; color: white; }
         .topbar-actions { display: flex; gap: 12px; align-items: center; }
-        .icon-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-app); border: 1px solid var(--border-soft); font-size: 19px; transition: background .2s ease, color .2s ease, transform .15s var(--ease-expo); }
-        .icon-btn:hover { background: var(--coffee-light); color: var(--coffee-main); transform: translateY(-1px); }
-        .user-profile { display: flex; align-items: center; gap: 10px; font-weight: 600; padding-left: 14px; border-left: 1px solid var(--border-soft); font-size: 14px; }
-        .admin-chip { font-size: 10px; font-weight: 800; letter-spacing: .5px; padding: 3px 8px; border-radius: 20px; background: var(--coffee-light); color: var(--coffee-main); text-transform: uppercase; }
+        .icon-btn { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); font-size: 20px; transition: transform .2s ease, background .2s ease, border-color .2s ease; }
+        .icon-btn:hover { background: rgba(34, 197, 94, 0.18); border-color: var(--green); color: #bbf7d0; transform: translateY(-1px); }
+        .user-profile { display: flex; align-items: center; gap: 10px; font-weight: 600; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.18); font-size: 14px; }
+        .admin-chip { display: inline-flex; align-items: center; background: rgba(34, 197, 94, 0.16); color: #bbf7d0; border: 1px solid rgba(34, 197, 94, 0.35); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 10px; border-radius: var(--radius-pill); }
 
-        .content { padding: 32px; max-width: 1440px; margin: 0 auto; }
-        .header-row { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; flex-wrap: wrap; gap: 14px; }
-        .title { font-family: var(--font-display); font-size: 27px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
-        .subtitle { color: var(--ink-soft); font-size: 14px; margin-top: 4px; }
+        .content { padding: 36px; max-width: 1440px; margin: 0 auto; }
+        .header-row { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 32px; flex-wrap: wrap; gap: 16px; }
+        .title { font-family: var(--font-lux); font-size: clamp(28px, 3vw, 38px); font-weight: 500; display: flex; align-items: center; gap: 10px; line-height: 1.1; letter-spacing: -0.02em; color: var(--ink); }
+        .subtitle { color: var(--ink-soft); font-size: 15px; margin-top: 8px; line-height: 1.6; }
 
-        .btn-primary { background: var(--coffee-gradient); color: #fff; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 13.5px; box-shadow: var(--shadow-sm); display: inline-flex; align-items: center; gap: 8px; transition: transform .16s var(--ease-expo), box-shadow .2s ease; }
-        .btn-primary:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
-        .btn-ghost { background: var(--bg-surface); border: 1px solid var(--border-soft); color: var(--coffee-main); padding: 10px 18px; border-radius: 10px; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; gap: 8px; transition: background .2s ease; }
-        .btn-ghost:hover { background: var(--coffee-light); }
+        .btn-primary { background: var(--green); color: white; padding: 12px 20px; border-radius: var(--radius-pill); font-weight: 800; font-size: 14px; box-shadow: 0 6px 16px -4px var(--green-glow); display: inline-flex; align-items: center; gap: 8px; transition: transform .3s var(--ease-lux), box-shadow .3s ease, background .3s ease; }
+        .btn-primary:hover { background: var(--green-deep); box-shadow: 0 12px 24px -6px rgba(22, 163, 74, 0.5); transform: scale(1.04); }
+        
+        .btn-ghost { background: var(--bg-surface); border: 1.5px solid var(--navy); color: var(--navy); padding: 12px 20px; border-radius: var(--radius-pill); font-weight: 800; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; transition: transform .3s var(--ease-lux), background .3s ease, color .3s ease, border-color .3s ease; }
+        .btn-ghost:hover { background: var(--navy); color: #fff; transform: scale(1.04); }
+        .dark-mode .btn-ghost { border-color: rgba(255, 255, 255, 0.35); color: #F4F7FB; }
+        .dark-mode .btn-ghost:hover { background: #F4F7FB; border-color: #F4F7FB; color: var(--navy-deep); }
 
-        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; margin-bottom: 24px; }
-        .kpi-card { background: var(--bg-surface); padding: 22px; border-radius: var(--radius); border: 1px solid var(--border-soft); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 12px; transition: transform .25s var(--ease-expo), box-shadow .25s var(--ease-expo), border-color .25s ease; }
-        .kpi-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: var(--coffee-light); }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px; }
+        .kpi-card { background: var(--bg-surface); padding: 24px; border-radius: var(--radius); border: 1px solid rgba(11, 37, 69, 0.06); box-shadow: var(--shadow-lux); display: flex; flex-direction: column; gap: 14px; transition: transform .4s var(--ease-lux), box-shadow .4s var(--ease-lux), border-color .4s ease; }
+        .dark-mode .kpi-card { border-color: rgba(255, 255, 255, 0.06); }
+        .kpi-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-lux-hover); border-color: rgba(11, 37, 69, 0.1); }
         .kpi-top { display: flex; align-items: flex-start; justify-content: space-between; }
-        .kpi-card i.kpi-icon { font-size: 22px; color: var(--coffee-main); padding: 11px; background: var(--coffee-light); border-radius: 11px; }
-        .kpi-tag { font-size: 10.5px; font-weight: 800; padding: 4px 9px; border-radius: 20px; background: var(--success-bg); color: var(--success); text-transform: uppercase; }
-        .kpi-val { font-family: var(--font-display); font-size: 30px; font-weight: 600; }
-        .kpi-label { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+        .kpi-card i.kpi-icon { font-size: 24px; color: var(--green-deep); padding: 12px; background: var(--mint); border-radius: 16px; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15); }
+        .dark-mode .kpi-card i.kpi-icon { background: rgba(34, 197, 94, 0.12); color: #4ADE80; }
+        .kpi-tag { font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--success-bg); color: var(--success); text-transform: uppercase; letter-spacing: 0.06em; }
+        .kpi-val { font-family: var(--font-lux); font-size: 34px; font-weight: 600; color: var(--navy); letter-spacing: -0.01em; }
+        .dark-mode .kpi-val { color: #F4F7FB; }
+        .kpi-label { color: var(--ink-soft); font-size: 14px; font-weight: 600; }
 
-        .panel { background: var(--bg-surface); border-radius: var(--radius); border: 1px solid var(--border-soft); padding: 24px; overflow-x: auto; margin-bottom: 22px; transition: background .3s ease, border-color .3s ease; }
-        .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-        .panel-title { font-family: var(--font-display); font-size: 17px; font-weight: 600; }
-        .panel-sub { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
-        .grid-2col { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; }
-        .chart-box { position: relative; height: 250px; }
-        .donut-wrap { position: relative; height: 220px; display: flex; align-items: center; justify-content: center; }
+        .panel { background: var(--bg-surface); border-radius: var(--radius); border: 1px solid rgba(11, 37, 69, 0.06); padding: 28px; overflow-x: auto; margin-bottom: 24px; box-shadow: var(--shadow-sm); }
+        .dark-mode .panel { border-color: rgba(255, 255, 255, 0.06); }
+        .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+        .panel-title { font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--navy); }
+        .dark-mode .panel-title { color: #F4F7FB; }
+        .panel-sub { font-size: 13px; color: var(--ink-faint); margin-top: 4px; }
+        
+        .grid-2col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; }
+        .chart-box { position: relative; height: 260px; }
+        .donut-wrap { position: relative; height: 240px; display: flex; align-items: center; justify-content: center; }
         .donut-center { position: absolute; text-align: center; pointer-events: none; }
-        .donut-center .num { font-family: var(--font-display); font-size: 22px; font-weight: 700; }
-        .donut-center .lbl { font-size: 10px; color: var(--ink-faint); font-weight: 700; text-transform: uppercase; }
+        .donut-center .num { font-family: var(--font-display); font-size: 28px; font-weight: 700; color: var(--navy); }
+        .dark-mode .donut-center .num { color: #F4F7FB; }
+        .donut-center .lbl { font-size: 11px; color: var(--ink-faint); font-weight: 700; text-transform: uppercase; }
 
         table { width: 100%; border-collapse: collapse; text-align: left; }
-        th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--ink-faint); padding-bottom: 14px; border-bottom: 1px solid var(--border-soft); font-weight: 700; }
-        td { padding: 14px 0; border-bottom: 1px solid var(--border-soft); font-weight: 500; vertical-align: middle; }
-        tbody tr:hover { background: var(--bg-app); }
-        .badge { padding: 4px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
-        .badge.b-red { background: var(--danger-bg); color: var(--danger); }
-        .badge.b-green { background: var(--success-bg); color: var(--success); }
-        .badge.b-yellow { background: var(--warning-bg); color: var(--warning); }
-        .chip-btn { border: 1px solid var(--border-soft); background: var(--bg-app); color: var(--coffee-main); font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 8px; transition: background .18s ease; }
-        .chip-btn:hover { background: var(--coffee-main); color: #fff; }
-        .icon-x { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border-soft); display: inline-grid; place-items: center; color: var(--ink-soft); transition: background .18s ease; }
-        .icon-x:hover { background: var(--danger-bg); color: var(--danger); }
-        .row-actions { display: flex; gap: 6px; align-items: center; }
+        th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); padding-bottom: 14px; border-bottom: 1px solid var(--border-soft); font-weight: 700; }
+        td { padding: 16px 0; border-bottom: 1px solid var(--border-soft); font-weight: 500; vertical-align: middle; font-size: 14px; }
+        tbody tr { transition: background 0.2s ease; }
+        tbody tr:hover { background: var(--bg-panel); }
+        
+        .badge { padding: 5px 12px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .badge.b-red { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(225, 29, 72, 0.2); }
+        .badge.b-green { background: var(--success-bg); color: var(--success); border: 1px solid rgba(22, 163, 74, 0.2); }
+        .badge.b-yellow { background: var(--warning-bg); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.2); }
+        
+        .chip-btn { border: 1px solid var(--green); background: transparent; color: var(--green-deep); font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: var(--radius-pill); transition: background .25s ease, color .25s ease, transform .3s var(--ease-lux); }
+        .chip-btn:hover { background: var(--green); color: #fff; transform: scale(1.04); }
+        .dark-mode .chip-btn { color: #4ADE80; }
+        .dark-mode .chip-btn:hover { color: #fff; }
+
+        .icon-x { width: 34px; height: 34px; border-radius: 10px; border: 1px solid transparent; display: inline-grid; place-items: center; color: var(--danger); font-size: 18px; transition: background .2s ease; }
+        .icon-x:hover { background: var(--danger-bg); }
+        .row-actions { display: flex; gap: 8px; align-items: center; }
 
         .form-inline { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-        .search-input, .select-input { padding: 10px 16px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--bg-app); color: var(--ink); min-width: 200px; font-family: inherit; font-size: 14px; }
+        .search-input, .select-input { padding: 12px 18px; border: 1.5px solid rgba(11, 37, 69, 0.22); border-radius: var(--radius-pill); background: var(--bg-panel); color: var(--ink); min-width: 220px; font-family: var(--font-body); font-size: 14px; font-weight: 500; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+        .search-input:focus, .select-input:focus { outline: none; border-color: var(--navy); background: var(--bg-surface); box-shadow: 0 0 0 4px rgba(11, 37, 69, 0.1); }
+        .dark-mode .search-input, .dark-mode .select-input { border-color: var(--border-soft); }
+        .dark-mode .search-input:focus, .dark-mode .select-input:focus { border-color: #93c5fd; box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.15); }
         
-        /* Modal product preview */
-        .swal-preview-img { max-width: 150px; max-height: 150px; border-radius: 8px; border: 1px solid var(--border-soft); object-fit: cover; }
+        .swal-preview-img { max-width: 150px; max-height: 150px; border-radius: 16px; border: 1px solid var(--border-soft); object-fit: cover; }
 
-        .stock-list { display: flex; flex-direction: column; gap: 2px; }
-        .stock-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 12px 4px; border-bottom: 1px solid var(--border-soft); }
-        .stock-thumb { width: 38px; height: 38px; border-radius: 10px; background: var(--coffee-light); display: grid; place-items: center; color: var(--coffee-main); font-size: 17px; flex: none; }
-        .stock-name { font-size: 13.5px; font-weight: 700; }
-        .stock-meta { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
-        .stock-qty { text-align: right; font-weight: 700; font-size: 13px; }
-        .stock-qty small { display: block; font-weight: 500; color: var(--ink-faint); font-size: 10.5px; }
+        .stock-list { display: flex; flex-direction: column; gap: 4px; }
+        .stock-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 14px 10px; border-bottom: 1px dashed var(--border-soft); }
+        .stock-row:last-child { border-bottom: none; }
+        .stock-thumb { width: 42px; height: 42px; border-radius: 14px; background: var(--mint); display: grid; place-items: center; color: var(--green-deep); font-size: 20px; flex: none; }
+        .stock-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+        .stock-meta { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+        .stock-qty { text-align: right; font-weight: 700; font-size: 14px; color: var(--ink); }
+        .stock-qty small { display: block; font-weight: 600; color: var(--ink-faint); font-size: 11px; }
 
-        .info-strip { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 15px; margin-bottom: 15px; border-bottom: 1px solid var(--border-soft); }
+        .info-strip { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px dashed var(--border-soft); }
 
-        .dark-mode .swal2-popup { background: var(--bg-surface); color: var(--ink); }
-        .dark-mode .swal2-input, .dark-mode .swal2-select, .dark-mode .swal2-textarea { background: var(--bg-app); color: var(--ink); border-color: var(--border-soft); }
+        /* Estilización SweetAlert2 para que parezca un modal del catálogo */
+        .swal2-popup { background: var(--bg-surface) !important; color: var(--ink) !important; border-radius: 36px !important; box-shadow: 0 40px 100px -30px rgba(7, 26, 50, 0.55), 0 0 0 1px rgba(11, 37, 69, 0.06) !important; font-family: var(--font-body) !important; }
+        .dark-mode .swal2-popup { box-shadow: 0 40px 100px -30px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08) !important; }
+        .swal2-title { font-family: var(--font-display) !important; color: var(--navy) !important; }
+        .dark-mode .swal2-title { color: #F4F7FB !important; }
+        .swal2-input, .swal2-select, .swal2-textarea, .swal2-file { background: var(--bg-panel) !important; color: var(--ink) !important; border: 1.5px solid rgba(11, 37, 69, 0.22) !important; border-radius: 14px !important; font-family: var(--font-body) !important; }
+        .swal2-input:focus, .swal2-select:focus, .swal2-textarea:focus { border-color: var(--navy) !important; box-shadow: 0 0 0 4px rgba(11, 37, 69, 0.1) !important; }
+        .dark-mode .swal2-input, .dark-mode .swal2-select, .dark-mode .swal2-textarea, .dark-mode .swal2-file { border-color: var(--border-soft) !important; }
 
-        /* Diseño Catálogo Técnico (NUEVO) */
-        .prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
-        .prod-card { background: var(--bg-surface); border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.2s ease, transform 0.2s ease; }
-        .prod-card:hover { box-shadow: var(--shadow-md); transform: translateY(-3px); border-color: var(--coffee-light); }
-        .prod-card-img { height: 160px; width: 100%; object-fit: cover; border-bottom: 1px solid var(--border-soft); background: var(--bg-app); }
-        .prod-card-body { padding: 16px; flex: 1; display: flex; flex-direction: column; }
-        .prod-meta { font-size: 11px; color: var(--ink-faint); display: flex; justify-content: space-between; margin-bottom: 6px; font-weight: 700; text-transform: uppercase; }
-        .prod-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; line-height: 1.3; color: var(--ink); }
-        .prod-price { font-size: 20px; font-family: var(--font-display); font-weight: 600; color: var(--coffee-main); margin-bottom: 12px; }
-        .prod-stock-info { background: var(--bg-app); border-radius: 8px; padding: 10px; font-size: 12px; margin-bottom: 16px; border: 1px dashed var(--border-soft); }
-        .prod-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; }
-        .btn-card { padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 700; text-align: center; border: 1px solid var(--border-soft); background: var(--bg-surface); color: var(--ink-soft); transition: 0.2s; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;}
-        .btn-card:hover { background: var(--coffee-light); color: var(--coffee-main); }
-        .btn-card-del:hover { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bg); }
-        .btn-card-full { grid-column: span 2; background: var(--coffee-main); color: #fff; border-color: var(--coffee-main); }
-        .btn-card-full:hover { background: var(--coffee-gradient); color: #fff; opacity: 0.9; }
+        /* Diseño Catálogo Técnico (Estilo Tarjetas del Catálogo) */
+        .prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 32px 28px; }
+        .prod-card { background: var(--bg-surface); border: 1px solid rgba(11, 37, 69, 0.06); border-radius: 32px; overflow: hidden; display: flex; flex-direction: column; padding: 10px; box-shadow: var(--shadow-lux); transition: transform 0.5s var(--ease-lux), box-shadow 0.5s var(--ease-lux), border-color 0.5s ease; position: relative; }
+        .dark-mode .prod-card { border-color: rgba(255, 255, 255, 0.06); }
+        .prod-card:hover { box-shadow: var(--shadow-lux-hover); transform: translateY(-6px); border-color: rgba(11, 37, 69, 0.1); }
+        .dark-mode .prod-card:hover { border-color: rgba(255, 255, 255, 0.12); }
+        
+        .prod-card-img-wrap { width: 100%; aspect-ratio: 1 / 1; border-radius: 24px; background: linear-gradient(160deg, #F6F8FB 0%, #EEF3F7 100%); overflow: hidden; position: relative; }
+        .dark-mode .prod-card-img-wrap { background: linear-gradient(160deg, #1A2536 0%, #152031 100%); }
+        .prod-card-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.9s var(--ease-lux); }
+        .prod-card:hover .prod-card-img { transform: scale(1.04); }
+        
+        .prod-card-body { padding: 18px 12px 12px; flex: 1; display: flex; flex-direction: column; }
+        .prod-meta { font-size: 10.5px; color: var(--ink-soft); display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.18em; }
+        .prod-title { font-family: var(--font-body); font-size: 15.5px; font-weight: 600; line-height: 1.4; color: var(--ink); margin-bottom: 16px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 43px; }
+        
+        .prod-price-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; margin-top: auto; }
+        .prod-price { font-size: 24px; font-family: var(--font-lux); font-weight: 600; color: var(--navy); letter-spacing: -0.01em; }
+        .dark-mode .prod-price { color: #F4F7FB; }
+        
+        .tarjeta__stock { font-size: 11.5px; font-weight: 700; background: var(--mint); padding: 5px 10px; border-radius: var(--radius-pill); border: 1px solid rgba(22, 163, 74, 0.14); color: var(--success); }
+        .tarjeta__stock.stock-none { color: var(--danger); background: rgba(225, 29, 72, 0.1); border-color: rgba(225, 29, 72, 0.2); }
+        .tarjeta__stock.stock-low { color: #9F1239; background: rgba(159, 18, 57, 0.08); border-color: rgba(159, 18, 57, 0.22); }
+        .dark-mode .tarjeta__stock { background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.25); color: #4ADE80; }
+        .dark-mode .tarjeta__stock.stock-low { color: #FDA4AF; background: rgba(253, 164, 175, 0.1); border-color: rgba(253, 164, 175, 0.25); }
+        
+        .prod-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-top: 1px dashed var(--border-soft); padding-top: 14px; }
+        .btn-card { padding: 10px; border-radius: var(--radius-pill); font-size: 12.5px; font-weight: 800; text-align: center; border: 1.5px solid var(--border-soft); background: transparent; color: var(--ink-soft); transition: 0.3s var(--ease-lux); display: flex; align-items: center; justify-content: center; gap: 6px;}
+        .btn-card:hover { border-color: var(--navy); color: var(--navy); transform: scale(1.04); }
+        .dark-mode .btn-card:hover { border-color: #F4F7FB; color: #F4F7FB; }
+        .btn-card-del:hover { background: rgba(225, 29, 72, 0.1); color: var(--danger); border-color: transparent; }
+        .btn-card-full { grid-column: span 2; background: var(--green); color: white; border-color: transparent; box-shadow: 0 6px 16px -4px var(--green-glow); }
+        .btn-card-full:hover { background: var(--green-deep); color: white; border-color: transparent; box-shadow: 0 12px 24px -6px rgba(22, 163, 74, 0.5); }
 
         @media (max-width: 1180px) { .grid-2col { grid-template-columns: 1fr; } }
         @media (max-width: 980px) {
             .app-layout { grid-template-columns: 1fr; }
-            .sidebar { position: fixed; left: 0; top: 0; width: 280px; height: 100vh; transform: translateX(-100%); transition: transform .35s var(--ease-expo); box-shadow: var(--shadow-lg); }
+            .sidebar { position: fixed; left: 0; top: 0; width: 280px; height: 100vh; transform: translateX(-100%); transition: transform .4s var(--ease-lux); box-shadow: 0 10px 40px rgba(7, 26, 50, 0.45); }
             .app-layout.mobile-open .sidebar { transform: translateX(0); }
-            .app-layout.mobile-open .sidebar-scrim { display: block; opacity: 1; }
+            .app-layout.mobile-open .sidebar-scrim { display: block; opacity: 1; pointer-events: auto; }
             .sidebar-collapse-btn { display: none; }
             .hamburger-btn { display: inline-flex; }
         }
@@ -568,7 +659,6 @@ try {
             <div class="nav-section-title" data-i18n="nav_section_gestion">Gestión</div>
             <button class="nav-btn" data-target="view-sucursales"><i class="ph ph-storefront"></i><span class="nav-label" data-i18n="nav_sucursales">Sucursales</span></button>
             <button class="nav-btn" data-target="view-personal"><i class="ph ph-users-three"></i><span class="nav-label" data-i18n="nav_personal">Personal</span></button>
-            <!-- REEMPLAZO UNIFICADO -->
             <button class="nav-btn" data-target="view-gestion-productos"><i class="ph ph-package"></i><span class="nav-label" data-i18n="nav_gestion_productos">Gestión de Productos</span></button>
             <button class="nav-btn" data-target="view-ventas"><i class="ph ph-chart-line-up"></i><span class="nav-label" data-i18n="nav_ventas">Ventas</span></button>
             <div class="nav-section-title" data-i18n="nav_section_nav">Navegación</div>
@@ -592,7 +682,7 @@ try {
                 <button class="icon-btn" id="btnLang" title="Switch language / Cambiar idioma"><i class="ph ph-translate"></i></button>
                 <button class="icon-btn" id="btnTheme" title="Modo Oscuro"><i class="ph ph-moon"></i></button>
                 <div class="user-profile">
-                    <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--coffee-main)"></i>
+                    <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--green)"></i>
                     <span><?= htmlspecialchars($nombreAdmin) ?></span>
                     <span class="admin-chip" data-i18n="role_chip">Admin</span>
                 </div>
@@ -621,8 +711,8 @@ try {
                     <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="atencion_title">Atención pendiente</h2><p class="panel-sub" data-i18n="atencion_sub">Productos bajos o agotados</p></div><button class="chip-btn" data-goto="view-gestion-productos" data-i18n="ir_inventario">Ir al inventario</button></div><div id="lowStockList" class="stock-list" data-i18n="cargando">Cargando...</div></div>
                     <div class="panel">
                         <div class="panel-head"><div><h2 class="panel-title" data-i18n="salud_inv_title">Salud del Inventario</h2><p class="panel-sub" data-i18n="salud_inv_sub">Métricas globales de mercancía</p></div></div>
-                        <div class="info-strip"><div><div class="kpi-label" data-i18n="total_unidades">Total de Unidades Físicas</div><div class="kpi-val" style="font-size:22px; margin-top:4px;" id="metricInventarioTotal"><?= number_format($ti) ?></div></div><i class="ph-fill ph-cube kpi-icon"></i></div>
-                        <div class="info-strip"><div><div class="kpi-label" data-i18n="valor_estimado">Valor Estimado (Precio Venta)</div><div class="kpi-val" style="font-size:22px; margin-top:4px; color:var(--success);" id="metricValorInventario">$<?= number_format($valor_inv, 2) ?></div></div><i class="ph-fill ph-chart-pie-slice kpi-icon"></i></div>
+                        <div class="info-strip"><div><div class="kpi-label" data-i18n="total_unidades">Total de Unidades Físicas</div><div class="kpi-val" style="font-size:26px; margin-top:6px;" id="metricInventarioTotal"><?= number_format($ti) ?></div></div><i class="ph-fill ph-cube kpi-icon" style="font-size:24px; color:var(--green-deep); background:var(--mint); padding:10px; border-radius:14px;"></i></div>
+                        <div class="info-strip" style="border:none; padding-bottom:0;"><div><div class="kpi-label" data-i18n="valor_estimado">Valor Estimado (Precio Venta)</div><div class="kpi-val" style="font-size:26px; margin-top:6px; color:var(--success);" id="metricValorInventario">$<?= number_format($valor_inv, 2) ?></div></div><i class="ph-fill ph-chart-pie-slice kpi-icon" style="font-size:24px; color:var(--green-deep); background:var(--mint); padding:10px; border-radius:14px;"></i></div>
                     </div>
                 </div>
             </section>
@@ -656,9 +746,8 @@ try {
                 </div>
                 
                 <div class="panel" style="background: transparent; border: none; padding: 0; box-shadow: none;">
-                    <!-- Barra de herramientas avanzada POS (Sin botón CSV) -->
-                    <div class="form-inline" style="margin-bottom:20px; background: var(--bg-surface); padding: 16px; border-radius: var(--radius); border: 1px solid var(--border-soft); box-shadow: var(--shadow-sm);">
-                        <input class="search-input" id="gpSearch" data-i18n-placeholder="placeholder_buscar_producto" placeholder="Buscar por nombre o código..." style="flex:1; min-width: 200px;">
+                    <div class="form-inline" style="margin-bottom:24px; background: var(--bg-surface); padding: 20px; border-radius: var(--radius); border: 1px solid rgba(11, 37, 69, 0.06); box-shadow: var(--shadow-sm);">
+                        <input class="search-input" id="gpSearch" data-i18n-placeholder="placeholder_buscar_producto" placeholder="Buscar por nombre o código..." style="flex:1; min-width: 240px;">
                         <select class="select-input" id="gpBranch"><option value="" data-i18n="todas_sucursales">Todas las sucursales</option></select>
                         <select class="select-input" id="gpCategory"><option value="" data-i18n="todas_categorias">Todas las categorías</option></select>
                         <select class="select-input" id="gpStock">
@@ -668,7 +757,6 @@ try {
                         </select>
                     </div>
                     
-                    <!-- Contenedor de Tarjetas -->
                     <div class="prod-grid" id="gpGrid"></div>
                 </div>
             </section>
@@ -676,7 +764,7 @@ try {
             <section id="view-ventas" class="view-section">
                 <div class="header-row"><div><h1 class="title"><i class="ph ph-chart-line-up"></i> <span data-i18n="ven_title">Historial de Ventas</span></h1><p class="subtitle" data-i18n="ven_sub">Supervisa las ventas de toda la red.</p></div></div>
                 <div class="panel">
-                    <div class="form-inline" style="margin-bottom:16px;">
+                    <div class="form-inline" style="margin-bottom:20px;">
                         <select class="select-input" id="salesBranch"><option value="" data-i18n="todas_sucursales">Todas las sucursales</option></select>
                         <input class="search-input" id="salesFrom" type="date"><input class="search-input" id="salesTo" type="date">
                     </div>
@@ -692,8 +780,8 @@ try {
 const endpoint = 'dashboard.php';
 const $ = s => document.querySelector(s);
 const escapeHtml = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-const money = v => '$' + Number(v || 0).toFixed(2);
-const notify = (msg, icon='success') => Swal.fire({ toast:true, position:'top-end', icon, title: msg, showConfirmButton:false, timer:2600 });
+const money = v => '$' + Number(v || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const notify = (msg, icon='success') => Swal.fire({ toast:true, position:'top-end', icon, title: msg, showConfirmButton:false, timer:2600, background: 'var(--bg-surface)', color: 'var(--ink)' });
 
 async function request(actionStr, options = {}) {
     const r = await fetch(`${endpoint}?action=${actionStr}`, options);
@@ -704,7 +792,7 @@ async function request(actionStr, options = {}) {
     return data;
 }
 const statusBadge = s => `<span class="badge ${String(s).toUpperCase().includes('INACT') ? 'b-red' : 'b-green'}">${escapeHtml(s)}</span>`;
-const empty = (cols, text=null) => `<tr><td colspan="${cols}" style="text-align:center;color:var(--ink-faint);padding:30px">${text || t('sin_registros')}</td></tr>`;
+const empty = (cols, text=null) => `<tr><td colspan="${cols}" style="text-align:center;color:var(--ink-faint);padding:40px">${text || t('sin_registros')}</td></tr>`;
 
 // -------- TEMA --------
 const body = document.body, btnTheme = $('#btnTheme');
@@ -735,7 +823,7 @@ const I18N = {
         per_sub: 'Registra gerentes/cajeros y asígnalos a una sucursal.', btn_add_personal: 'Agregar personal', th_rol: 'Rol',
         placeholder_buscar_producto: 'Buscar producto o código...',
         todas_sucursales: 'Todas las sucursales', todas_categorias: 'Todas las categorías', cualquier_stock: 'Cualquier nivel de stock',
-        stock_bajo: 'Stock Bajo / Crítico', stock_agotado: 'Agotados (0 stock)',
+        stock_bajo: 'Stock Bajo', stock_agotado: 'Agotados',
         gestion_prod_sub: 'Catálogo técnico e inventario unificado. Controla existencias y catálogo en un solo lugar.', btn_add_producto: 'Nuevo Producto',
         th_codigo: 'Código', th_categoria: 'Categoría',
         ven_title: 'Historial de Ventas', ven_sub: 'Supervisa las ventas de toda la red.',
@@ -765,7 +853,7 @@ const I18N = {
         per_sub: 'Register managers/cashiers and assign them to a branch.', btn_add_personal: 'Add staff', th_rol: 'Role',
         placeholder_buscar_producto: 'Search product or code...',
         todas_sucursales: 'All branches', todas_categorias: 'All categories', cualquier_stock: 'Any stock level',
-        stock_bajo: 'Low / Critical Stock', stock_agotado: 'Out of stock (0)',
+        stock_bajo: 'Low Stock', stock_agotado: 'Out of stock',
         gestion_prod_sub: 'Technical catalog and unified inventory. Control stock and catalog in one place.', btn_add_producto: 'New Product',
         th_codigo: 'Code', th_categoria: 'Category',
         ven_title: 'Sales History', ven_sub: 'Monitor sales across the whole network.',
@@ -841,7 +929,7 @@ async function loadLowStock() {
     try {
         const { data } = await request('get_inventarios');
         const low = data.filter(x => x.nivel !== 'OK').slice(0, 5);
-        $('#lowStockList').innerHTML = low.length ? low.map(x => `<div class="stock-row"><span class="stock-thumb"><i class="ph ph-package"></i></span><div><div class="stock-name">${escapeHtml(x.producto)}</div><div class="stock-meta">${escapeHtml(x.sucursal)}</div></div><div class="stock-qty">${escapeHtml(x.existencias)}<small>mín. ${escapeHtml(x.stock_minimo)}</small></div></div>`).join('') : `<p class="subtitle" style="font-size:13px; padding:10px 0;">${t('inv_saludable')}</p>`;
+        $('#lowStockList').innerHTML = low.length ? low.map(x => `<div class="stock-row"><span class="stock-thumb"><i class="ph ph-package"></i></span><div><div class="stock-name">${escapeHtml(x.producto)}</div><div class="stock-meta">${escapeHtml(x.sucursal)}</div></div><div class="stock-qty">${escapeHtml(x.existencias)}<small>mín. ${escapeHtml(x.stock_minimo)}</small></div></div>`).join('') : `<p class="subtitle" style="font-size:14px; padding:10px 0;">${t('inv_saludable')}</p>`;
     } catch (e) {}
 }
 $('#refreshDashboard').addEventListener('click', () => { loadDashboard(); notify(t('panel_actualizado')); });
@@ -851,7 +939,7 @@ async function loadSucursales() {
     try {
         const { data } = await request('get_sucursales');
         $('#sucursalesTable').innerHTML = data.length ? data.map(x => `<tr>
-            <td><b>${escapeHtml(x.nombre)}</b></td><td>${escapeHtml(x.direccion||'-')}</td><td>${escapeHtml(x.telefono||'-')}</td><td>${escapeHtml(x.contacto||'-')}</td>
+            <td><b style="color:var(--navy);font-weight:700;">${escapeHtml(x.nombre)}</b></td><td>${escapeHtml(x.direccion||'-')}</td><td>${escapeHtml(x.telefono||'-')}</td><td>${escapeHtml(x.contacto||'-')}</td>
             <td>${statusBadge(x.estado)}</td>
             <td class="row-actions"><button class="chip-btn" data-edit-suc='${JSON.stringify(x).replace(/'/g,'&#39;')}'>${t('editar')}</button><button class="icon-x" data-del-suc="${x.id_sucursal}"><i class="ph ph-trash"></i></button></td>
         </tr>`).join('') : empty(6);
@@ -863,13 +951,13 @@ async function sucursalModal(record = null) {
     const { value: form } = await Swal.fire({
         title: editing ? L.titleEdit : L.titleNew,
         html: `<div style="text-align:left;">
-            <label><b>${L.nombre}</b></label><input id="swal-nombre" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.nombre):''}">
-            <label><b>${L.dir}</b></label><input id="swal-dir" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.direccion||''):''}">
-            <label><b>${L.tel}</b></label><input id="swal-tel" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.telefono||''):''}">
-            <label><b>${L.cont}</b></label><input id="swal-cont" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.contacto||''):''}">
-            ${editing ? `<label><b>${L.estado}</b></label><select id="swal-estado" class="swal2-input" style="width:100%;margin:6px 0;"><option ${record.estado==='ACTIVA'?'selected':''}>ACTIVA</option><option${record.estado==='INACTIVA'?'selected':''}>INACTIVA</option></select>` : ''}
+            <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.nombre}</label><input id="swal-nombre" class="swal2-input" style="width:100%;margin:0 0 16px;" value="${editing?escapeHtml(record.nombre):''}">
+            <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.dir}</label><input id="swal-dir" class="swal2-input" style="width:100%;margin:0 0 16px;" value="${editing?escapeHtml(record.direccion||''):''}">
+            <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.tel}</label><input id="swal-tel" class="swal2-input" style="width:100%;margin:0 0 16px;" value="${editing?escapeHtml(record.telefono||''):''}">
+            <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.cont}</label><input id="swal-cont" class="swal2-input" style="width:100%;margin:0 0 16px;" value="${editing?escapeHtml(record.contacto||''):''}">
+            ${editing ? `<label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.estado}</label><select id="swal-estado" class="swal2-select" style="width:100%;margin:0;"><option ${record.estado==='ACTIVA'?'selected':''}>ACTIVA</option><option${record.estado==='INACTIVA'?'selected':''}>INACTIVA</option></select>` : ''}
         </div>`,
-        confirmButtonText: t('guardar'), confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar'),
+        confirmButtonText: t('guardar'), confirmButtonColor: 'var(--green)', showCancelButton: true, cancelButtonText: t('cancelar'),
         preConfirm: () => {
             const nombre = document.getElementById('swal-nombre').value.trim();
             if (!nombre) { Swal.showValidationMessage(L.required); return false; }
@@ -907,8 +995,8 @@ async function loadPersonal() {
     try {
         const { data } = await request('get_gerentes');
         $('#personalTable').innerHTML = data.length ? data.map(x => `<tr>
-            <td><b>${escapeHtml(x.nombre)} ${escapeHtml(x.apellido||'')}</b><br><small style="color:var(--ink-faint)">${escapeHtml(x.correo)}</small></td>
-            <td>${escapeHtml(x.rol||'-')}</td><td>${escapeHtml(x.sucursal)}</td><td>${statusBadge(x.estado)}</td>
+            <td><b style="color:var(--navy);font-weight:700;">${escapeHtml(x.nombre)} ${escapeHtml(x.apellido||'')}</b><br><small style="color:var(--ink-faint);font-weight:600;">${escapeHtml(x.correo)}</small></td>
+            <td><span style="font-weight:700;color:var(--ink);">${escapeHtml(x.rol||'-')}</span></td><td>${escapeHtml(x.sucursal)}</td><td>${statusBadge(x.estado)}</td>
             <td class="row-actions"><button class="chip-btn" data-edit-per='${JSON.stringify(x).replace(/'/g,'&#39;')}'>${t('editar')}</button><button class="icon-x" data-del-per="${x.id_usuario}"><i class="ph ph-trash"></i></button></td>
         </tr>`).join('') : empty(5);
     } catch (e) { notify(e.message, 'error'); }
@@ -924,15 +1012,15 @@ async function personalModal(record = null) {
     const { value: form } = await Swal.fire({
         title: editing ? Lp.titleEdit : Lp.titleNew,
         html: `<div style="text-align:left;">
-            <label><b>${Lp.nombre}</b></label><input id="swal-nom" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.nombre):''}">
-            <label><b>${Lp.apellido}</b></label><input id="swal-ape" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.apellido||''):''}">
-            <label><b>${Lp.correo}</b></label><input id="swal-correo" type="email" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.correo):''}">
-            <label><b>${Lp.rol}</b></label><select id="swal-rol" class="swal2-input" style="width:100%;margin:6px 0 12px;">${roleOptions}</select>
-            <label><b>${Lp.suc}</b></label><select id="swal-suc" class="swal2-input" style="width:100%;margin:6px 0 12px;">${branchOptions}</select>
-            <label><b>${Lp.pass} ${editing?Lp.passEdit:'*'}</b></label><input id="swal-pass" type="password" class="swal2-input" style="width:100%;margin:6px 0 12px;">
-            ${editing ? `<label><b>${Lp.estado}</b></label><select id="swal-estado" class="swal2-input" style="width:100%;margin:6px 0;"><option ${record.estado==='ACTIVO'?'selected':''}>ACTIVO</option><option${record.estado==='INACTIVO'?'selected':''}>INACTIVO</option></select>` : ''}
+            <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${Lp.nombre}</label><input id="swal-nom" class="swal2-input" style="width:100%;margin:0 0 16px;" value="${editing?escapeHtml(record.nombre):''}">
+            <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${Lp.apellido}</label><input id="swal-ape" class="swal2-input" style="width:100%;margin:0 0 16px;" value="${editing?escapeHtml(record.apellido||''):''}">
+            <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${Lp.correo}</label><input id="swal-correo" type="email" class="swal2-input" style="width:100%;margin:0 0 16px;" value="${editing?escapeHtml(record.correo):''}">
+            <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${Lp.rol}</label><select id="swal-rol" class="swal2-select" style="width:100%;margin:0 0 16px;">${roleOptions}</select>
+            <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${Lp.suc}</label><select id="swal-suc" class="swal2-select" style="width:100%;margin:0 0 16px;">${branchOptions}</select>
+            <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${Lp.pass} <span style="color:var(--ink-faint); font-weight:normal;">${editing?Lp.passEdit:'*'}</span></label><input id="swal-pass" type="password" class="swal2-input" style="width:100%;margin:0 0 16px;">
+            ${editing ? `<label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${Lp.estado}</label><select id="swal-estado" class="swal2-select" style="width:100%;margin:0;"><option ${record.estado==='ACTIVO'?'selected':''}>ACTIVO</option><option${record.estado==='INACTIVO'?'selected':''}>INACTIVO</option></select>` : ''}
         </div>`,
-        confirmButtonText: t('guardar'), confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar'),
+        confirmButtonText: t('guardar'), confirmButtonColor: 'var(--green)', showCancelButton: true, cancelButtonText: t('cancelar'),
         preConfirm: () => {
             const nombre = document.getElementById('swal-nom').value.trim();
             const correo = document.getElementById('swal-correo').value.trim();
@@ -988,26 +1076,31 @@ async function loadGestionProductos() {
         
         $('#gpGrid').innerHTML = data.length ? data.map(x => {
             const statusCls = x.estado === 'ACTIVO' ? 'color: var(--success);' : 'color: var(--danger);';
-            const img = x.imagen_url ? escapeHtml(x.imagen_url) : 'https://placehold.co/300x200?text=Sin+Imagen';
-            const stockCls = x.total_existencias <= 0 ? 'color: var(--danger);' : (x.total_existencias <= x.stock_minimo ? 'color: var(--warning);' : 'color: var(--success);');
+            const img = x.imagen_url ? escapeHtml(x.imagen_url) : 'https://placehold.co/300x300?text=Sin+Imagen';
             
-            const desglose = x.detalle_stock.map(s => `${s.sucursal}: ${s.existencias}`).join(' | ') || 'Sin inventario asignado';
+            let stockClass = 'stock-ok';
+            let stockLabel = `Stock: ${x.total_existencias}`;
+            
+            if (x.total_existencias <= 0) { 
+                stockClass = 'stock-none'; 
+                stockLabel = 'AGOTADO';
+            } else if (x.total_existencias <= x.stock_minimo) { 
+                stockClass = 'stock-low'; 
+                stockLabel = `Bajo: ${x.total_existencias}`;
+            }
 
             return `
             <div class="prod-card">
-                <img src="${img}" class="prod-card-img" alt="${escapeHtml(x.nombre)}">
+                <div class="prod-card-img-wrap">
+                    <img src="${img}" class="prod-card-img" alt="${escapeHtml(x.nombre)}">
+                </div>
                 <div class="prod-card-body">
-                    <div class="prod-meta"><span>${escapeHtml(x.codigo)}</span> <span style="${statusCls}">${escapeHtml(x.estado)}</span></div>
-                    <h3 class="prod-title">${escapeHtml(x.nombre)}</h3>
-                    <div class="prod-meta" style="color:var(--ink); opacity:0.8;">${escapeHtml(x.categoria)}</div>
-                    <div class="prod-price">${money(x.precio)}</div>
+                    <div class="prod-meta"><span>${escapeHtml(x.categoria)}</span> <span style="${statusCls}">${escapeHtml(x.estado)}</span></div>
+                    <h3 class="prod-title" title="${escapeHtml(x.nombre)}">${escapeHtml(x.nombre)}</h3>
                     
-                    <div class="prod-stock-info" title="${escapeHtml(desglose)}">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                            <strong>Stock Total:</strong>
-                            <strong style="${stockCls}">${x.total_existencias} u.</strong>
-                        </div>
-                        <div style="color:var(--ink-faint); font-size:10.5px;">Mínimo recomendado: ${x.stock_minimo} u.</div>
+                    <div class="prod-price-row">
+                        <div class="prod-price">${money(x.precio)}</div>
+                        <div class="tarjeta__stock ${stockClass}">${stockLabel}</div>
                     </div>
 
                     <div class="prod-actions">
@@ -1017,7 +1110,7 @@ async function loadGestionProductos() {
                     </div>
                 </div>
             </div>`;
-        }).join('') : `<div style="grid-column: 1 / -1; text-align:center; padding: 40px; color:var(--ink-faint);">${t('sin_registros')}</div>`;
+        }).join('') : `<div style="grid-column: 1 / -1; text-align:center; padding: 40px; color:var(--ink-faint); font-weight:600; font-size:16px;">${t('sin_registros')}</div>`;
     } catch (e) { notify(e.message, 'error'); }
 }
 
@@ -1033,20 +1126,22 @@ async function ajustarStockModalAdmin(id_producto, nombre_producto) {
         title: t('ajustar_stock_title'),
         html: `
             <div style="text-align:left; font-size:14px;">
-                <p style="margin-bottom:12px; color:var(--coffee-main); font-weight:600;">${nombre_producto}</p>
-                <label><b>${t('sucursal_destino')}</b></label>
-                <select id="swal-s" class="swal2-input" style="width:100%;margin:8px 0 16px;">${options}</select>
-                <label><b>${t('tipo_movimiento')}</b></label>
-                <select id="swal-t" class="swal2-input" style="width:100%;margin:8px 0 16px;">
+                <p style="margin-bottom:18px; color:var(--clinic); font-weight:700; font-size:15px; border-bottom:1px solid var(--border-soft); padding-bottom:10px;">${nombre_producto}</p>
+                <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${t('sucursal_destino')}</label>
+                <select id="swal-s" class="swal2-select" style="width:100%;margin:0 0 16px;">${options}</select>
+                
+                <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${t('tipo_movimiento')}</label>
+                <select id="swal-t" class="swal2-select" style="width:100%;margin:0 0 16px;">
                     <option value="entrada">${t('mov_entrada')}</option>
                     <option value="salida">${t('mov_salida')}</option>
                     <option value="reemplazo">${t('mov_reemplazo')}</option>
                 </select>
-                <label><b>${t('cantidad_piezas')}</b></label>
-                <input id="swal-c" type="number" min="0" value="1" class="swal2-input" style="width:100%;margin-top:8px;">
+                
+                <label class="swal2-label" style="font-weight:600; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${t('cantidad_piezas')}</label>
+                <input id="swal-c" type="number" min="0" value="1" class="swal2-input" style="width:100%;margin:0;">
             </div>
         `,
-        confirmButtonText: t('aplicar_ajuste'), confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar'),
+        confirmButtonText: t('aplicar_ajuste'), confirmButtonColor: 'var(--green)', showCancelButton: true, cancelButtonText: t('cancelar'),
         preConfirm: () => ({
             id_producto,
             id_sucursal: document.getElementById('swal-s').value,
@@ -1064,7 +1159,7 @@ async function ajustarStockModalAdmin(id_producto, nombre_producto) {
     }
 }
 
-// CREAR/EDITAR PRODUCTO (Formulario Mantenido)
+// CREAR/EDITAR PRODUCTO
 async function productoModal(record = null) {
     const editing = !!record;
     let categorias = [], sucursales = [], asignadas = [];
@@ -1077,36 +1172,39 @@ async function productoModal(record = null) {
     } catch (e) { notify(e.message, 'error'); return; }
 
     const catOptions = categorias.map(c => `<option value="${c.id_categoria}" ${editing && +record.id_categoria===+c.id_categoria?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('');
-    const branchChecks = sucursales.map(s => `<label style="font-size:13px; display:flex; align-items:center; gap:6px;"><input type="checkbox" class="swal-suc-chk" value="${s.id_sucursal}" ${asignadas.includes(s.id_sucursal)?'checked':''}> ${escapeHtml(s.nombre)}</label>`).join('');
+    const branchChecks = sucursales.map(s => `<label style="font-size:13.5px; display:flex; align-items:center; gap:8px; font-weight:600;"><input type="checkbox" class="swal-suc-chk" value="${s.id_sucursal}" ${asignadas.includes(s.id_sucursal)?'checked':''} style="width:16px;height:16px;accent-color:var(--green);"> ${escapeHtml(s.nombre)}</label>`).join('');
 
     const { value: form } = await Swal.fire({
         title: editing ? t('modal_prod_edit') : t('modal_prod_new'),
         html: `<div style="text-align:left;">
-            <div style="text-align:center; margin-bottom:12px;">
-                <img id="swal-preview" class="swal-preview-img" src="${editing && record.imagen_url ? escapeHtml(record.imagen_url) : 'https://placehold.co/150x150?text=Sin+Imagen'}" style="max-width:140px; max-height:140px; object-fit:cover; border-radius:12px; border:2px solid var(--border-soft); box-shadow:var(--shadow-sm);">
+            <div style="text-align:center; margin-bottom:18px;">
+                <img id="swal-preview" class="swal-preview-img" src="${editing && record.imagen_url ? escapeHtml(record.imagen_url) : 'https://placehold.co/150x150?text=Sin+Imagen'}" style="max-width:140px; max-height:140px; object-fit:cover; border-radius:18px; border:1.5px solid rgba(11, 37, 69, 0.22); box-shadow:var(--shadow-sm);">
             </div>
-            <label><b>${t('img_url')}</b></label>
-            <input type="file" id="swal-file" accept="image/jpeg,image/png,image/webp,image/gif" class="swal2-file" style="width:100%; margin:4px 0 8px; font-size:12.5px; border-radius:8px;">
-            <input id="swal-img" class="swal2-input" style="width:100%;margin:2px 0 12px; font-size:13px;" value="${editing?escapeHtml(record.imagen_url||''):''}" placeholder="O pega un enlace de imagen (https://...)">
-            <div style="display:flex; gap:10px;">
-                <div style="flex:1"><label><b>${t('th_codigo')} *</b></label><input id="swal-codigo" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.codigo):''}"></div>
-                <div style="flex:2"><label><b>${t('th_producto')} *</b></label><input id="swal-nombre" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.nombre):''}"></div>
-            </div>
-            <label><b>${t('desc_lbl')}</b></label>
-            <textarea id="swal-desc" class="swal2-textarea" style="width:100%;margin:6px 0 12px; font-family:inherit; min-height:80px;">${editing?escapeHtml(record.descripcion||''):''}</textarea>
             
-            <div style="display:flex; gap:10px;">
-                <div style="flex:1"><label><b>${t('th_categoria')}</b></label><select id="swal-cat" class="swal2-input" style="width:100%;margin:6px 0 12px;">${catOptions}</select></div>
-                <div style="flex:1"><label><b>${t('th_precio')} *</b></label><input id="swal-precio" type="number" step="0.01" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?record.precio:''}"></div>
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${t('img_url')}</label>
+            <input type="file" id="swal-file" accept="image/jpeg,image/png,image/webp,image/gif" class="swal2-file" style="width:100%; margin:0 0 10px; font-size:13px; border-radius:12px;">
+            <input id="swal-img" class="swal2-input" style="width:100%;margin:0 0 16px; font-size:13px;" value="${editing?escapeHtml(record.imagen_url||''):''}" placeholder="O pega un enlace de imagen (https://...)">
+            
+            <div style="display:flex; gap:12px; margin-bottom:16px;">
+                <div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${t('th_codigo')} *</label><input id="swal-codigo" class="swal2-input" style="width:100%;margin:0;" value="${editing?escapeHtml(record.codigo):''}"></div>
+                <div style="flex:2"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${t('th_producto')} *</label><input id="swal-nombre" class="swal2-input" style="width:100%;margin:0;" value="${editing?escapeHtml(record.nombre):''}"></div>
+            </div>
+            
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${t('desc_lbl')}</label>
+            <textarea id="swal-desc" class="swal2-textarea" style="width:100%;margin:0 0 16px; min-height:80px;">${editing?escapeHtml(record.descripcion||''):''}</textarea>
+            
+            <div style="display:flex; gap:12px; margin-bottom:16px;">
+                <div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${t('th_categoria')}</label><select id="swal-cat" class="swal2-select" style="width:100%;margin:0;">${catOptions}</select></div>
+                <div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${t('th_precio')} *</label><input id="swal-precio" type="number" step="0.01" class="swal2-input" style="width:100%;margin:0;" value="${editing?record.precio:''}"></div>
             </div>
 
-            <div style="padding:14px; background:var(--bg-app); border:1px solid var(--border-soft); border-radius:10px; margin:10px 0;">
-                <label><b>${t('asign_suc')}</b></label>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">${branchChecks || '<span style="font-size:12px;color:var(--ink-faint)">No hay sucursales activas.</span>'}</div>
+            <div style="padding:16px; background:var(--bg-panel); border:1px solid rgba(11, 37, 69, 0.12); border-radius:20px; margin-bottom:16px;">
+                <label class="swal2-label" style="font-weight:700; font-size:14px; color:var(--navy); display:block; margin-bottom:10px;">${t('asign_suc')}</label>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">${branchChecks || '<span style="font-size:13px;color:var(--ink-faint);font-weight:600;">No hay sucursales activas.</span>'}</div>
             </div>
-            ${editing ? `<label><b>Estado</b></label><select id="swal-estado" class="swal2-input" style="width:100%;margin:6px 0;"><option ${record.estado==='ACTIVO'?'selected':''}>ACTIVO</option><option${record.estado==='INACTIVO'?'selected':''}>INACTIVO</option></select>` : ''}
+            ${editing ? `<label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">Estado</label><select id="swal-estado" class="swal2-select" style="width:100%;margin:0;"><option ${record.estado==='ACTIVO'?'selected':''}>ACTIVO</option><option${record.estado==='INACTIVO'?'selected':''}>INACTIVO</option></select>` : ''}
         </div>`,
-        confirmButtonText: t('guardar'), confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar'), width: 550,
+        confirmButtonText: t('guardar'), confirmButtonColor: 'var(--green)', showCancelButton: true, cancelButtonText: t('cancelar'), width: 580,
         didOpen: () => {
             const preview = document.getElementById('swal-preview');
             const fileIn = document.getElementById('swal-file');
@@ -1202,8 +1300,8 @@ async function loadVentas() {
         const p = new URLSearchParams({ sucursal: $('#salesBranch').value, desde: $('#salesFrom').value, hasta: $('#salesTo').value });
         const { data } = await request(`get_ventas&${p}`);
         $('#ventasTable').innerHTML = data.length ? data.map(x => `<tr>
-            <td>#${x.id_venta}</td><td>${new Date(x.fecha_hora).toLocaleString('es-MX')}</td><td>${escapeHtml(x.sucursal)}</td><td>${escapeHtml(x.empleado)}</td><td>${escapeHtml(x.metodo_pago)}</td>
-            <td><b>${money(x.total)}</b></td><td>${statusBadge(x.estado)}</td>
+            <td><b style="color:var(--navy);font-weight:700;">#${x.id_venta}</b></td><td>${new Date(x.fecha_hora).toLocaleString('es-MX')}</td><td>${escapeHtml(x.sucursal)}</td><td>${escapeHtml(x.empleado)}</td><td><span style="font-weight:600;color:var(--ink-soft);">${escapeHtml(x.metodo_pago)}</span></td>
+            <td><b style="font-size:16px;color:var(--clinic);font-family:var(--font-lux);">${money(x.total)}</b></td><td>${statusBadge(x.estado)}</td>
             <td><button class="chip-btn" data-ver-venta="${x.id_venta}">${t('ver')}</button></td>
         </tr>`).join('') : empty(8);
     } catch (e) { notify(e.message, 'error'); }
@@ -1214,24 +1312,25 @@ document.addEventListener('click', async e => {
     if (!verBtn) return;
     try {
         const { data } = await request(`get_venta_detalle&id=${verBtn.dataset.verVenta}`);
-        Swal.fire({ title: `Detalle Venta #${verBtn.dataset.verVenta}`, html: data.length ? `<table style="width:100%;text-align:left;"><tr><th>Producto</th><th>Cant</th><th style="text-align:right">Subtotal</th></tr>${data.map(x=>`<tr><td>${escapeHtml(x.producto)}</td><td>${x.cantidad}</td><td style="text-align:right">${money(x.subtotal)}</td></tr>`).join('')}</table>` : t('sin_datos') });
+        Swal.fire({ title: `Detalle Venta #${verBtn.dataset.verVenta}`, html: data.length ? `<table style="width:100%;text-align:left;font-size:14px;"><tr style="border-bottom:2px solid var(--border-soft);"><th style="padding-bottom:10px;">Producto</th><th style="padding-bottom:10px;">Cant</th><th style="text-align:right;padding-bottom:10px;">Subtotal</th></tr>${data.map(x=>`<tr><td style="padding:12px 0;">${escapeHtml(x.producto)}</td><td style="padding:12px 0;font-weight:700;">${x.cantidad}</td><td style="text-align:right;padding:12px 0;font-weight:700;color:var(--navy);">${money(x.subtotal)}</td></tr>`).join('')}</table>` : t('sin_datos') });
     } catch (e) { notify(e.message, 'error'); }
 });
 
 // -------- INICIO --------
 const initial = <?= json_encode(['labels' => $v7['labels'] ?? [], 'ingresos' => $v7['ingresos'] ?? [], 'payments' =>$mp], JSON_UNESCAPED_UNICODE) ?>;
 window.addEventListener('DOMContentLoaded', () => {
-    const palette = ['#936545', '#547c5c', '#648ba6', '#b3832e', '#a66d7e'];
+    const palette = ['#1B6CA8', '#22C55E', '#0B2545', '#E8F6EE', '#16A34A']; // Colores catálogos
     if (window.Chart) {
+        Chart.defaults.font.family = '"Plus Jakarta Sans", sans-serif';
         salesChartInstance = new Chart($('#salesChart'), {
             type: 'line',
-            data: { labels: initial.labels || [], datasets: [{ label: 'Ingresos', data: initial.ingresos || [], borderColor: '#6c4630', backgroundColor: 'rgba(147,101,69,.14)', fill: true, tension: .38, pointRadius: 3 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } }
+            data: { labels: initial.labels || [], datasets: [{ label: 'Ingresos', data: initial.ingresos || [], borderColor: '#1B6CA8', backgroundColor: 'rgba(27, 108, 168, 0.12)', fill: true, tension: .4, pointRadius: 4, pointBackgroundColor: '#1B6CA8', pointBorderColor: '#fff', pointBorderWidth: 2 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(11, 37, 69, 0.05)' } }, x: { grid: { display: false } } } }
         });
         paymentChartInstance = new Chart($('#paymentChart'), {
             type: 'doughnut',
             data: { labels: (initial.payments || []).map(x => x.metodo), datasets: [{ data: (initial.payments || []).map(x => x.total_ventas), backgroundColor: palette, borderWidth: 0 }] },
-            options: { responsive: true, maintainAspectRatio: false, cutout: '74%', plugins: { legend: { position: 'bottom' } } }
+            options: { responsive: true, maintainAspectRatio: false, cutout: '76%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } } } }
         });
     }
     loadBranchSelects();
