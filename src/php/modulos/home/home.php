@@ -1,3 +1,14 @@
+<?php
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -521,7 +532,6 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
                 <figure class="pol main" style="--r:-3deg;--k:10"><div class="ph"><i class="im im-caballos-sol" style="background-position:50% 55%"></i></div></figure>
             </div>
         </div>
-
     </div>
 </section>
 
@@ -904,10 +914,20 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
 
     function toggleHomeLanguage() {
         const entries = Object.entries(homeTranslations).sort((a, b) => b[0].length - a[0].length);
+        const languageBtn = document.getElementById('languageToggle');
+
         document.querySelectorAll('body *:not(script):not(style)').forEach((element) => {
+            // Ignorar los botones de control para no alterar sus iconos o etiquetas técnicas
+            if (element.id === 'darkModeBtn' || element.id === 'languageToggle') return;
+
             element.childNodes.forEach((node) => {
                 if (node.nodeType !== Node.TEXT_NODE || node.parentElement?.hasAttribute('data-i18n')) return;
-                if (!originalHomeTexts.has(node)) originalHomeTexts.set(node, node.textContent);
+                if (node.parentElement?.id === 'darkModeBtn' || node.parentElement?.id === 'languageToggle') return;
+
+                if (!originalHomeTexts.has(node)) {
+                    originalHomeTexts.set(node, node.textContent);
+                }
+
                 const originalText = originalHomeTexts.get(node);
                 const leading = originalText.match(/^\s*/)[0];
                 const trailing = originalText.match(/\s*$/)[0];
@@ -917,15 +937,40 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
                 node.textContent = leading + translated + trailing;
             });
         });
+
+        // Actualizar atributos de documento y botones
         document.documentElement.lang = homeInEnglish ? 'en' : 'es';
-        document.getElementById('languageToggle').textContent = homeInEnglish ? 'ES' : 'EN';
+        document.title = homeInEnglish ? 'KION | Veterinary Clinic Management' : 'KION | Gestión para Veterinarias';
+
+        if (languageBtn) {
+            languageBtn.textContent = homeInEnglish ? 'ES' : 'EN';
+            languageBtn.title = homeInEnglish ? 'Cambiar a español' : 'Switch to English';
+            languageBtn.setAttribute('aria-label', homeInEnglish ? 'Cambiar a español' : 'Switch to English');
+        }
+
+        if (typeof updateDarkModeTitle === 'function') {
+            updateDarkModeTitle();
+        }
     }
 
-    document.getElementById('languageToggle').addEventListener('click', () => {
-        homeInEnglish = !homeInEnglish;
-        toggleHomeLanguage();
-    });
-</script>
+    const languageBtn = document.getElementById('languageToggle');
+    if (languageBtn) {
+        languageBtn.addEventListener('click', () => {
+            homeInEnglish = !homeInEnglish;
+            localStorage.setItem('kion_lang', homeInEnglish ? 'en' : 'es');
+            toggleHomeLanguage();
+        });
+    }
 
+    // Inicializar idioma según la preferencia guardada en localStorage
+    const savedLang = localStorage.getItem('kion_lang');
+    if (savedLang === 'en') {
+        homeInEnglish = true;
+        toggleHomeLanguage();
+    } else {
+        homeInEnglish = false;
+        toggleHomeLanguage();
+    }
+</script>
 </body>
 </html>

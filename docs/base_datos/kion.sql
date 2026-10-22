@@ -127,8 +127,7 @@ CREATE TABLE `roles` (
 INSERT INTO `roles` (`id_rol`, `nombre`) VALUES
 (1, 'Administrador General'),
 (3, 'Cajero'),
-(2, 'Gerente'),
-(4, 'Usuario');
+(2, 'Gerente');
 
 -- --------------------------------------------------------
 
@@ -156,10 +155,13 @@ CREATE TABLE `usuarios` (
   `nombre` varchar(100) NOT NULL,
   `apellido` varchar(100) NOT NULL,
   `correo` varchar(150) NOT NULL,
-  `google_id` varchar(255) DEFAULT NULL,
   `password_hash` varchar(255) NOT NULL,
   `id_rol` int(10) UNSIGNED NOT NULL,
   `id_sucursal` int(10) UNSIGNED DEFAULT NULL,
+  `remember_token` char(64) DEFAULT NULL,
+  `remember_expires_at` datetime DEFAULT NULL,
+  `recovery_token` char(64) DEFAULT NULL,
+  `recovery_expires_at` datetime DEFAULT NULL,
   `estado` enum('ACTIVO','INACTIVO') NOT NULL DEFAULT 'ACTIVO'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -240,7 +242,6 @@ ALTER TABLE `sucursales`
 --
 ALTER TABLE `usuarios`
   ADD PRIMARY KEY (`id_usuario`),
-  ADD UNIQUE KEY `google_id` (`google_id`),
   ADD UNIQUE KEY `correo` (`correo`),
   ADD KEY `id_rol` (`id_rol`),
   ADD KEY `id_sucursal` (`id_sucursal`);
@@ -292,7 +293,7 @@ ALTER TABLE `productos`
 -- AUTO_INCREMENT de la tabla `roles`
 --
 ALTER TABLE `roles`
-  MODIFY `id_rol` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id_rol` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT de la tabla `sucursales`

@@ -49,7 +49,7 @@ try {
 
     session_regenerate_id(true);
     $_SESSION['usuario'] = ['id_usuario' => $usuario['id_usuario'], 'nombre' => $usuario['nombre'], 'apellido' => $usuario['apellido'], 'correo' => $usuario['correo'], 'id_rol' => $usuario['id_rol'], 'id_sucursal' => $usuario['id_sucursal'], 'rol' => $usuario['rol']];
-    $destino = $usuario['rol'] === 'Usuario' ? 'src/php/componentes/catalogo.php' : 'src/php/modulos/home/dashboard.php';
+    $destino = 'src/php/modulos/home/home.php';
     echo json_encode(['ok' => true, 'redirect' => $destino]);
 } catch (Throwable $e) {
     http_response_code(401);
