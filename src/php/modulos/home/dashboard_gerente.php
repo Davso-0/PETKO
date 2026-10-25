@@ -661,6 +661,7 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
 
     <style>
         /* ESTILOS CONTROL DE CANTIDAD EN CARRITO */
@@ -978,25 +979,27 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
         <div class="content">
 
             <!-- PANEL PRINCIPAL -->
-            <section id="view-dash" class="view-section active">
-                <div class="header-row"><div><h1 class="title" data-i18n="dash_title">Resumen de Operaciones <span class="wave">👋</span></h1><p class="subtitle" data-i18n="dash_sub">Métricas en tiempo real de tu sucursal.</p></div></div>
-                <div class="kpi-grid">
-                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-money kpi-icon"></i></div><div class="kpi-val" id="kpiIngresos">$0.00</div><div class="kpi-label" data-i18n="kpi_ingresos">Ingresos Hoy</div></div>
-                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-warning-circle kpi-icon" style="color:var(--danger); background:var(--danger-bg);"></i></div><div class="kpi-val" id="kpiBajo" style="color:var(--danger)">0</div><div class="kpi-label" data-i18n="kpi_bajo">Stock Bajo</div></div>
-                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-desktop kpi-icon"></i></div><div class="kpi-val" id="kpiCajas">0</div><div class="kpi-label" data-i18n="kpi_cajas">Cajas Activas</div></div>
-                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-package kpi-icon"></i></div><div class="kpi-val" id="kpiProductos">0</div><div class="kpi-label" data-i18n="kpi_productos">Productos Asignados</div></div>
-                </div>
+           <!-- PANEL PRINCIPAL -->
+<section id="view-dash" class="view-section active">
+    <div class="header-row"><div><h1 class="title" data-i18n="dash_title">Resumen de Operaciones <span class="wave">👋</span></h1><p class="subtitle" data-i18n="dash_sub">Métricas en tiempo real de tu sucursal.</p></div></div>
+    
+    <div class="panel" style="margin-bottom: 24px;">
+        <div class="panel-head"><div><h2 class="panel-title" data-i18n="misuc_title">Mi Sucursal</h2><p class="panel-sub" data-i18n="misuc_sub">Información general de tu punto de venta.</p></div></div>
+        <div class="info-grid" id="infoSucursal" data-i18n="cargando">Cargando...</div>
+    </div>
 
-                <div class="panel" style="margin-bottom: 24px;">
-                    <div class="panel-head"><div><h2 class="panel-title" data-i18n="misuc_title">Mi Sucursal</h2><p class="panel-sub" data-i18n="misuc_sub">Información general de tu punto de venta.</p></div></div>
-                    <div class="info-grid" id="infoSucursal" data-i18n="cargando">Cargando...</div>
-                </div>
+    <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-money kpi-icon"></i></div><div class="kpi-val" id="kpiIngresos">$0.00</div><div class="kpi-label" data-i18n="kpi_ingresos">Ingresos Hoy</div></div>
+        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-warning-circle kpi-icon" style="color:var(--danger); background:var(--danger-bg);"></i></div><div class="kpi-val" id="kpiBajo" style="color:var(--danger)">0</div><div class="kpi-label" data-i18n="kpi_bajo">Stock Bajo</div></div>
+        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-desktop kpi-icon"></i></div><div class="kpi-val" id="kpiCajas">0</div><div class="kpi-label" data-i18n="kpi_cajas">Cajas Activas</div></div>
+        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-package kpi-icon"></i></div><div class="kpi-val" id="kpiProductos">0</div><div class="kpi-label" data-i18n="kpi_productos">Productos Asignados</div></div>
+    </div>
 
-                <div class="grid-2col">
-                    <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="chart_ventas">Ventas (7 días)</h2></div></div><div class="chart-box"><canvas id="salesChart"></canvas></div></div>
-                    <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="alertas_title">Alertas de Inventario Bajo</h2></div></div><table style="margin-top:16px;" id="tblAlertas"><tr><th data-i18n="th_producto">Producto</th><th data-i18n="th_existencia">Existencia</th><th data-i18n="th_estado">Estado</th></tr></table></div>
-                </div>
-            </section>
+    <div class="grid-2col">
+        <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="chart_ventas">Ventas (7 días)</h2></div></div><div class="chart-box"><canvas id="salesChart"></canvas></div></div>
+        <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="alertas_title">Alertas de Inventario Bajo</h2></div></div><table style="margin-top:16px;" id="tblAlertas"><tr><th data-i18n="th_producto">Producto</th><th data-i18n="th_existencia">Existencia</th><th data-i18n="th_estado">Estado</th></tr></table></div>
+    </div>
+</section>
 
             <!-- INVENTARIO -->
             <section id="view-inventario" class="view-section">
@@ -1098,12 +1101,16 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
                 <div class="pos-layout">
                     <div>
                         <div class="pos-scanner" style="position:relative;">
-                            <i class="ph ph-barcode" style="font-size:32px; color:var(--accent); align-self:center;"></i>
-                            <div style="flex:1; position:relative;">
-                                <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
-                                <div id="posSearchResults" class="pos-search-dropdown"></div>
-                            </div>
-                        </div>
+    <i class="ph ph-barcode" style="font-size:32px; color:var(--accent); align-self:center;"></i>
+    <div style="flex:1; position:relative;">
+        <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
+        <div id="posSearchResults" class="pos-search-dropdown"></div>
+    </div>
+    <button type="button" class="chip-btn" id="btnStartCameraScan" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
+        <i class="ph ph-camera" style="font-size:20px;"></i>
+        <span style="font-weight:700;">Cámara</span>
+    </button>
+</div>
                         <div class="pos-cart panel" style="padding:0;">
                             <table style="width:100%; margin:0;">
                                 <thead><tr><th style="padding:16px 24px;" data-i18n="th_producto">Producto</th><th style="text-align:center;" data-i18n="th_cant">Cant.</th><th style="text-align:right;" data-i18n="th_precio">Precio</th><th style="text-align:right; padding-right:24px;" data-i18n="th_subtotal">Subtotal</th></tr></thead>
@@ -1304,8 +1311,7 @@ async function loadDashboard() {
             <div class="info-item"><span>${t('lbl_nombre')}</span><b>${escapeHtml(suc.nombre)}</b></div>
             <div class="info-item"><span>${t('lbl_direccion')}</span><b>${escapeHtml(suc.direccion || '-')}</b></div>
             <div class="info-item"><span>${t('lbl_telefono')}</span><b>${escapeHtml(suc.telefono || '-')}</b></div>
-            <div class="info-item"><span>${t('lbl_contacto')}</span><b>${escapeHtml(suc.contacto || '-')}</b></div>
-            <div class="info-item"><span>${t('lbl_estado')}</span><span class="badge ${suc.estado==='ACTIVA'?'b-green':'b-red'}">${escapeHtml(suc.estado)}</span></div>`;
+            <div class="info-item"><span>${t('lbl_contacto')}</span><b>${escapeHtml(suc.contacto || '-')}</b></div>`;
     } catch (e) { $('#infoSucursal').innerHTML = t('no_encontrada'); }
 }
 
@@ -2156,6 +2162,78 @@ $('#btnCobrar').addEventListener('click', async () => {
 // -------- INICIO --------
 loadDashboard();
 loadFiltrosInv();
+// Variable global para controlar la cámara
+let html5QrCodeScanner = null;
+
+async function abrirEscanerCamara() {
+    // Modal de SweetAlert para mostrar el visor de la cámara
+    Swal.fire({
+        title: 'Escaneando Código / QR',
+        html: `
+            <div id="reader-container" style="width: 100%; max-width: 450px; margin: 0 auto; overflow: hidden; border-radius: 16px; border: 2px solid var(--border-soft);">
+                <div id="reader" style="width: 100%;"></div>
+            </div>
+            <p style="margin-top: 12px; font-size: 13px; color: var(--ink-soft);">Apunta la cámara del teléfono o laptop hacia el código de barras o QR.</p>
+        `,
+        showConfirmButton: false,
+        showCancelButton: true,
+        cancelButtonText: t('cancelar'),
+        didOpen: () => {
+            // Inicializar escáner Html5Qrcode
+            html5QrCodeScanner = new Html5Qrcode("reader");
+            
+            const config = { 
+                fps: 10, 
+                qrbox: { width: 250, height: 150 },
+                aspectRatio: 1.0
+            };
+
+            // Pedir permiso y usar cámara trasera preferentemente (environment)
+            html5QrCodeScanner.start(
+                { facingMode: "environment" }, 
+                config, 
+                async (decodedText) => {
+                    // CÓDIGO DETECTADO CON ÉXITO
+                    if (html5QrCodeScanner) {
+                        await html5QrCodeScanner.stop();
+                        html5QrCodeScanner.clear();
+                    }
+                    Swal.close();
+
+                    try {
+                        // Buscar el producto en la base de datos con el código leído
+                        const { data } = await request(`buscar_producto_pos&codigo=${encodeURIComponent(decodedText)}`);
+                        addProductToCart(data);
+                        notify(`Añadido: ${data.nombre}`);
+                    } catch (err) {
+                        notify(err.message, 'error');
+                    }
+                },
+                (errorMessage) => {
+                    // Errores de lectura continuo (se ignoran para evitar saturación)
+                }
+            ).catch(err => {
+                Swal.close();
+                notify('No se pudo acceder a la cámara o no diste permisos.', 'error');
+            });
+        },
+        willClose: () => {
+            // Detener la cámara si el usuario cierra la ventana emergente
+            if (html5QrCodeScanner && html5QrCodeScanner.isScanning) {
+                html5QrCodeScanner.stop().then(() => {
+                    html5QrCodeScanner.clear();
+                }).catch(() => {});
+            }
+        }
+    });
+}
+
+// Evento al presionar el botón de la cámara
+document.addEventListener('click', e => {
+    if (e.target.closest('#btnStartCameraScan')) {
+        abrirEscanerCamara();
+    }
+});
 </script>
 
 </body>
