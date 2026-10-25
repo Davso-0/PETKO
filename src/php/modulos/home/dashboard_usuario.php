@@ -49,7 +49,20 @@ if (isset($_GET['action'])) {$action = $_GET['action'];$out = ['ok' => false, 'm
             throw new RuntimeException('[ERROR] Sesión inválida.');
         }
 
-        if ($action === 'get_apartados') {
+        if ($action === 'solicitar_cambio_password') {
+            $bytes = random_bytes(32);
+            $tokenPlano = bin2hex($bytes);
+            $tokenHash = hash('sha256', $tokenPlano);
+            $expiraEn = date('Y-m-d H:i:s', strtotime('+1 hour'));
+            $st = $pdo->prepare("UPDATE usuarios SET recovery_token = ?, recovery_expires_at = ? WHERE id_usuario = ?");
+            $st->execute([$tokenHash, $expiraEn, $id_usuario_actual]);
+            if ($st->rowCount() !== 1) {
+                throw new RuntimeException('No fue posible generar el enlace de restablecimiento.');
+            }
+            $redirectUrl = '../../../../recuperar.php?token=' . $tokenPlano;
+            $out = ['ok' => true, 'msg' => 'Redirigiendo a restablecimiento...', 'redirect' => $redirectUrl];
+
+        } elseif ($action === 'get_apartados') {
             // Asumimos una tabla 'apartados' que relaciona al usuario, el producto y la sucursal.
             $sql = "SELECT a.id_apartado, p.nombre AS producto, p.precio, s.nombre AS sucursal, a.fecha_reserva, a.estado 
                     FROM apartados a 
@@ -213,16 +226,16 @@ if (isset($_GET['action'])) {$action = $_GET['action'];$out = ['ok' => false, 'm
         <button class="sidebar-collapse-btn" id="btnCollapse"><i class="ph ph-caret-left"></i></button>
         <div class="brand">
             <i class="ph-fill ph-paw-print"></i>
-            <div class="brand-text"><div>KION</div><div class="brand-sub">Panel de Cliente</div></div>
+            <div class="brand-text"><div>KION</div><div class="brand-sub" data-i18n="brand_sub">Panel de Cliente</div></div>
         </div>
         <nav class="nav-menu">
-            <div class="nav-section-title">Mi Actividad</div>
-            <button class="nav-btn active" data-target="view-apartados"><i class="ph ph-shopping-bag"></i><span class="nav-label">Mis Apartados</span></button>
-            <div class="nav-section-title">Ajustes</div>
-            <button class="nav-btn" data-target="view-config"><i class="ph ph-gear"></i><span class="nav-label">Configuración</span></button>
-            <div class="nav-section-title">Navegación</div>
-            <a class="nav-btn" href="../../componentes/catalogo.php"><i class="ph ph-storefront"></i><span class="nav-label">Ir al Catálogo</span></a>
-            <a class="nav-btn" href="../../../../inicioSesion.php" style="color:var(--danger)"><i class="ph ph-sign-out"></i><span class="nav-label">Cerrar sesión</span></a>
+            <div class="nav-section-title" data-i18n="nav_section_activity">Mi Actividad</div>
+            <button class="nav-btn active" data-target="view-apartados"><i class="ph ph-shopping-bag"></i><span class="nav-label" data-i18n="nav_apartados">Mis Apartados</span></button>
+            <div class="nav-section-title" data-i18n="nav_section_settings">Ajustes</div>
+            <button class="nav-btn" data-target="view-config"><i class="ph ph-gear"></i><span class="nav-label" data-i18n="nav_config">Configuración</span></button>
+            <div class="nav-section-title" data-i18n="nav_section_navigation">Navegación</div>
+            <a class="nav-btn" href="../../componentes/catalogo.php"><i class="ph ph-storefront"></i><span class="nav-label" data-i18n="nav_catalog">Ir al Catálogo</span></a>
+            <a class="nav-btn" href="../../../../cerrarSesion.php" style="color:var(--danger)"><i class="ph ph-sign-out"></i><span class="nav-label" data-i18n="nav_logout">Cerrar sesión</span></a>
         </nav>
     </aside>
     <div class="sidebar-scrim" id="sidebarScrim"></div>
@@ -231,14 +244,15 @@ if (isset($_GET['action'])) {$action = $_GET['action'];$out = ['ok' => false, 'm
         <header class="topbar">
             <div style="display:flex; align-items:center; gap:14px;">
                 <button class="hamburger-btn" id="btnMobileMenu"><i class="ph ph-list"></i></button>
-                <b id="topbarTitle" style="font-size: 16px; display: none;">Mis Apartados</b>
+                <b id="topbarTitle" data-i18n="topbar_apartados" style="font-size: 16px;">Mis Apartados</b>
             </div>
             <div class="topbar-actions">
-                <button class="icon-btn" id="btnTheme" title="Modo Oscuro"><i class="ph ph-moon"></i></button>
+                <button class="icon-btn" id="btnTheme" title="Modo Oscuro" data-i18n-title="theme_title"><i class="ph ph-moon"></i></button>
+                <button class="icon-btn" id="btnLang" title="Switch language / Cambiar idioma"><i class="ph ph-translate"></i></button>
                 <div class="user-profile">
                     <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--coffee-main)"></i>
                     <span><?= htmlspecialchars($nombreCompleto) ?></span>
-                    <span class="role-chip">Cliente</span>
+                    <span class="role-chip" data-i18n="role_chip">Cliente</span>
                 </div>
             </div>
         </header>
@@ -249,23 +263,23 @@ if (isset($_GET['action'])) {$action = $_GET['action'];$out = ['ok' => false, 'm
             <section id="view-apartados" class="view-section active">
                 <div class="header-row">
                     <div>
-                        <h1 class="title">Mis Productos Apartados</h1>
-                        <p class="subtitle">Consulta los productos que has reservado y su sucursal de recolección.</p>
+                        <h1 class="title" data-i18n="apartados_title">Mis Productos Apartados</h1>
+                        <p class="subtitle" data-i18n="apartados_subtitle">Consulta los productos que has reservado y su sucursal de recolección.</p>
                     </div>
                 </div>
                 <div class="panel">
                     <table>
                         <thead>
                             <tr>
-                                <th>Producto</th>
-                                <th>Sucursal de Recolección</th>
-                                <th>Precio</th>
-                                <th>Fecha de Reserva</th>
-                                <th>Estado</th>
+                                <th data-i18n="th_producto">Producto</th>
+                                <th data-i18n="th_sucursal">Sucursal de Recolección</th>
+                                <th data-i18n="th_precio">Precio</th>
+                                <th data-i18n="th_fecha">Fecha de Reserva</th>
+                                <th data-i18n="th_estado">Estado</th>
                             </tr>
                         </thead>
                         <tbody id="apartadosTable">
-                            <tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--ink-faint);">Cargando información...</td></tr>
+                            <tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--ink-faint);" data-i18n="loading">Cargando información...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -275,42 +289,37 @@ if (isset($_GET['action'])) {$action = $_GET['action'];$out = ['ok' => false, 'm
             <section id="view-config" class="view-section">
                 <div class="header-row">
                     <div>
-                        <h1 class="title">Configuración de Cuenta</h1>
-                        <p class="subtitle">Gestiona tu información personal y seguridad.</p>
+                        <h1 class="title" data-i18n="config_title">Configuración de Cuenta</h1>
+                        <p class="subtitle" data-i18n="config_subtitle">Gestiona tu información personal y seguridad.</p>
                     </div>
                 </div>
                 <div class="panel" style="display: flex; gap: 40px; flex-wrap: wrap;">
                     
                     <div style="flex: 1; min-width: 300px;">
-                        <h3 style="margin-bottom: 20px; font-size: 16px;">Datos de Contacto</h3>
+                        <h3 style="margin-bottom: 20px; font-size: 16px;" data-i18n="contact_title">Datos de Contacto</h3>
                         <div class="form-group">
-                            <label>Nombre Completo</label>
+                            <label data-i18n="name_label">Nombre Completo</label>
                             <input type="text" class="form-input" value="<?= htmlspecialchars($nombreCompleto) ?>" disabled>
                         </div>
                         <div class="form-group">
-                            <label>Correo Electrónico</label>
+                            <label data-i18n="email_label">Correo Electrónico</label>
                             <input type="text" class="form-input" value="<?= htmlspecialchars($correoUsuario) ?>" disabled>
                         </div>
-                        <p style="font-size: 12px; color: var(--ink-faint);">* Para cambiar tu correo o nombre, contacta a una sucursal.</p>
+                        <p style="font-size: 12px; color: var(--ink-faint);" data-i18n="contact_help">* Para cambiar tu correo o nombre, contacta a una sucursal.</p>
                     </div>
 
-                    <div style="flex: 1; min-width: 300px;">
-                        <h3 style="margin-bottom: 20px; font-size: 16px;">Cambiar Contraseña</h3>
-                        <form id="formPassword">
-                            <div class="form-group">
-                                <label>Contraseña Actual</label>
-                                <input type="password" id="passActual" class="form-input" required placeholder="••••••">
-                            </div>
-                            <div class="form-group">
-                                <label>Nueva Contraseña</label>
-                                <input type="password" id="passNueva" class="form-input" required placeholder="Mínimo 6 caracteres">
-                            </div>
-                            <div class="form-group">
-                                <label>Confirmar Nueva Contraseña</label>
-                                <input type="password" id="passConfirma" class="form-input" required placeholder="••••••">
-                            </div>
-                            <button type="submit" class="btn-primary">Actualizar Contraseña</button>
-                        </form>
+                    <div style="flex:  1; min-width: 300px;">
+                        <h3 style="margin-bottom: 20px; font-size: 16px;" data-i18n="password_title">Cambiar Contraseña</h3>
+                        <div class="form-group">
+                            <label data-i18n="pass_actual_label">Contraseña de la cuenta</label>
+                            <input type="password" class="form-input" value="••••••••••••" disabled>
+                        </div>
+                        <div style="margin-top: 20px; padding: 16px; background: var(--bg-app); border: 1px solid var(--border-soft); border-radius: 10px;">
+                            <p style="font-size: 13.5px; color: var(--ink-soft); margin-bottom: 10px;" data-i18n="pass_help_text">¿Deseas cambiar o actualizar tu contraseña?</p>
+                            <button type="button" id="btnSolicitarCambioPass" class="btn-primary" style="max-width: 100%; width: auto; margin: 0;">
+                                <i class="ph ph-key" style="margin-right: 6px;"></i> <span data-i18n="btn_solicitar_pass">Cambiar Contraseña</span>
+                            </button>
+                        </div>
                     </div>
 
                 </div>
@@ -327,24 +336,83 @@ const escapeHtml = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','
 const money = v => '$' + Number(v || 0).toFixed(2);
 const notify = (msg, icon='success') => Swal.fire({ toast:true, position:'top-end', icon, title: msg, showConfirmButton:false, timer:2600 });
 
+const I18N = {
+    es: {
+        brand_sub: 'Panel de Cliente', nav_section_activity: 'Mi Actividad', nav_section_settings: 'Ajustes',
+        nav_section_navigation: 'Navegación', nav_apartados: 'Mis Apartados', nav_config: 'Configuración',
+        nav_catalog: 'Ir al Catálogo', nav_logout: 'Cerrar sesión', topbar_apartados: 'Mis Apartados',
+        topbar_config: 'Configuración', theme_title: 'Modo Oscuro', role_chip: 'Cliente',
+        apartados_title: 'Mis Productos Apartados', apartados_subtitle: 'Consulta los productos que has reservado y su sucursal de recolección.',
+        th_producto: 'Producto', th_sucursal: 'Sucursal de Recolección', th_precio: 'Precio',
+        th_fecha: 'Fecha de Reserva', th_estado: 'Estado', loading: 'Cargando información...',
+        config_title: 'Configuración de Cuenta', config_subtitle: 'Gestiona tu información personal y seguridad.',
+        contact_title: 'Datos de Contacto', name_label: 'Nombre Completo', email_label: 'Correo Electrónico',
+        contact_help: '* Para cambiar tu correo o nombre, contacta a una sucursal.',
+        password_title: 'Cambiar Contraseña', pass_actual_label: 'Contraseña de la cuenta',
+        pass_help_text: '¿Deseas cambiar o actualizar tu contraseña?', btn_solicitar_pass: 'Cambiar Contraseña',
+        empty_apartados: 'No tienes ningún producto apartado en este momento.',
+        missing_apartados: 'Aún no has apartado ningún producto.', error_response: 'Error al procesar la respuesta del servidor.',
+        error_request: 'No fue posible completar la operación.', redirecting_password: 'Redirigiendo a restablecimiento...',
+        entregado: 'ENTREGADO', vencido: 'VENCIDO', cancelado: 'CANCELADO', pendiente: 'PENDIENTE'
+    },
+    en: {
+        brand_sub: 'Customer Dashboard', nav_section_activity: 'My Activity', nav_section_settings: 'Settings',
+        nav_section_navigation: 'Navigation', nav_apartados: 'My Reservations', nav_config: 'Settings',
+        nav_catalog: 'Go to Catalog', nav_logout: 'Log out', topbar_apartados: 'My Reservations',
+        topbar_config: 'Settings', theme_title: 'Dark Mode', role_chip: 'Customer',
+        apartados_title: 'My Reserved Products', apartados_subtitle: 'Review the products you have reserved and their pickup branch.',
+        th_producto: 'Product', th_sucursal: 'Pickup Branch', th_precio: 'Price',
+        th_fecha: 'Reservation Date', th_estado: 'Status', loading: 'Loading information...',
+        config_title: 'Account Settings', config_subtitle: 'Manage your personal information and security.',
+        contact_title: 'Contact Information', name_label: 'Full Name', email_label: 'Email Address',
+        contact_help: '* To change your email or name, contact a branch.',
+        password_title: 'Change Password', pass_actual_label: 'Account password',
+        pass_help_text: 'Would you like to change or update your password?', btn_solicitar_pass: 'Change Password',
+        empty_apartados: 'You do not have any reserved products at this time.',
+        missing_apartados: 'You have not reserved any products yet.', error_response: 'Error processing the server response.',
+        error_request: 'Unable to complete the operation.', redirecting_password: 'Redirecting to password reset...',
+        entregado: 'DELIVERED', vencido: 'EXPIRED', cancelado: 'CANCELED', pendiente: 'PENDING'
+    }
+};
+let currentLang = localStorage.getItem('kion-user-lang') === 'en' ? 'en' : 'es';
+function t(key) {
+    return (I18N[currentLang] && I18N[currentLang][key]) || I18N.es[key] || key;
+}
+function applyLanguage() {
+    document.documentElement.lang = currentLang;
+    document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+}
+
 async function request(actionStr, options = {}) {
     const r = await fetch(`${endpoint}?action=${actionStr}`, options);
     const text = await r.text();
     let data;
-    try { data = JSON.parse(text); } catch(e) { throw new Error('Error al procesar la respuesta del servidor.'); }
-    if (!data.ok) throw new Error(data.msg || 'No fue posible completar la operación.');
+    try { data = JSON.parse(text); } catch(e) { throw new Error(t('error_response')); }
+    if (!data.ok) throw new Error(data.msg || t('error_request'));
     return data;
 }
 
 // -------- TEMA --------
 const body = document.body, btnTheme = $('#btnTheme');
+if (localStorage.getItem('kion-user-theme') === 'dark') {
+    body.classList.add('dark-mode');
+    btnTheme.querySelector('i').classList.replace('ph-moon', 'ph-sun');
+}
 btnTheme.addEventListener('click', () => {
     body.classList.toggle('dark-mode');
     const icon = btnTheme.querySelector('i');
     icon.classList.toggle('ph-moon'); icon.classList.toggle('ph-sun');
     localStorage.setItem('kion-user-theme', body.classList.contains('dark-mode') ? 'dark' : 'light');
 });
-if (localStorage.getItem('kion-user-theme') === 'dark') { body.classList.add('dark-mode'); btnTheme.querySelector('i').classList.replace('ph-moon','ph-sun'); }
+
+$('#btnLang').addEventListener('click', () => {
+    currentLang = currentLang === 'es' ? 'en' : 'es';
+    localStorage.setItem('kion-user-lang', currentLang);
+    applyLanguage();
+    const activeView = document.querySelector('.view-section.active');
+    if (activeView) switchView(activeView.id);
+});
 
 // -------- SIDEBAR --------
 const appLayout = $('#appLayout');
@@ -356,16 +424,21 @@ const navButtons = document.querySelectorAll('.nav-btn[data-target]');
 const views = document.querySelectorAll('.view-section');
 
 function switchView(targetId) {
+    const targetView = document.getElementById(targetId);
+    if (!targetView) return;
     views.forEach(v => v.classList.remove('active'));
     navButtons.forEach(b => b.classList.remove('active'));
-    document.getElementById(targetId).classList.add('active');
+    targetView.classList.add('active');
     const btn = document.querySelector(`.nav-btn[data-target="${targetId}"]`);
     if (btn) btn.classList.add('active');
     appLayout.classList.remove('mobile-open');
+    $('#topbarTitle').textContent = t(targetId === 'view-config' ? 'topbar_config' : 'topbar_apartados');
 
     if (targetId === 'view-apartados') loadApartados();
 }
 navButtons.forEach(btn => btn.addEventListener('click', e => switchView(e.currentTarget.dataset.target)));
+
+applyLanguage();
 
 // -------- APARTADOS --------
 async function loadApartados() {
@@ -373,7 +446,7 @@ async function loadApartados() {
     try {
         const { data, msg } = await request('get_apartados');
         if (msg) {
-            table.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:var(--ink-faint);">${escapeHtml(msg)}</td></tr>`;
+            table.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:var(--ink-faint);">${escapeHtml(t('missing_apartados'))}</td></tr>`;
             return;
         }
 
@@ -382,43 +455,30 @@ async function loadApartados() {
             if(x.estado === 'ENTREGADO') badgeClass = 'b-green';
             if(x.estado === 'VENCIDO' || x.estado === 'CANCELADO') badgeClass = 'b-yellow';
 
+            const estadoKey = x.estado === 'ENTREGADO' ? 'entregado'
+                : x.estado === 'VENCIDO' ? 'vencido'
+                : x.estado === 'CANCELADO' ? 'cancelado'
+                : null;
+            const estado = estadoKey ? t(estadoKey) : (x.estado || t('pendiente'));
+            const fecha = x.fecha_reserva ? new Date(x.fecha_reserva).toLocaleDateString(currentLang === 'es' ? 'es-MX' : 'en-US') : '-';
             return `<tr>
                 <td><b>${escapeHtml(x.producto)}</b></td>
                 <td><i class="ph ph-storefront" style="vertical-align: middle; margin-right: 4px;"></i> ${escapeHtml(x.sucursal)}</td>
-                <td><b>${money(x.precio)}</b></td>
-                <td>${x.fecha_reserva ? new Date(x.fecha_reserva).toLocaleDateString('es-MX') : '-'}</td>
-                <td><span class="badge ${badgeClass}">${escapeHtml(x.estado || 'PENDIENTE')}</span></td>
+                <td><b>${escapeHtml(money(x.precio))}</b></td>
+                <td>${escapeHtml(fecha)}</td>
+                <td><span class="badge ${badgeClass}">${escapeHtml(estado)}</span></td>
             </tr>`;
-        }).join('') : `<tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--ink-faint);">No tienes ningún producto apartado en este momento.</td></tr>`;
+        }).join('') : `<tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--ink-faint);">${escapeHtml(t('empty_apartados'))}</td></tr>`;
     } catch (e) {
         table.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:var(--danger);">${escapeHtml(e.message)}</td></tr>`;
     }
 }
 
-// -------- CAMBIO DE CONTRASEÑA --------
-$('#formPassword').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const pAct = $('#passActual').value;
-    const pNue = $('#passNueva').value;
-    const pCon = $('#passConfirma').value;
-
-    if (pNue !== pCon) {
-        notify('Las contraseñas nuevas no coinciden.', 'error');
-        return;
-    }
-    if (pNue.length < 6) {
-        notify('La nueva contraseña debe tener al menos 6 caracteres.', 'error');
-        return;
-    }
-
+$('#btnSolicitarCambioPass').addEventListener('click', async () => {
     try {
-        const fd = new FormData();
-        fd.append('password_actual', pAct);
-        fd.append('password_nueva', pNue);
-        
-        const d = await request('update_password', { method: 'POST', body: fd });
-        notify(d.msg);
-        $('#formPassword').reset();
+        const data = await request('solicitar_cambio_password');
+        notify(t('redirecting_password'));
+        window.location.href = data.redirect;
     } catch (err) {
         notify(err.message, 'error');
     }

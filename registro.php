@@ -32,10 +32,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $contrasena = is_string($contrasena) ? $contrasena : '';
     $confirmacion = $_POST['confirm_password'] ?? '';
     $confirmacion = is_string($confirmacion) ? $confirmacion : '';
-    $aceptoTerminos = isset($_POST['terms']) && is_string($_POST['terms']) && $_POST['terms'] === '1';
+    if (!isset($_POST['acepto_terminos'])
+        || !is_string($_POST['acepto_terminos'])
+        || $_POST['acepto_terminos'] !== '1') {
+        responderRegistro(false, 'Debes aceptar los Términos y Condiciones para poder registrarte.');
+    }
 
-    if ($nombre === '' || $apellido === '' || $correo === '' || $contrasena === '' || $confirmacion === '' || !$aceptoTerminos) {
-        responderRegistro(false, 'Completa todos los campos y acepta los Términos y Condiciones y la Política de Privacidad.');
+    if ($nombre === '' || $apellido === '' || $correo === '' || $contrasena === '' || $confirmacion === '') {
+        responderRegistro(false, 'Completa todos los campos requeridos.');
     }
     if (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {
         responderRegistro(false, 'Escribe un correo electrónico válido.');
@@ -90,20 +94,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KION | Crear cuenta</title>
+    <title>PETKO | Crear cuenta</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
     <style>
         :root {
-            --gold: #c9a444;
-            --gold-light: #e6c260;
-            --bg-card: rgba(12, 12, 12, 0.65);
-            --field-bg: rgba(255, 255, 255, 0.05);
-            --field-border: rgba(255, 255, 255, 0.15);
-            --text-main: #fff;
-            --text-muted: #a0a0a0;
-            --error-red: #efaaa5;
-            --error-bg: rgba(239, 170, 165, 0.12);
-            --success-green: #8bd19a;
-            --success-bg: rgba(139, 209, 154, 0.12);
+            --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 50%, #e0f2fe 100%);
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --card-border: rgba(255, 255, 255, 0.9);
+            --green-primary: #16a34a;
+            --green-hover: #15803d;
+            --green-glow: rgba(22, 163, 74, 0.25);
+            --field-bg: rgba(248, 250, 252, 0.8);
+            --field-border: #cbd5e1;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --error-red: #dc2626;
+            --error-bg: #fef2f2;
+            --success-green: #16a34a;
+            --success-bg: #f0fdf4;
+            --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+            --font-brand: 'Fredoka', sans-serif;
+            --bg-main: #f8fafc;
+            --gold: var(--green-primary);
+            --gold-light: var(--green-hover);
+            --bg-card: var(--card-bg);
         }
         * { box-sizing: border-box; }
         html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
@@ -175,7 +192,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .field-error.visible { display: block; }
         .check-row { display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 10px; color: var(--text-muted); font-size: 10px; line-height: 1.35; }
         .check-row input { width: 14px; height: 14px; flex: 0 0 auto; margin: 0; accent-color: var(--gold); }
-        .check-row label { margin: 0; color: inherit; font-size: inherit; }
+        .check-row label { display: inline; margin: 0; color: inherit; font-size: inherit; }
+        .check-row > div { min-width: 0; }
+        .check-row a { color: var(--gold-light); text-decoration: underline; text-underline-offset: 2px; }
+        .check-row a:hover { color: #f2d77f; }
         .btn-submit { width: 100%; min-height: 39px; border: 0; border-radius: 8px; background: linear-gradient(135deg, #e6c260 0%, #c9a444 100%); color: #17130a; cursor: pointer; font: inherit; font-size: 13px; font-weight: 750; transition: box-shadow .2s, transform .2s; }
         .btn-submit:hover { box-shadow: 0 4px 15px rgba(201, 164, 68, .35); transform: translateY(-1px); }
         .btn-submit:disabled { cursor: wait; opacity: .7; transform: none; }
@@ -186,6 +206,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .notice.visible { display: block; animation: fadeIn .2s ease both; }
         .notice.error { border-color: rgba(239, 170, 165, .35); background: var(--error-bg); color: var(--error-red); }
         .notice.success { border-color: rgba(139, 209, 154, .35); background: var(--success-bg); color: var(--success-green); }
+        .terms-modal { position: fixed; z-index: 10; inset: 0; display: grid; padding: 20px; place-items: center; background: rgba(0, 0, 0, .62); opacity: 0; visibility: hidden; transition: opacity .2s ease, visibility .2s ease; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+        .terms-modal.visible { opacity: 1; visibility: visible; }
+        .terms-dialog { width: min(820px, 100%); height: min(780px, calc(100svh - 40px)); overflow: hidden; transform: translateY(8px); border: 1px solid rgba(201, 164, 68, .3); border-radius: 18px; background: #0c0c0c; box-shadow: 0 25px 60px rgba(0, 0, 0, .7); transition: transform .2s ease; }
+        .terms-modal.visible .terms-dialog { transform: translateY(0); }
+        .terms-frame { display: block; width: 100%; height: 100%; border: 0; }
         @keyframes pageEnter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pageExit { to { opacity: 0; transform: translateY(-5px); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
@@ -197,19 +222,114 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .password-help { margin-bottom: 5px; }
             .form-footer { margin-top: 7px; }
         }
+        @media (max-width: 540px) { .terms-modal { padding: 10px; } .terms-dialog { height: calc(100svh - 20px); } }
         @media (max-width: 360px) { .auth-card { padding-right: 17px; padding-left: 17px; } .name-row { gap: 7px; } }
         @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+        html, body { background: var(--bg-main); }
+        body { position: relative; isolation: isolate; color: var(--text-main); font-family: var(--font-main); }
+        input, button { font-family: var(--font-main); }
+        #videoFondo, .velo { display: none; }
+        .bg-viewport { position: fixed; z-index: -1; inset: 0; overflow: hidden; background: var(--bg-gradient); pointer-events: none; }
+        .bg-viewport::before, .bg-viewport::after { position: absolute; width: min(58vw, 680px); aspect-ratio: 1; border-radius: 50%; content: ''; filter: blur(60px); opacity: .85; animation: floatGlow 16s ease-in-out infinite alternate; }
+        .bg-viewport::before { top: -18%; left: -10%; background: radial-gradient(circle, #dcfce7 0%, rgba(220, 252, 231, .58) 35%, transparent 70%); }
+        .bg-viewport::after { right: -10%; bottom: -22%; background: radial-gradient(circle, #e0f2fe 0%, rgba(224, 242, 254, .7) 35%, transparent 70%); animation-delay: -8s; }
+        .bg-orb { position: absolute; top: 38%; left: 56%; width: min(34vw, 390px); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(187, 247, 208, .68), rgba(220, 252, 231, .18) 52%, transparent 72%); filter: blur(60px); animation: floatGlow 20s ease-in-out -4s infinite alternate; }
+        .floating-paw { position: absolute; bottom: -50px; width: 34px; height: 34px; fill: #16a34a; opacity: .12; animation: floatUp 18s linear infinite; }
+        .floating-paw:nth-of-type(2) { left: 12%; animation-delay: -3s; }
+        .floating-paw:nth-of-type(3) { left: 33%; width: 24px; height: 24px; animation-delay: -12s; }
+        .floating-paw:nth-of-type(4) { left: 69%; width: 29px; height: 29px; animation-delay: -7s; }
+        .floating-paw:nth-of-type(5) { left: 88%; width: 22px; height: 22px; animation-delay: -15s; }
+        .floating-paw:nth-of-type(6) { left: 49%; width: 20px; height: 20px; animation-delay: -10s; }
+        @keyframes floatGlow { from { transform: translate3d(-3%, -2%, 0) scale(.95); } to { transform: translate3d(5%, 4%, 0) scale(1.08); } }
+        @keyframes floatUp { 0% { transform: translate3d(0, 0, 0) rotate(-12deg); opacity: 0; } 12% { opacity: .12; } 82% { opacity: .12; } 100% { transform: translate3d(30px, -115vh, 0) rotate(24deg); opacity: 0; } }
+        .auth-card { position: relative; z-index: 1; width: min(420px, 100%); max-height: calc(100svh - 16px); overflow-y: auto; border: 1px solid var(--card-border); border-radius: 24px; background: var(--card-bg); box-shadow: 0 20px 50px rgba(15, 23, 42, .08), 0 2px 6px rgba(15, 23, 42, .04); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+        .brand-logo { color: #0f172a; }
+        .brand-badge { background: rgba(22, 163, 74, .1); border-color: rgba(22, 163, 74, .28); color: var(--green-hover); }
+        .form-title { color: #15803d; }
+        label, .password-help p, .form-footer { color: var(--text-muted); }
+        input[type="email"], input[type="password"], input[type="text"] { border-radius: 10px; background: var(--field-bg); color: #0f172a; }
+        input:focus { border-color: var(--green-primary); box-shadow: 0 0 0 3px var(--green-glow); background: #fff; }
+        input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus { -webkit-text-fill-color: #0f172a; box-shadow: 0 0 0 1000px #fff inset; }
+        .toggle-password { color: var(--text-muted); }
+        .toggle-password:hover { color: var(--green-primary); }
+        .toggle-password .ph-eye-slash { display: none; }
+        .toggle-password[aria-pressed="true"] .ph-eye { display: none; }
+        .toggle-password[aria-pressed="true"] .ph-eye-slash { display: inline; }
+        .password-rules li { border-color: #e2e8f0; background: #f1f5f9; color: #64748b; }
+        .password-rules li::before { content: none; }
+        .password-rules li .rule-icon { margin-right: 4px; font-size: 12px; vertical-align: -1px; }
+        .password-rules li .rule-icon-valid { display: none; }
+        .password-rules li.valid { border-color: #bbf7d0; background: #dcfce7; color: #15803d; }
+        .password-rules li.valid::before { content: none; }
+        .password-rules li.valid .rule-icon-empty { display: none; }
+        .password-rules li.valid .rule-icon-valid { display: inline; }
+        .check-row input { accent-color: var(--green-primary); }
+        .check-row a, .form-footer a { color: var(--green-primary); }
+        .check-row a:hover, .form-footer a:hover { color: var(--green-hover); }
+        .btn-submit { border-radius: 999px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #fff; font-weight: 700; }
+        .btn-submit:hover { box-shadow: 0 8px 25px rgba(22, 163, 74, .35); transform: translateY(-2px); }
+        .notice.error { border-color: rgba(220, 38, 38, .2); background: var(--error-bg); color: var(--error-red); }
+        .notice.success { border-color: rgba(22, 163, 74, .2); background: var(--success-bg); color: var(--success-green); }
+        @media (prefers-reduced-motion: reduce) { .bg-viewport::before, .bg-viewport::after, .bg-orb, .floating-paw { animation: none !important; } }
+        .brand-header { display: flex; flex-direction: column; align-items: center; }
+        .brand-badge { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 5px 11px; border: 1px solid rgba(34, 197, 94, .48); border-radius: 999px; background: rgba(34, 197, 94, .12); color: var(--green-primary); font-size: 10px; font-weight: 700; letter-spacing: .02em; }
+        .brand-badge i { font-size: 14px; }
+        .brand-logo { font-family: var(--font-brand); font-size: 28px; font-weight: 700; letter-spacing: .04em; line-height: 1; }
+        .brand-logo span { color: var(--green-primary); }
+        .brand-subtitle { color: var(--text-muted); font-family: var(--font-main); }
+        .form-title { color: var(--success-green); font-family: var(--font-main); }
+        label, .password-help p, .form-footer { color: var(--text-muted); }
+        input[type="email"], input[type="password"], input[type="text"] { border-radius: 10px; background: rgba(255, 255, 255, .05); font-family: var(--font-main); }
+        input:focus { border-color: var(--green-primary); box-shadow: 0 0 12px var(--green-glow); }
+        input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus { -webkit-text-fill-color: var(--text-main); box-shadow: 0 0 0 1000px #0b2238 inset; }
+        .toggle-password { color: var(--text-muted); }
+        .toggle-password:hover { color: var(--green-primary); }
+        .toggle-password i { font-size: 18px; }
+        .toggle-password .ph-eye-slash { display: none; }
+        .toggle-password[aria-pressed="true"] .ph-eye { display: none; }
+        .toggle-password[aria-pressed="true"] .ph-eye-slash { display: inline; }
+        .password-rules li { border-color: rgba(148, 163, 184, .18); background: rgba(148, 163, 184, .06); color: #94a3b8; }
+        .password-rules li::before { content: none; }
+        .password-rules li .rule-icon { margin-right: 4px; font-size: 12px; vertical-align: -1px; }
+        .password-rules li .rule-icon-valid { display: none; }
+        .password-rules li.valid { border-color: rgba(34, 197, 94, .32); background: rgba(34, 197, 94, .15); color: #4ade80; }
+        .password-rules li.valid::before { content: none; }
+        .password-rules li.valid .rule-icon-empty { display: none; }
+        .password-rules li.valid .rule-icon-valid { display: inline; }
+        .check-row input { accent-color: var(--green-primary); }
+        .check-row a { color: var(--green-primary); }
+        .check-row a:hover { color: var(--success-green); }
+        .form-footer a { color: var(--green-primary); }
+        .form-footer a:hover { color: var(--success-green); }
+        .btn-submit { border-radius: 12px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #052e16; font-weight: 700; }
+        .btn-submit:hover { box-shadow: 0 6px 20px var(--green-glow); transform: translateY(-2px); }
+        .btn-submit:disabled {
+            background: #94a3b8 !important;
+            cursor: not-allowed !important;
+            opacity: 0.65;
+            box-shadow: none !important;
+            transform: none !important;
+        }
+        .notice.error { border-color: rgba(248, 113, 113, .35); background: var(--error-bg); color: var(--error-red); }
+        .notice.success { border-color: rgba(74, 222, 128, .35); background: var(--success-bg); color: var(--success-green); }
+        .terms-modal { background: rgba(2, 12, 24, .72); }
+        .terms-dialog { border-color: rgba(34, 197, 94, .3); border-radius: 18px; background: rgba(11, 34, 56, .96); box-shadow: 0 25px 60px rgba(0, 0, 0, .5), 0 0 30px rgba(34, 197, 94, .08); }
     </style>
 </head>
 <body>
-    <video id="videoFondo" autoplay muted loop playsinline>
-        <source src="src/videoEJEMPLO/22.mp4" type="video/mp4">
-    </video>
-    <div class="velo"></div>
+    <div class="bg-viewport" aria-hidden="true">
+        <span class="bg-orb"></span>
+        <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
+        <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
+        <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
+        <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
+        <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
+    </div>
 
     <main class="auth-card">
         <header class="brand-header">
-            <h1 class="brand-logo">KION</h1>
+            <span class="brand-badge"><i class="ph-fill ph-paw-print" aria-hidden="true"></i> Veterinaria &amp; Farmacia</span>
+            <h1 class="brand-logo">PET<span>KO</span></h1>
             <div class="brand-subtitle">Vet &amp; Agropecuario</div>
         </header>
         <h2 class="form-title">Crear una cuenta</h2>
@@ -235,16 +355,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="input-wrapper">
                     <input id="password" name="password" type="password" autocomplete="new-password" required>
                     <button class="toggle-password" type="button" aria-label="Mostrar contraseña" aria-pressed="false">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <i class="ph ph-eye" aria-hidden="true"></i><i class="ph ph-eye-slash" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
             <div class="password-help">
                 <p>La contraseña debe cumplir:</p>
                 <ul class="password-rules" aria-label="Requisitos de la contraseña">
-                    <li data-rule="length">Mínimo 8</li>
-                    <li data-rule="uppercase">1 mayúscula</li>
-                    <li data-rule="number">1 número</li>
+                    <li data-rule="length"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i>Mínimo 8</li>
+                    <li data-rule="uppercase"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i>1 mayúscula</li>
+                    <li data-rule="number"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i>1 número</li>
                 </ul>
             </div>
             <div class="form-group">
@@ -252,19 +372,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="input-wrapper">
                     <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required>
                     <button class="toggle-password" type="button" aria-label="Mostrar contraseña" aria-pressed="false">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <i class="ph ph-eye" aria-hidden="true"></i><i class="ph ph-eye-slash" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
             <small class="field-error" id="confirmPasswordError" aria-live="polite">Las contraseñas no coinciden.</small>
             <div class="check-row">
-                <input id="terms" name="terms" type="checkbox" value="1" required>
-                <label for="terms">Acepto los Términos y Condiciones y la Política de Privacidad.</label>
+                <input id="aceptoTerminos" name="acepto_terminos" type="checkbox" value="1" required>
+                <label for="aceptoTerminos">Acepto los <a href="#" id="abrirModalTerminos">Términos y Condiciones y la Política de Privacidad</a>.</label>
             </div>
-            <button class="btn-submit" type="submit">Crear cuenta</button>
+            <button class="btn-submit" type="submit" id="btnRegistro" disabled>Crear cuenta</button>
         </form>
         <div class="form-footer">¿Ya tienes cuenta? <a href="inicioSesion.php">Inicia sesión</a></div>
     </main>
+
+    <div class="terms-modal" id="termsModal" aria-hidden="true">
+    <section class="terms-dialog" role="dialog" aria-modal="true" aria-label="Términos, condiciones y política de privacidad">
+        <iframe class="terms-frame" id="termsFrame" title="Términos, condiciones y política de privacidad" src="about:blank"></iframe>
+    </section>
+    </div>
 
     <script>
         const registerForm = document.getElementById('registerForm');
@@ -272,7 +398,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         const confirmPasswordInput = document.getElementById('confirm_password');
         const confirmPasswordError = document.getElementById('confirmPasswordError');
         const registerNotice = document.getElementById('registerNotice');
-        const registerButton = registerForm.querySelector('.btn-submit');
+        const registerButton = document.getElementById('btnRegistro');
+        const termsCheckbox = document.getElementById('aceptoTerminos');
+        const termsModal = document.getElementById('termsModal');
+        const termsFrame = document.getElementById('termsFrame');
+        const openTermsLink = document.getElementById('abrirModalTerminos');
+        let previousFocus = null;
         const passwordRules = {
             length: (value) => value.length >= 8,
             uppercase: (value) => /[A-Z]/.test(value),
@@ -293,7 +424,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             confirmPasswordError.classList.toggle('visible', mismatch);
             confirmPasswordInput.setAttribute('aria-invalid', String(mismatch));
         }
+        function updateRegisterButton() {
+            registerButton.disabled = !termsCheckbox.checked;
+        }
 
+        updateRegisterButton();
+        termsCheckbox.addEventListener('change', updateRegisterButton);
         document.querySelectorAll('.toggle-password').forEach((button) => {
             button.addEventListener('click', () => {
                 const input = button.parentElement.querySelector('input');
@@ -308,6 +444,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             updatePasswordMatch();
         });
         confirmPasswordInput.addEventListener('input', updatePasswordMatch);
+
+        function closeTermsModal(accepted = false) {
+            if (!termsModal.classList.contains('visible')) return;
+            termsModal.classList.remove('visible');
+            termsModal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            if (accepted) {
+                termsCheckbox.checked = true;
+                termsCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            if (previousFocus instanceof HTMLElement) previousFocus.focus();
+        }
+        openTermsLink.addEventListener('click', (event) => {
+            event.preventDefault();
+            previousFocus = document.activeElement;
+            termsFrame.src = 'terminos.php?embed=1';
+            termsModal.classList.add('visible');
+            termsModal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        });
+        termsModal.addEventListener('click', (event) => {
+            if (event.target === termsModal) closeTermsModal();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') closeTermsModal();
+        });
+        window.addEventListener('message', (event) => {
+            if (event.origin !== window.location.origin
+                || event.source !== termsFrame.contentWindow
+                || !event.data
+                || !['kion-terms-accepted', 'kion-terms-dismissed'].includes(event.data.type)) {
+                return;
+            }
+            closeTermsModal(event.data.type === 'kion-terms-accepted');
+        });
 
         registerForm.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -337,7 +508,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 confirmPasswordInput.focus();
                 return;
             }
-            if (!registerForm.elements.terms.checked) {
+            if (!termsCheckbox.checked) {
                 showNotice('Debes aceptar los Términos y Condiciones y la Política de Privacidad.', 'error');
                 return;
             }
@@ -359,7 +530,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (error) {
                 showNotice('No fue posible conectar con el servidor. Inténtalo de nuevo.', 'error');
             } finally {
-                registerButton.disabled = false;
+                updateRegisterButton();
             }
         });
 
