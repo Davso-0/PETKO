@@ -379,7 +379,10 @@ if (isset($_GET['action'])) {
                 $pdo->prepare("INSERT INTO turnos_caja(id_caja,id_cajero,id_sucursal,fecha_inicio,dinero_inicial,estado) VALUES(?,?,?,NOW(),?,'ABIERTO')")
                     ->execute([$id_caja, $id_cajero, $id_sucursal, $dineroInicial]);
                 $idTurno = (int)$pdo->lastInsertId();
-                $fInicio = $pdo->query("SELECT fecha_inicio FROM turnos_caja WHERE id_turno=" . $idTurno)->fetchColumn();
+                
+$stFI = $pdo->prepare("SELECT fecha_inicio FROM turnos_caja WHERE id_turno = ?");
+$stFI->execute([$idTurno]);
+$fInicio = $stFI->fetchColumn();
                 $out = ['ok' => true, 'msg' => 'Acceso concedido.', 'data' => [
                     'nombre_cajero' => $cajero['nombre'], 'nombre_caja' => $nombreCaja, 'id_caja' => $id_caja, 'id_cajero' => $id_cajero,
                     'id_turno' => $idTurno, 'dinero_inicial' => $dineroInicial, 'fecha_inicio' => $fInicio, 'horas_extra' => false, 'reanudado' => false
@@ -512,7 +515,6 @@ if (isset($_GET['action'])) {
                     LEFT JOIN turnos_caja tc ON tc.id_turno = v.id_turno
                     LEFT JOIN cajeros cj ON cj.id_cajero = tc.id_cajero
                     WHERE v.id_sucursal=?";
-            $params = [$id_sucursal];
             $params = [$id_sucursal];
             if ($desde !== '') { $sql .= " AND DATE(v.fecha_hora)>=?"; $params[] = $desde; }
             if ($hasta !== '') { $sql .= " AND DATE(v.fecha_hora)<=?"; $params[] = $hasta; }
@@ -979,7 +981,6 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
         <div class="content">
 
             <!-- PANEL PRINCIPAL -->
-           <!-- PANEL PRINCIPAL -->
 <section id="view-dash" class="view-section active">
     <div class="header-row"><div><h1 class="title" data-i18n="dash_title">Resumen de Operaciones <span class="wave">👋</span></h1><p class="subtitle" data-i18n="dash_sub">Métricas en tiempo real de tu sucursal.</p></div></div>
     
@@ -1100,17 +1101,24 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
                 </div>
                 <div class="pos-layout">
                     <div>
-                        <div class="pos-scanner" style="position:relative;">
-    <i class="ph ph-barcode" style="font-size:32px; color:var(--accent); align-self:center;"></i>
-    <div style="flex:1; position:relative;">
-        <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
-        <div id="posSearchResults" class="pos-search-dropdown"></div>
-    </div>
-    <button type="button" class="chip-btn" id="btnStartCameraScan" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
-        <i class="ph ph-camera" style="font-size:20px;"></i>
-        <span style="font-weight:700;">Cámara</span>
-    </button>
-</div>
+                        <!-- SECCIÓN ESCÁNER CORREGIDA CON EL CONTENEDOR Y BOTÓN TOGGLE -->
+                        <div class="pos-scanner" style="position:relative; flex-direction:column;">
+                            <div style="display:flex; gap:16px; width:100%;">
+                                <i class="ph ph-barcode" style="font-size:32px; color:var(--accent); align-self:center;"></i>
+                                <div style="flex:1; position:relative;">
+                                    <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
+                                    <div id="posSearchResults" class="pos-search-dropdown"></div>
+                                </div>
+                                <button type="button" class="chip-btn" id="btnStartCameraScan" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
+                                    <i class="ph ph-camera" style="font-size:20px;"></i>
+                                    <span style="font-weight:700;">Cámara</span>
+                                </button>
+                            </div>
+                            
+                            <!-- CONTENEDOR DEL ESCÁNER PARA LA CÁMARA (Librería Html5Qrcode) -->
+                            <div id="reader" style="width: 100%; max-width: 400px; display: none; margin: 15px auto 0; border: 2px solid var(--accent); border-radius: 12px; overflow: hidden; background: #000;"></div>
+                        </div>
+
                         <div class="pos-cart panel" style="padding:0;">
                             <table style="width:100%; margin:0;">
                                 <thead><tr><th style="padding:16px 24px;" data-i18n="th_producto">Producto</th><th style="text-align:center;" data-i18n="th_cant">Cant.</th><th style="text-align:right;" data-i18n="th_precio">Precio</th><th style="text-align:right; padding-right:24px;" data-i18n="th_subtotal">Subtotal</th></tr></thead>
@@ -2162,78 +2170,87 @@ $('#btnCobrar').addEventListener('click', async () => {
 // -------- INICIO --------
 loadDashboard();
 loadFiltrosInv();
-// Variable global para controlar la cámara
-let html5QrCodeScanner = null;
 
-async function abrirEscanerCamara() {
-    // Modal de SweetAlert para mostrar el visor de la cámara
-    Swal.fire({
-        title: 'Escaneando Código / QR',
-        html: `
-            <div id="reader-container" style="width: 100%; max-width: 450px; margin: 0 auto; overflow: hidden; border-radius: 16px; border: 2px solid var(--border-soft);">
-                <div id="reader" style="width: 100%;"></div>
-            </div>
-            <p style="margin-top: 12px; font-size: 13px; color: var(--ink-soft);">Apunta la cámara del teléfono o laptop hacia el código de barras o QR.</p>
-        `,
-        showConfirmButton: false,
-        showCancelButton: true,
-        cancelButtonText: t('cancelar'),
-        didOpen: () => {
-            // Inicializar escáner Html5Qrcode
-            html5QrCodeScanner = new Html5Qrcode("reader");
-            
-            const config = { 
-                fps: 10, 
-                qrbox: { width: 250, height: 150 },
-                aspectRatio: 1.0
-            };
+// -------- ESCÁNER DE CÓDIGO DE BARRAS --------
+let html5QrCode = null;
 
-            // Pedir permiso y usar cámara trasera preferentemente (environment)
-            html5QrCodeScanner.start(
-                { facingMode: "environment" }, 
-                config, 
-                async (decodedText) => {
-                    // CÓDIGO DETECTADO CON ÉXITO
-                    if (html5QrCodeScanner) {
-                        await html5QrCodeScanner.stop();
-                        html5QrCodeScanner.clear();
-                    }
-                    Swal.close();
+document.addEventListener('DOMContentLoaded', () => {
+    const btnCamara = document.getElementById('btnStartCameraScan');
+    if (btnCamara) {
+        btnCamara.addEventListener('click', toggleEscanerCamara);
+    }
+});
 
-                    try {
-                        // Buscar el producto en la base de datos con el código leído
-                        const { data } = await request(`buscar_producto_pos&codigo=${encodeURIComponent(decodedText)}`);
-                        addProductToCart(data);
-                        notify(`Añadido: ${data.nombre}`);
-                    } catch (err) {
-                        notify(err.message, 'error');
-                    }
-                },
-                (errorMessage) => {
-                    // Errores de lectura continuo (se ignoran para evitar saturación)
-                }
-            ).catch(err => {
-                Swal.close();
-                notify('No se pudo acceder a la cámara o no diste permisos.', 'error');
-            });
-        },
-        willClose: () => {
-            // Detener la cámara si el usuario cierra la ventana emergente
-            if (html5QrCodeScanner && html5QrCodeScanner.isScanning) {
-                html5QrCodeScanner.stop().then(() => {
-                    html5QrCodeScanner.clear();
-                }).catch(() => {});
+function toggleEscanerCamara() {
+    if (html5QrCode && html5QrCode.isScanning) {
+        detenerEscanerCamara();
+        return;
+    }
+    abrirEscanerCamara();
+}
+
+function abrirEscanerCamara() {
+    const readerDiv = document.getElementById('reader');
+    if (!readerDiv) {
+        notify('No se encontró el contenedor del escáner (#reader) en el HTML.', 'error');
+        return;
+    }
+    readerDiv.style.display = 'block';
+
+    if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("reader");
+    }
+
+    // Configuración óptima para códigos de barras
+    const config = {
+        fps: 15,
+        qrbox: { width: 300, height: 150 }, // Aspecto rectangular para barra
+        aspectRatio: 1.0,
+        disableFlip: false // Soporte para cámara frontal/trasera sin invertir la lectura
+    };
+
+    html5QrCode.start(
+        { facingMode: "environment" }, // Preferir cámara trasera
+        config,
+        async (decodedText) => {
+            // 1. Mostrar en el input visual
+            const posBarcode = document.getElementById('posBarcode');
+            if (posBarcode) {
+                posBarcode.value = decodedText;
             }
+
+            // 2. Buscar producto y agregar al carrito automáticamente
+            try {
+                const { data } = await request(`buscar_producto_pos&codigo=${encodeURIComponent(decodedText)}`);
+                if (data) {
+                    addProductToCart(data);
+                    notify(`Producto escaneado: ${data.nombre}`, 'success');
+                }
+            } catch (err) {
+                notify(err.message, 'error');
+            }
+
+            // 3. Detener la cámara tras un escaneo exitoso
+            detenerEscanerCamara();
+        },
+        (errorMessage) => {
+            // Se ignora el registro de los fotogramas fallidos para mantener la consola limpia
         }
+    ).catch((err) => {
+        console.error("Error cámara:", err);
+        notify("No se pudo iniciar la cámara. Revisa permisos (HTTPS o localhost).", "error");
+        readerDiv.style.display = 'none';
     });
 }
 
-// Evento al presionar el botón de la cámara
-document.addEventListener('click', e => {
-    if (e.target.closest('#btnStartCameraScan')) {
-        abrirEscanerCamara();
+function detenerEscanerCamara() {
+    if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+            const readerDiv = document.getElementById('reader');
+            if (readerDiv) readerDiv.style.display = 'none';
+        }).catch(err => console.error("Error al detener la cámara:", err));
     }
-});
+}
 </script>
 
 </body>
