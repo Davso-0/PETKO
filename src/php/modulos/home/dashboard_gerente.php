@@ -2171,9 +2171,9 @@ $('#btnCobrar').addEventListener('click', async () => {
 loadDashboard();
 loadFiltrosInv();
 
-// -------- ESCÁNER DE CÓDIGO DE BARRAS (MODAL EXCLUSIVO Y CORREGIDO) --------
+// -------- ESCÁNER DE CÓDIGO DE BARRAS Y QR (SOPORTE COMPLETO) --------
 let html5QrCode = null;
-let procesandoEscaneo = false; // Evita que lea el código 10 veces en un segundo y se trabe
+let procesandoEscaneo = false; // Evita que lea el código múltiples veces seguidas
 
 document.addEventListener('DOMContentLoaded', () => {
     const btnCamara = document.getElementById('btnStartCameraScan');
@@ -2185,7 +2185,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function abrirEscanerCamara() {
     procesandoEscaneo = false; // Reiniciamos la bandera
     Swal.fire({
-        title: 'Escanear Código de Barras',
+        title: 'Escanear Código de Barras o QR',
         html: `
             <style>
                 #reader { width: 100% !important; max-width: 350px !important; margin: 0 auto !important; border-radius: 12px !important; overflow: hidden !important; background: #000 !important; }
@@ -2210,21 +2210,38 @@ function iniciarCamaraModal() {
     html5QrCode = new Html5Qrcode("reader");
 
     const config = {
-        fps: 10, // Lo bajamos a 10 para mayor estabilidad
-        qrbox: { width: 250, height: 120 },
+        fps: 10,
+        qrbox: { width: 250, height: 140 },
         aspectRatio: 1.0,
-        disableFlip: false
+        disableFlip: false,
+        // Habilitación explícita de todos los formatos de códigos 1D y 2D
+        formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.DATA_MATRIX,
+            Html5QrcodeSupportedFormats.PDF_417,
+            Html5QrcodeSupportedFormats.AZTEC
+        ]
     };
 
     html5QrCode.start(
         { facingMode: "environment" },
         config,
         async (decodedText) => {
-            // Si ya estamos procesando un código, ignorar las siguientes lecturas
+            // Si ya se está procesando un código, ignorar lecturas consecutivas
             if (procesandoEscaneo) return;
             procesandoEscaneo = true;
 
-            // 1. Apagar cámara de forma segura esperando que termine
+            // 1. Apagar la cámara de forma segura
             if (html5QrCode && html5QrCode.isScanning) {
                 try {
                     await html5QrCode.stop();
@@ -2235,14 +2252,14 @@ function iniciarCamaraModal() {
                 }
             }
 
-            // 2. Cerrar la ventana emergente
+            // 2. Cerrar la ventana modal
             Swal.close();
 
-            // 3. Insertar código en la barra
+            // 3. Colocar el texto leído en el campo de entrada
             const posBarcode = document.getElementById('posBarcode');
             if (posBarcode) posBarcode.value = decodedText;
 
-            // 4. Buscar y agregar el producto al carrito
+            // 4. Buscar el producto en la base de datos y agregarlo
             try {
                 const { data } = await request(`buscar_producto_pos&codigo=${encodeURIComponent(decodedText)}`);
                 if (data) {
@@ -2253,24 +2270,29 @@ function iniciarCamaraModal() {
                 notify(err.message, 'error');
             }
         },
-        (errorMessage) => { 
-            // Ignorar errores de "no se detectó código"
+        (errorMessage) => {
+            // Ignorar fotogramas sin detección
         }
     ).catch((err) => {
         console.error("Error al iniciar cámara:", err);
-        Swal.showValidationMessage("No se pudo acceder a la cámara. Revisa permisos.");
+        Swal.showValidationMessage("No se pudo acceder a la cámara. Revisa los permisos.");
     });
 }
 
 function detenerEscanerCamara() {
-    if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().then(() => {
+    if (html5QrCode) {
+        if (html5QrCode.isScanning) {
+            html5QrCode.stop().then(() => {
+                html5QrCode.clear();
+                html5QrCode = null;
+            }).catch(err => {
+                console.error("Error al detener cámara manualmente:", err);
+                html5QrCode = null;
+            });
+        } else {
             html5QrCode.clear();
             html5QrCode = null;
-        }).catch(err => {
-            console.error("Error al detener cámara manualmente:", err);
-            html5QrCode = null;
-        });
+        }
     }
 }
 </script>
