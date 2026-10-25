@@ -2171,8 +2171,9 @@ $('#btnCobrar').addEventListener('click', async () => {
 loadDashboard();
 loadFiltrosInv();
 
-// -------- ESCÁNER DE CÓDIGO DE BARRAS (MODAL EXCLUSIVO) --------
+// -------- ESCÁNER DE CÓDIGO DE BARRAS (MODAL EXCLUSIVO Y CORREGIDO) --------
 let html5QrCode = null;
+let procesandoEscaneo = false; // Evita que lea el código 10 veces en un segundo y se trabe
 
 document.addEventListener('DOMContentLoaded', () => {
     const btnCamara = document.getElementById('btnStartCameraScan');
@@ -2182,6 +2183,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function abrirEscanerCamara() {
+    procesandoEscaneo = false; // Reiniciamos la bandera
     Swal.fire({
         title: 'Escanear Código de Barras',
         html: `
@@ -2208,7 +2210,7 @@ function iniciarCamaraModal() {
     html5QrCode = new Html5Qrcode("reader");
 
     const config = {
-        fps: 15,
+        fps: 10, // Lo bajamos a 10 para mayor estabilidad
         qrbox: { width: 250, height: 120 },
         aspectRatio: 1.0,
         disableFlip: false
@@ -2218,15 +2220,29 @@ function iniciarCamaraModal() {
         { facingMode: "environment" },
         config,
         async (decodedText) => {
-            // 1. Apagar cámara y cerrar modal
-            detenerEscanerCamara();
+            // Si ya estamos procesando un código, ignorar las siguientes lecturas
+            if (procesandoEscaneo) return;
+            procesandoEscaneo = true;
+
+            // 1. Apagar cámara de forma segura esperando que termine
+            if (html5QrCode && html5QrCode.isScanning) {
+                try {
+                    await html5QrCode.stop();
+                    html5QrCode.clear();
+                    html5QrCode = null;
+                } catch (err) {
+                    console.error("Error apagando cámara:", err);
+                }
+            }
+
+            // 2. Cerrar la ventana emergente
             Swal.close();
 
-            // 2. Insertar código en la barra de búsqueda
+            // 3. Insertar código en la barra
             const posBarcode = document.getElementById('posBarcode');
             if (posBarcode) posBarcode.value = decodedText;
 
-            // 3. Buscar y agregar producto al carrito
+            // 4. Buscar y agregar el producto al carrito
             try {
                 const { data } = await request(`buscar_producto_pos&codigo=${encodeURIComponent(decodedText)}`);
                 if (data) {
@@ -2237,7 +2253,9 @@ function iniciarCamaraModal() {
                 notify(err.message, 'error');
             }
         },
-        (errorMessage) => { }
+        (errorMessage) => { 
+            // Ignorar errores de "no se detectó código"
+        }
     ).catch((err) => {
         console.error("Error al iniciar cámara:", err);
         Swal.showValidationMessage("No se pudo acceder a la cámara. Revisa permisos.");
@@ -2245,19 +2263,14 @@ function iniciarCamaraModal() {
 }
 
 function detenerEscanerCamara() {
-    if (html5QrCode) {
-        if (html5QrCode.isScanning) {
-            html5QrCode.stop().then(() => {
-                html5QrCode.clear();
-                html5QrCode = null;
-            }).catch(err => {
-                console.error("Error al detener cámara:", err);
-                html5QrCode = null;
-            });
-        } else {
+    if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
             html5QrCode.clear();
             html5QrCode = null;
-        }
+        }).catch(err => {
+            console.error("Error al detener cámara manualmente:", err);
+            html5QrCode = null;
+        });
     }
 }
 </script>
