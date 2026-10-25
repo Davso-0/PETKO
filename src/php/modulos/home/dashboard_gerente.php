@@ -1093,55 +1093,55 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
                 </div>
             </section>
 
-            <!-- PUNTO DE VENTA -->
-            <section id="view-pos" class="view-section">
-                <div class="header-row" style="margin-bottom: 12px;">
-                    <div><h1 class="title"><span data-i18n="pos_caja_label">Caja</span> <span id="lblCajaActual" style="color:var(--accent);">-</span></h1><p class="subtitle" style="margin-top:4px;"><span data-i18n="pos_cajero_label">Cajero:</span> <b id="lblCajeroActual" style="color:var(--ink);">—</b> <span style="margin:0 8px;">·</span> <span id="lblTurnoTiempo" style="color:var(--ink-soft); font-weight:600;"></span></p></div>
-                    <button class="btn-danger" id="btnCerrarCaja"><i class="ph ph-sign-out"></i> <span data-i18n="btn_cerrar_turno">Cerrar Turno</span></button>
+            <!-- PUNTO DE VENTA (ESTRUCTURA CORREGIDA DE 2 COLUMNAS) -->
+<section id="view-pos" class="view-section">
+    <div class="header-row" style="margin-bottom: 12px;">
+        <div><h1 class="title"><span data-i18n="pos_caja_label">Caja</span> <span id="lblCajaActual" style="color:var(--accent);">-</span></h1><p class="subtitle" style="margin-top:4px;"><span data-i18n="pos_cajero_label">Cajero:</span> <b id="lblCajeroActual" style="color:var(--ink);">—</b> <span style="margin:0 8px;">·</span> <span id="lblTurnoTiempo" style="color:var(--ink-soft); font-weight:600;"></span></p></div>
+        <button class="btn-danger" id="btnCerrarCaja"><i class="ph ph-sign-out"></i> <span data-i18n="btn_cerrar_turno">Cerrar Turno</span></button>
+    </div>
+    
+    <div class="pos-layout">
+        <!-- COLUMNA IZQUIERDA (Escáner + Carrito dentro del mismo contenedor) -->
+        <div>
+            <div class="pos-scanner" style="position:relative;">
+                <div style="display:flex; gap:16px; width:100%;">
+                    <i class="ph ph-barcode" style="font-size:32px; color:var(--accent); align-self:center;"></i>
+                    <div style="flex:1; position:relative;">
+                        <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
+                        <div id="posSearchResults" class="pos-search-dropdown"></div>
+                    </div>
+                    <button type="button" class="chip-btn" id="btnStartCameraScan" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
+    <i class="ph ph-barcode" style="font-size:20px;"></i>
+    <span style="font-weight:700;">Escanear</span>
+</button>
                 </div>
-                <div class="pos-layout">
-                    <div>
-                        <!-- SECCIÓN ESCÁNER CORREGIDA CON EL CONTENEDOR Y BOTÓN TOGGLE -->
-                        <div class="pos-scanner" style="position:relative; flex-direction:column;">
-                            <div style="display:flex; gap:16px; width:100%;">
-                                <i class="ph ph-barcode" style="font-size:32px; color:var(--accent); align-self:center;"></i>
-                                <div style="flex:1; position:relative;">
-                                    <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
-                                    <div id="posSearchResults" class="pos-search-dropdown"></div>
-                                </div>
-                                <button type="button" class="chip-btn" id="btnStartCameraScan" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
-                                    <i class="ph ph-camera" style="font-size:20px;"></i>
-                                    <span style="font-weight:700;">Cámara</span>
-                                </button>
-                            </div>
-                            
-                            <!-- CONTENEDOR DEL ESCÁNER PARA LA CÁMARA (Librería Html5Qrcode) -->
-                            <div id="reader" style="width: 100%; max-width: 400px; display: none; margin: 15px auto 0; border: 2px solid var(--accent); border-radius: 12px; overflow: hidden; background: #000;"></div>
-                        </div>
+            </div>
 
-                        <div class="pos-cart panel" style="padding:0;">
-                            <table style="width:100%; margin:0;">
-                                <thead><tr><th style="padding:16px 24px;" data-i18n="th_producto">Producto</th><th style="text-align:center;" data-i18n="th_cant">Cant.</th><th style="text-align:right;" data-i18n="th_precio">Precio</th><th style="text-align:right; padding-right:24px;" data-i18n="th_subtotal">Subtotal</th></tr></thead>
-                                <tbody id="cartBody"><tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--ink-faint); font-weight:600;" data-i18n="carrito_vacio">El carrito está vacío. Escanea un producto.</td></tr></tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="pos-summary">
-                        <h2 data-i18n="resumen_venta" style="font-family:var(--font-display); font-size:24px;">Resumen de Venta</h2>
-                        <select class="pay-select" id="posMetodo"><option value="" data-i18n="cargando_metodos">Cargando métodos de pago...</option></select>
-                        <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="fondo_inicial_label">Fondo inicial:</span><span id="posFondoInicial">$0.00</span></div>
-                        <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="efectivo_esperado_label">Efectivo esperado:</span><span id="posEfectivoEsperado">$0.00</span></div>
-                        <button class="chip-btn" id="btnRetiroManual" style="align-self:flex-start; background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.3); color:#fff;" type="button"><span data-i18n="btn_registrar_retiro">+ Registrar retiro</span></button>
-                        <div style="flex:1;"></div>
-                        <div class="summary-row"><span data-i18n="subtotal_label">Subtotal:</span><span id="posSubtotal">$0.00</span></div>
-                        <div class="summary-row"><span data-i18n="iva_label">IVA (16%):</span><span id="posIva">$0.00</span></div>
-                        <hr style="border:1px solid rgba(255,255,255,0.2)">
-                        <div style="font-size:18px; font-weight:600; opacity:0.9;" data-i18n="total_pagar">Total a Pagar</div>
-                        <div class="summary-total" id="posTotal">$0.00</div>
-                        <button class="pay-btn" id="btnCobrar"><i class="ph-fill ph-credit-card"></i> <span data-i18n="btn_procesar_cobro">PROCESAR COBRO</span></button>
-                    </div>
-                </div>
-            </section>
+            <div class="pos-cart panel" style="padding:0;">
+                <table style="width:100%; margin:0;">
+                    <thead><tr><th style="padding:16px 24px;" data-i18n="th_producto">Producto</th><th style="text-align:center;" data-i18n="th_cant">Cant.</th><th style="text-align:right;" data-i18n="th_precio">Precio</th><th style="text-align:right; padding-right:24px;" data-i18n="th_subtotal">Subtotal</th></tr></thead>
+                    <tbody id="cartBody"><tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--ink-faint); font-weight:600;" data-i18n="carrito_vacio">El carrito está vacío. Escanea un producto.</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- COLUMNA DERECHA (Resumen de venta) -->
+        <div class="pos-summary">
+            <h2 data-i18n="resumen_venta" style="font-family:var(--font-display); font-size:24px;">Resumen de Venta</h2>
+            <select class="pay-select" id="posMetodo"><option value="" data-i18n="cargando_metodos">Cargando métodos de pago...</option></select>
+            <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="fondo_inicial_label">Fondo inicial:</span><span id="posFondoInicial">$0.00</span></div>
+            <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="efectivo_esperado_label">Efectivo esperado:</span><span id="posEfectivoEsperado">$0.00</span></div>
+            <button class="chip-btn" id="btnRetiroManual" style="align-self:flex-start; background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.3); color:#fff;" type="button"><span data-i18n="btn_registrar_retiro">+ Registrar retiro</span></button>
+            <div style="flex:1;"></div>
+            <div class="summary-row"><span data-i18n="subtotal_label">Subtotal:</span><span id="posSubtotal">$0.00</span></div>
+            <div class="summary-row"><span data-i18n="iva_label">IVA (16%):</span><span id="posIva">$0.00</span></div>
+            <hr style="border:1px solid rgba(255,255,255,0.2)">
+            <div style="font-size:18px; font-weight:600; opacity:0.9;" data-i18n="total_pagar">Total a Pagar</div>
+            <div class="summary-total" id="posTotal">$0.00</div>
+            <button class="pay-btn" id="btnCobrar"><i class="ph-fill ph-credit-card"></i> <span data-i18n="btn_procesar_cobro">PROCESAR COBRO</span></button>
+        </div>
+    </div>
+</section>
 
         </div>
     </main>
@@ -2171,84 +2171,93 @@ $('#btnCobrar').addEventListener('click', async () => {
 loadDashboard();
 loadFiltrosInv();
 
-// -------- ESCÁNER DE CÓDIGO DE BARRAS --------
+// -------- ESCÁNER DE CÓDIGO DE BARRAS (MODAL EXCLUSIVO) --------
 let html5QrCode = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     const btnCamara = document.getElementById('btnStartCameraScan');
     if (btnCamara) {
-        btnCamara.addEventListener('click', toggleEscanerCamara);
+        btnCamara.addEventListener('click', abrirEscanerCamara);
     }
 });
 
-function toggleEscanerCamara() {
-    if (html5QrCode && html5QrCode.isScanning) {
-        detenerEscanerCamara();
-        return;
-    }
-    abrirEscanerCamara();
+function abrirEscanerCamara() {
+    Swal.fire({
+        title: 'Escanear Código de Barras',
+        html: `
+            <style>
+                #reader { width: 100% !important; max-width: 350px !important; margin: 0 auto !important; border-radius: 12px !important; overflow: hidden !important; background: #000 !important; }
+                #reader video { width: 100% !important; height: auto !important; max-height: 240px !important; object-fit: cover !important; border-radius: 12px !important; }
+            </style>
+            <div id="reader"></div>
+        `,
+        showCancelButton: true,
+        showConfirmButton: false,
+        cancelButtonText: typeof t === 'function' ? t('cancelar') : 'Cancelar',
+        width: '420px',
+        didOpen: () => {
+            iniciarCamaraModal();
+        },
+        willClose: () => {
+            detenerEscanerCamara();
+        }
+    });
 }
 
-function abrirEscanerCamara() {
-    const readerDiv = document.getElementById('reader');
-    if (!readerDiv) {
-        notify('No se encontró el contenedor del escáner (#reader) en el HTML.', 'error');
-        return;
-    }
-    readerDiv.style.display = 'block';
+function iniciarCamaraModal() {
+    html5QrCode = new Html5Qrcode("reader");
 
-    if (!html5QrCode) {
-        html5QrCode = new Html5Qrcode("reader");
-    }
-
-    // Configuración óptima para códigos de barras
     const config = {
         fps: 15,
-        qrbox: { width: 300, height: 150 }, // Aspecto rectangular para barra
+        qrbox: { width: 250, height: 120 },
         aspectRatio: 1.0,
-        disableFlip: false // Soporte para cámara frontal/trasera sin invertir la lectura
+        disableFlip: false
     };
 
     html5QrCode.start(
-        { facingMode: "environment" }, // Preferir cámara trasera
+        { facingMode: "environment" },
         config,
         async (decodedText) => {
-            // 1. Mostrar en el input visual
-            const posBarcode = document.getElementById('posBarcode');
-            if (posBarcode) {
-                posBarcode.value = decodedText;
-            }
+            // 1. Apagar cámara y cerrar modal
+            detenerEscanerCamara();
+            Swal.close();
 
-            // 2. Buscar producto y agregar al carrito automáticamente
+            // 2. Insertar código en la barra de búsqueda
+            const posBarcode = document.getElementById('posBarcode');
+            if (posBarcode) posBarcode.value = decodedText;
+
+            // 3. Buscar y agregar producto al carrito
             try {
                 const { data } = await request(`buscar_producto_pos&codigo=${encodeURIComponent(decodedText)}`);
                 if (data) {
                     addProductToCart(data);
-                    notify(`Producto escaneado: ${data.nombre}`, 'success');
+                    notify(`Producto agregado: ${data.nombre}`, 'success');
                 }
             } catch (err) {
                 notify(err.message, 'error');
             }
-
-            // 3. Detener la cámara tras un escaneo exitoso
-            detenerEscanerCamara();
         },
-        (errorMessage) => {
-            // Se ignora el registro de los fotogramas fallidos para mantener la consola limpia
-        }
+        (errorMessage) => { }
     ).catch((err) => {
-        console.error("Error cámara:", err);
-        notify("No se pudo iniciar la cámara. Revisa permisos (HTTPS o localhost).", "error");
-        readerDiv.style.display = 'none';
+        console.error("Error al iniciar cámara:", err);
+        Swal.showValidationMessage("No se pudo acceder a la cámara. Revisa permisos.");
     });
 }
 
 function detenerEscanerCamara() {
-    if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().then(() => {
-            const readerDiv = document.getElementById('reader');
-            if (readerDiv) readerDiv.style.display = 'none';
-        }).catch(err => console.error("Error al detener la cámara:", err));
+    if (html5QrCode) {
+        if (html5QrCode.isScanning) {
+            html5QrCode.stop().then(() => {
+                html5QrCode.clear();
+                html5QrCode = null;
+            }).catch(err => {
+                console.error("Error al detener cámara:", err);
+                html5QrCode = null;
+            });
+        } else {
+            html5QrCode.clear();
+            html5QrCode = null;
+        }
     }
 }
 </script>
