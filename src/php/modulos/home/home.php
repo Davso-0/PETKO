@@ -434,6 +434,7 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,800;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
 <body>
 
@@ -448,7 +449,7 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
         <a href="#sucursales">Sucursales</a>
         <a href="#nosotros">Nosotros</a>
         <a href="../../../../inicioSesion.php" class="btn-login">Iniciar sesión</a>
-        <button id="darkModeBtn" class="dark-mode-btn" title="Cambiar modo">🌙</button>
+        <button id="darkModeBtn" class="dark-mode-btn" title="Cambiar modo"><i class="fa-regular fa-moon" aria-hidden="true"></i></button>
         <button id="languageToggle" class="language-btn" type="button" aria-label="Cambiar idioma">EN</button>
     </nav>
 </header>
@@ -467,42 +468,42 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
 
         <div class="ps-text">
             <div class="ps-step on">
-                <div class="ps-tag">PETKO · CONTROL INTELIGENTE PARA VETERINARIAS</div>
-                <h1>Tu veterinaria, <em>en otro nivel.</em></h1>
-                <p>Consultas, vacunas, ventas, inventario y sucursales bajo control. Perros, gatos, aves y conejos: cada mascota con su ficha y tu negocio siempre en orden.</p>
+                <div class="ps-tag">PETKO · PUNTO DE VENTA VETERINARIO</div>
+                <h1>Tu punto de venta, <em>más fácil.</em></h1>
+                <p>Cobra productos y servicios, controla existencias y administra tus sucursales desde un solo sistema.</p>
                 <div class="ps-btns">
-                    <a href="#" class="ps-b1">Comenzar ahora</a>
-                    <a href="#funciones" class="ps-b2">Explorar PETKO</a>
+                    <a href="#" class="ps-b1">Ingresar al sistema</a>
+                    <a href="#funciones" class="ps-b2">Ver funciones</a>
                 </div>
                 <div class="ps-chips">
-                    <button data-go="1">🛒 Punto de venta</button><button data-go="2">📦 Inventario</button>
-                    <button data-go="3">📅 Citas</button><button data-go="3">🐾 Mascotas</button>
+                    <button data-go="1"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Punto de venta</button><button data-go="2"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i> Inventario</button>
+                    <button data-go="3"><i class="fa-regular fa-calendar-check" aria-hidden="true"></i> Citas</button><button data-go="3"><i class="fa-solid fa-paw" aria-hidden="true"></i> Mascotas</button>
                 </div>
             </div>
 
             <div class="ps-step">
-                <h2>Cobra la consulta y la vacuna.</h2>
-                <p>Cobra servicios, medicamentos y alimento en una sola cuenta por mascota, y descuenta el inventario al instante.</p>
+                <h2>Cobra productos y servicios.</h2>
+                <p>Registra cada venta y mantén actualizado el inventario.</p>
                 <ul class="ps-list"><li>Registro de ventas</li><li>Servicios y productos veterinarios</li><li>Cuenta por paciente</li><li>Actualización del inventario</li></ul>
             </div>
 
             <div class="ps-step">
-                <h2>Que nunca falte una vacuna.</h2>
-                <p>Existencias de alimento, medicamentos y vacunas por sucursal. Lo que está por agotarse aparece marcado como bajo.</p>
+                <h2>Controla tus existencias.</h2>
+                <p>Consulta productos disponibles y detecta existencias bajas por sucursal.</p>
                 <ul class="ps-list"><li>Consulta de existencias</li><li>Control de vacunas y medicamentos</li><li>Control por sucursal</li><li>Actualización después de una venta</li></ul>
             </div>
 
             <div class="ps-step">
-                <h2>Cada mascota, su agenda.</h2>
-                <p>Citas, recordatorios y fichas clínicas para tus pacientes, con gerentes y cajeros trabajando en cada sucursal.</p>
+                <h2>Ventas y atención en un solo lugar.</h2>
+                <p>Organiza las operaciones de tu veterinaria y los accesos de cada usuario.</p>
                 <ul class="ps-list"><li>Citas y recordatorios</li><li>Ficha clínica por mascota</li><li>Gerentes y cajeros</li></ul>
             </div>
 
             <div class="ps-step">
                 <h2>Todo junto <em>en PETKO.</em></h2>
-                <p>Pacientes, ventas, inventario y sucursales en un solo lugar.</p>
+                <p>Vende y administra desde PETKO.</p>
                 <div class="ps-btns">
-                    <a href="#" class="ps-b1">Comenzar ahora</a>
+                    <a href="#" class="ps-b1">Ingresar al sistema</a>
                     <a href="#funciones" class="ps-b2">Ver funciones</a>
                 </div>
             </div>
@@ -535,30 +536,30 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
     </div>
 </section>
 
-<section class="intro">Una solución pensada para <strong>veterinarias que quieren tener el control de su negocio.</strong>
-    <div class="paws" aria-hidden="true">🐾 🐾 🐾 🐾 🐾</div>
+<section class="intro">Punto de venta e inventario para <strong>veterinarias.</strong>
+    
 </section>
 
 <section class="sec c" id="funciones">
     <div class="label">TODO EN UN SOLO LUGAR</div>
-    <h2 class="title">Todo lo que tu veterinaria necesita</h2>
-    <p class="desc">PETKO reúne las herramientas necesarias para atender a tus pacientes y administrar tu negocio de manera sencilla y organizada.</p>
+    <h2 class="title">Todo para vender y administrar</h2>
+    <p class="desc">Ventas, inventario y sucursales en un solo sistema.</p>
     <div class="grid g4">
-        <div class="card"><div class="ico">🩺</div><h3>Consultas y ficha clínica</h3><p>Guarda el historial de cada mascota: consultas, diagnósticos, peso y tratamientos.</p></div>
-        <div class="card"><div class="ico">💉</div><h3>Vacunas y desparasitación</h3><p>Lleva el control de cada aplicación y sabe cuándo toca la siguiente.</p></div>
-        <div class="card"><div class="ico">📅</div><h3>Citas y recordatorios</h3><p>Organiza la agenda del día y recuerda a los dueños la visita de su mascota.</p></div>
-        <div class="card"><div class="ico">🛁</div><h3>Estética y baño</h3><p>Registra los servicios de baño, corte y estética junto con el resto de la cuenta.</p></div>
-        <div class="card"><div class="ico">🛒</div><h3>Punto de venta</h3><p>Registra las ventas de alimentos, medicamentos, accesorios y servicios de manera rápida.</p></div>
-        <div class="card"><div class="ico">📦</div><h3>Inventario</h3><p>Mantén controladas las existencias de los productos de tu veterinaria.</p></div>
-        <div class="card"><div class="ico">🏪</div><h3>Sucursales</h3><p>Administra diferentes sucursales desde un mismo sistema.</p></div>
-        <div class="card"><div class="ico">👥</div><h3>Usuarios</h3><p>Gestiona los accesos y funciones de gerentes y cajeros.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-stethoscope" aria-hidden="true"></i></div><h3>Consultas y ficha clínica</h3><p>Consulta la información básica de cada paciente.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-syringe" aria-hidden="true"></i></div><h3>Vacunas y desparasitación</h3><p>Organiza el registro de vacunas.</p></div>
+        <div class="card"><div class="ico"><i class="fa-regular fa-calendar-check" aria-hidden="true"></i></div><h3>Citas y recordatorios</h3><p>Consulta y organiza las citas.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-shower" aria-hidden="true"></i></div><h3>Estética y baño</h3><p>Agrega servicios a la cuenta de venta.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i></div><h3>Punto de venta</h3><p>Cobra productos y servicios veterinarios.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i></div><h3>Inventario</h3><p>Consulta existencias y productos bajos.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-store" aria-hidden="true"></i></div><h3>Sucursales</h3><p>Controla cada sede desde un solo sistema.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-users" aria-hidden="true"></i></div><h3>Usuarios</h3><p>Administra permisos de usuarios.</p></div>
     </div>
 </section>
 
 <section class="sec alt c" id="mascotas">
     <div class="label">PARA CADA PACIENTE</div>
-    <h2 class="title">Un expediente para cada mascota</h2>
-    <p class="desc">Desde un cachorro hasta un loro: registra a todos los animales que llegan a tu veterinaria.</p>
+    <h2 class="title">Control de pacientes</h2>
+    <p class="desc">Consulta la información de tus pacientes.</p>
     <div class="ptabs" role="tablist"><button type="button" role="tab" class="on" data-p="perros"><span class="pf"><i class="im im-salchicha"></i></span>Perros</button><button type="button" role="tab" class="" data-p="gatos"><span class="pf"><i class="im im-gato-adulto"></i></span>Gatos</button><button type="button" role="tab" class="" data-p="conejos"><span class="pf"><i class="im im-conejo-gris"></i></span>Conejos</button><button type="button" role="tab" class="" data-p="aves"><span class="pf"><i class="im im-perico"></i></span>Aves</button><button type="button" role="tab" class="" data-p="roedores"><span class="pf"><i class="im im-rata"></i></span>Roedores</button><button type="button" role="tab" class="" data-p="agro"><span class="pf"><i class="im im-caballos"></i></span>Agropecuario</button></div>
     <div class="ppanel on" id="pp-perros" role="tabpanel"><div class="pgal"><figure class="pol" style="--r:-4deg"><div class="ph"><i class="im im-salchicha"></i></div></figure><figure class="pol" style="--r:3deg"><div class="ph"><i class="im im-perro-clasico"></i></div></figure></div><div class="ptxt"><h3>Perros</h3><p>Vacunas, desparasitación y control de peso</p><ul class="check"><li>Vacuna antirrábica y múltiple</li><li>Control de peso y alimentación</li><li>Desparasitación al día</li></ul></div></div>
     <div class="ppanel" id="pp-gatos" role="tabpanel"><div class="pgal"><figure class="pol" style="--r:-4deg"><div class="ph"><i class="im im-gatito"></i></div></figure><figure class="pol" style="--r:3deg"><div class="ph"><i class="im im-gato-adulto"></i></div></figure></div><div class="ptxt"><h3>Gatos</h3><p>Esterilización, vacunas y revisiones</p><ul class="check"><li>Esterilización</li><li>Vacuna triple felina</li><li>Chequeo anual</li></ul></div></div>
@@ -569,7 +570,7 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
 </section>
 
 <section class="sec c galeria" id="galeria">
-    <div class="sello"><b>🐾</b>cuidado<br>animal</div>
+    <div class="sello"><b><i class="fa-solid fa-paw" aria-hidden="true"></i></b>cuidado<br>animal</div>
     <div class="label">NUESTRO ÁLBUM</div>
     <h2 class="title">Cada mascota tiene su historia</h2>
     <p class="desc">Fotos, recuerdos y cuidados: en PETKO cada paciente es parte de la familia.</p>
@@ -584,11 +585,11 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
         <figure class="pol" style="--r:4deg"><div class="ph"><i class="im im-pajaros" role="img" aria-label="Aves"></i>🐦</div><figcaption>Dúo de aves</figcaption></figure>
         <figure class="pol" style="--r:-2deg"><div class="ph"><i class="im im-rata" role="img" aria-label="Rata"></i>🐭</div><figcaption>Pequeño explorador</figcaption></figure>
         <figure class="pol" style="--r:3deg"><div class="ph"><i class="im im-caballos" role="img" aria-label="Caballos y ganado"></i>🐴</div><figcaption>Campo y ganado</figcaption></figure>
-        <figure class="pol" style="--r:-4deg"><div class="ph"><i class="im im-revision-ganado" role="img" aria-label="Revisión de ganado"></i>🩺</div><figcaption>Revisión con ultrasonido</figcaption></figure>
+        <figure class="pol" style="--r:-4deg"><div class="ph"><i class="im im-revision-ganado" role="img" aria-label="Revisión de ganado"></i><i class="fa-solid fa-stethoscope" aria-hidden="true"></i></div><figcaption>Revisión con ultrasonido</figcaption></figure>
         <figure class="pol" style="--r:2deg"><div class="ph"><i class="im im-laboratorio" role="img" aria-label="Muestras de laboratorio"></i>🧪</div><figcaption>Análisis de laboratorio</figcaption></figure>
     </div>
     <div class="botica">
-        <span><b>🩺</b>Estetoscopio</span><span><b>💉</b>Vacunas</span><span><b>💊</b>Tónicos y vitaminas</span>
+        <span><b><i class="fa-solid fa-stethoscope" aria-hidden="true"></i></b>Estetoscopio</span><span><b><i class="fa-solid fa-syringe" aria-hidden="true"></i></b>Vacunas</span><span><b>💊</b>Tónicos y vitaminas</span>
         <span><b>🦴</b>Huesitos</span><span><b>🧴</b>Shampoo medicado</span><span><b>🌡️</b>Termómetro</span><span><b>🧸</b>Juguetes</span>
     </div>
 </section>
@@ -643,7 +644,7 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
             <div class="tr"><span>🍖 Alimento</span><span>125</span><span class="good">Disponible</span></div>
             <div class="tr"><span>💊 Medicamentos</span><span>48</span><span class="good">Disponible</span></div>
             <div class="tr"><span>🦴 Accesorios</span><span>73</span><span class="good">Disponible</span></div>
-            <div class="tr"><span>💉 Vacunas</span><span>8</span><span class="bad">Bajo</span></div>
+            <div class="tr"><span><i class="fa-solid fa-syringe" aria-hidden="true"></i> Vacunas</span><span>8</span><span class="bad">Bajo</span></div>
         </div>
     </div>
 </section>
@@ -651,7 +652,7 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
 <section class="sec alt" id="citas">
     <div class="split">
         <div class="tbl">
-            <h3>📅 Citas de hoy</h3>
+            <h3><i class="fa-regular fa-calendar-check" aria-hidden="true"></i> Citas de hoy</h3>
             <div class="tr th"><span>Paciente</span><span>Hora</span><span>Servicio</span></div>
             <div class="tr"><span>🐶 Luna</span><span>09:00</span><span class="good">Vacuna</span></div>
             <div class="tr"><span>🐱 Michi</span><span>10:30</span><span class="good">Consulta</span></div>
@@ -672,16 +673,16 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
     <h2 class="title">Una sola plataforma para todas tus sucursales</h2>
     <p class="desc">Centraliza la información y facilita la administración de cada punto de venta de tu negocio veterinario.</p>
     <div class="grid g3">
-        <div class="card"><div class="ico">🏪</div><h3>Sucursal</h3><p>Administra los productos y operaciones correspondientes a cada sucursal.</p></div>
-        <div class="card"><div class="ico">👨‍💼</div><h3>Gerentes</h3><p>Los responsables de cada sede pueden gestionar las operaciones de su sucursal.</p></div>
-        <div class="card"><div class="ico">👩‍💻</div><h3>Cajeros</h3><p>Realizan las ventas y consultan la información necesaria para trabajar.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-store" aria-hidden="true"></i></div><h3>Sucursal</h3><p>Administra los productos y operaciones correspondientes a cada sucursal.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-user-tie" aria-hidden="true"></i></div><h3>Gerentes</h3><p>Los responsables de cada sede pueden gestionar las operaciones de su sucursal.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-cash-register" aria-hidden="true"></i></div><h3>Cajeros</h3><p>Realizan las ventas y consultan la información necesaria para trabajar.</p></div>
     </div>
 </section>
 
 <section class="sec alt c">
     <div class="label">SIMPLE Y ORGANIZADO</div>
-    <h2 class="title">Comienza a utilizar PETKO</h2>
-    <p class="desc">Organiza las operaciones de tu veterinaria desde un solo sistema.</p>
+    <h2 class="title">Comienza con PETKO</h2>
+    <p class="desc">Ventas, inventario y sucursales en un solo lugar.</p>
     <div class="grid g3">
         <div class="card"><div class="num">01</div><h3>Registra</h3><p>Agrega tus productos, sucursales, usuarios y a tus pacientes al sistema.</p></div>
         <div class="card"><div class="num">02</div><h3>Administra</h3><p>Controla inventario, citas y operaciones de cada sucursal.</p></div>
@@ -693,20 +694,20 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
     <div class="label">¿POR QUÉ PETKO?</div>
     <h2 class="title">Menos complicaciones. Más control.</h2>
     <div class="grid g4">
-        <div class="benefit"><strong>🐾 Especializado</strong><p>Diseñado pensando en las necesidades de negocios veterinarios.</p></div>
-        <div class="benefit"><strong>⚡ Sencillo</strong><p>Una interfaz pensada para facilitar las operaciones diarias.</p></div>
-        <div class="benefit"><strong>📦 Organizado</strong><p>Mantén tus productos e información organizada.</p></div>
-        <div class="benefit"><strong>🏪 Centralizado</strong><p>Gestiona las diferentes sucursales desde un mismo sistema.</p></div>
+        <div class="benefit"><strong><i class="fa-solid fa-paw" aria-hidden="true"></i> Especializado</strong><p>Hecho para negocios veterinarios.</p></div>
+        <div class="benefit"><strong><i class="fa-solid fa-bolt" aria-hidden="true"></i> Sencillo</strong><p>Operaciones sencillas y rápidas.</p></div>
+        <div class="benefit"><strong><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i> Organizado</strong><p>Productos organizados.</p></div>
+        <div class="benefit"><strong><i class="fa-solid fa-store" aria-hidden="true"></i> Centralizado</strong><p>Administra varias sucursales.</p></div>
     </div>
 </section>
 
 <section class="cta">
-    <span class="fl" style="left:6%;top:14%" aria-hidden="true">🐶</span>
-    <span class="fl" style="right:7%;top:18%;animation-delay:1.5s" aria-hidden="true">🐱</span>
-    <span class="fl" style="left:12%;bottom:10%;animation-delay:3s" aria-hidden="true">🐰</span>
-    <span class="fl" style="right:12%;bottom:12%;animation-delay:2s" aria-hidden="true">🦜</span>
-    <h2>Tu veterinaria necesita control.</h2>
-    <p>Pacientes, ventas, inventario y sucursales en un solo lugar.</p>
+    
+    
+    
+    
+    <h2>Tu negocio, bajo control.</h2>
+    <p>Vende y administra desde PETKO.</p>
     <a href="#" class="ps-b1">Comenzar con PETKO</a>
 </section>
 
@@ -791,55 +792,55 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
     const darkModeBtn = document.getElementById("darkModeBtn");
     darkModeBtn.addEventListener("click", function () {
         document.body.classList.toggle("dark-mode");
-        darkModeBtn.innerHTML = document.body.classList.contains("dark-mode") ? "☀️" : "🌙";
+        darkModeBtn.innerHTML = document.body.classList.contains("dark-mode") ? '<i class="fa-regular fa-sun" aria-hidden="true"></i>' : '<i class="fa-regular fa-moon" aria-hidden="true"></i>';
     });
 
     // ===== IDIOMA ES / EN =====
     const homeTranslations = {
         'Inicio': 'Home', 'Funciones': 'Features', 'Mascotas': 'Pets', 'Ventas': 'Sales', 'Inventario': 'Inventory',
         'Sucursales': 'Branches', 'Nosotros': 'About us', 'Iniciar sesión': 'Sign in',
-        'PETKO · CONTROL INTELIGENTE PARA VETERINARIAS': '🐾 SOFTWARE FOR VETERINARY CLINICS',
+        'PETKO · PUNTO DE VENTA VETERINARIO': '<i class="fa-solid fa-paw" aria-hidden="true"></i> SOFTWARE FOR VETERINARY CLINICS',
         'Tu veterinaria,': 'Your veterinary clinic,', 'en otro nivel.': 'on another level.',
-        'Consultas, vacunas, ventas, inventario y sucursales bajo control. Perros, gatos, aves y conejos: cada mascota con su ficha y tu negocio siempre en orden.': 'Visits, vaccines, sales, inventory and branches under control. Dogs, cats, birds and rabbits: every pet with its own record and your business always in order.',
-        'Comenzar ahora': 'Get started', 'Explorar PETKO': 'Discover PETKO', 'Comenzar con PETKO': 'Get started with PETKO',
-        '🛒 Punto de venta': '🛒 Point of sale', '📦 Inventario': '📦 Inventory', '📅 Citas': '📅 Appointments', '🐾 Mascotas': '🐾 Pets',
+        'Cobra productos y servicios, controla existencias y administra tus sucursales desde un solo sistema.': 'Visits, vaccines, sales, inventory and branches under control. Dogs, cats, birds and rabbits: every pet with its own record and your business always in order.',
+        'Ingresar al sistema': 'Get started', 'Ver funciones': 'Discover PETKO', 'Comenzar con PETKO': 'Get started with PETKO',
+        '<i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Punto de venta': '<i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Point of sale', '<i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i> Inventario': '<i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i> Inventory', '<i class="fa-regular fa-calendar-check" aria-hidden="true"></i> Citas': '<i class="fa-regular fa-calendar-check" aria-hidden="true"></i> Appointments', '<i class="fa-solid fa-paw" aria-hidden="true"></i> Mascotas': '<i class="fa-solid fa-paw" aria-hidden="true"></i> Pets',
         'Prueba las tarjetas: quita servicios de la cuenta o repón las vacunas.': 'Try the cards: remove services from the bill or restock the vaccines.',
-        'Cobra la consulta y la vacuna.': 'Charge the visit and the vaccine.',
-        'Cobra servicios, medicamentos y alimento en una sola cuenta por mascota, y descuenta el inventario al instante.': 'Charge services, medicine and food in a single bill per pet, and update your inventory instantly.',
+        'Cobra productos y servicios.': 'Charge the visit and the vaccine.',
+        'Registra cada venta y mantén actualizado el inventario.': 'Charge services, medicine and food in a single bill per pet, and update your inventory instantly.',
         'Servicios y productos veterinarios': 'Veterinary services and products', 'Cuenta por paciente': 'Bill per patient',
-        'Que nunca falte una vacuna.': 'Never run out of vaccines.',
-        'Existencias de alimento, medicamentos y vacunas por sucursal. Lo que está por agotarse aparece marcado como bajo.': 'Stock of food, medicine and vaccines by branch. Items running out are flagged as low.',
+        'Controla tus existencias.': 'Never run out of vaccines.',
+        'Consulta productos disponibles y detecta existencias bajas por sucursal.': 'Stock of food, medicine and vaccines by branch. Items running out are flagged as low.',
         'Control de vacunas y medicamentos': 'Vaccine and medicine control',
-        'Cada mascota, su agenda.': 'Every pet, its own schedule.',
-        'Citas, recordatorios y fichas clínicas para tus pacientes, con gerentes y cajeros trabajando en cada sucursal.': 'Appointments, reminders and medical records for your patients, with managers and cashiers working at every branch.',
+        'Ventas y atención en un solo lugar.': 'Every pet, its own schedule.',
+        'Organiza las operaciones de tu veterinaria y los accesos de cada usuario.': 'Appointments, reminders and medical records for your patients, with managers and cashiers working at every branch.',
         'Citas y recordatorios': 'Appointments and reminders', 'Ficha clínica por mascota': 'Medical record per pet', 'Gerentes y cajeros': 'Managers and cashiers',
         'Todo junto': 'All together', 'en PETKO.': 'in PETKO.',
-        'Pacientes, ventas, inventario y sucursales en un solo lugar.': 'Patients, sales, inventory and branches in one place.',
+        'Vende y administra desde PETKO.': 'Patients, sales, inventory and branches in one place.',
         'Ver funciones': 'See features',
         '🐶 Cuenta de Luna': "🐶 Luna's bill", 'Consulta general': 'General checkup', 'Vacuna antirrábica': 'Rabies vaccine',
         'Desparasitante': 'Dewormer', 'Alimento premium': 'Premium food',
         'Toca un concepto para quitarlo o agregarlo.': 'Tap an item to remove or add it.',
-        'Vacunas': 'Vaccines', '📅 Citas': '📅 Appointments', 'Consultas': 'Visits', 'Vacunaciones': 'Vaccinations',
+        'Vacunas': 'Vaccines', '<i class="fa-regular fa-calendar-check" aria-hidden="true"></i> Citas': '<i class="fa-regular fa-calendar-check" aria-hidden="true"></i> Appointments', 'Consultas': 'Visits', 'Vacunaciones': 'Vaccinations',
         'Hoy': 'Today', 'Semana': 'Week',
         'Una solución pensada para': 'A solution designed for',
         'veterinarias que quieren tener el control de su negocio.': 'veterinary clinics that want control of their business.',
         'TODO EN UN SOLO LUGAR': 'EVERYTHING IN ONE PLACE',
-        'Todo lo que tu veterinaria necesita': 'Everything your veterinary clinic needs',
-        'PETKO reúne las herramientas necesarias para atender a tus pacientes y administrar tu negocio de manera sencilla y organizada.': 'PETKO brings together the tools you need to care for your patients and manage your business simply and efficiently.',
+        'Todo para vender y administrar': 'Everything your veterinary clinic needs',
+        'Ventas, inventario y sucursales en un solo sistema.': 'PETKO brings together the tools you need to care for your patients and manage your business simply and efficiently.',
         'Consultas y ficha clínica': 'Visits and medical records',
-        'Guarda el historial de cada mascota: consultas, diagnósticos, peso y tratamientos.': 'Keep every pet\'s history: visits, diagnoses, weight and treatments.',
+        'Consulta la información básica de cada paciente.': 'Keep every pet\'s history: visits, diagnoses, weight and treatments.',
         'Vacunas y desparasitación': 'Vaccines and deworming',
-        'Lleva el control de cada aplicación y sabe cuándo toca la siguiente.': 'Track every dose and know when the next one is due.',
-        'Organiza la agenda del día y recuerda a los dueños la visita de su mascota.': 'Organize the daily schedule and remind owners about their pet\'s visit.',
+        'Organiza el registro de vacunas.': 'Track every dose and know when the next one is due.',
+        'Consulta y organiza las citas.': 'Organize the daily schedule and remind owners about their pet\'s visit.',
         'Estética y baño': 'Grooming and bath',
-        'Registra los servicios de baño, corte y estética junto con el resto de la cuenta.': 'Record bath, haircut and grooming services along with the rest of the bill.',
+        'Agrega servicios a la cuenta de venta.': 'Record bath, haircut and grooming services along with the rest of the bill.',
         'Punto de venta': 'Point of sale', 'Usuarios': 'Users',
-        'Registra las ventas de alimentos, medicamentos, accesorios y servicios de manera rápida.': 'Record food, medicine, accessory and service sales quickly.',
-        'Mantén controladas las existencias de los productos de tu veterinaria.': 'Keep track of your veterinary clinic inventory.',
-        'Administra diferentes sucursales desde un mismo sistema.': 'Manage different branches from one system.',
-        'Gestiona los accesos y funciones de gerentes y cajeros.': 'Manage manager and cashier access and permissions.',
-        'PARA CADA PACIENTE': 'FOR EVERY PATIENT', 'Un expediente para cada mascota': 'A record for every pet',
-        'Desde un cachorro hasta un loro: registra a todos los animales que llegan a tu veterinaria.': 'From a puppy to a parrot: register every animal that comes to your clinic.',
+        'Cobra productos y servicios veterinarios.': 'Record food, medicine, accessory and service sales quickly.',
+        'Consulta existencias y productos bajos.': 'Keep track of your veterinary clinic inventory.',
+        'Controla cada sede desde un solo sistema.': 'Manage different branches from one system.',
+        'Administra permisos de usuarios.': 'Manage manager and cashier access and permissions.',
+        'PARA CADA PACIENTE': 'FOR EVERY PATIENT', 'Control de pacientes': 'A record for every pet',
+        'Consulta la información de tus pacientes.': 'From a puppy to a parrot: register every animal that comes to your clinic.',
         'Perros': 'Dogs', 'Gatos': 'Cats', 'Conejos': 'Rabbits', 'Aves': 'Birds', 'Roedores': 'Rodents', 'Agropecuario': 'Agricultural',
         'Vacunas, desparasitación y control de peso': 'Vaccines, deworming and weight control',
         'Esterilización, vacunas y revisiones': 'Spaying/neutering, vaccines and checkups',
@@ -866,7 +867,7 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
         'Actualización después de una venta': 'Updated after every sale',
         'Inventario de productos': 'Product inventory', 'Producto': 'Product', 'Existencia': 'Stock', 'Estado': 'Status',
         'Disponible': 'Available', 'Bajo': 'Low', 'Alimento': 'Food', 'Medicamentos': 'Medicine', 'Accesorios': 'Accessories',
-        '📅 Citas de hoy': "📅 Today's appointments", 'Paciente': 'Patient', 'Hora': 'Time', 'Servicio': 'Service',
+        '<i class="fa-regular fa-calendar-check" aria-hidden="true"></i> Citas de hoy': "<i class="fa-regular fa-calendar-check" aria-hidden="true"></i> Today's appointments", 'Paciente': 'Patient', 'Hora': 'Time', 'Servicio': 'Service',
         'Vacuna': 'Vaccine', 'Consulta': 'Visit', 'Revisión': 'Checkup', 'Control': 'Follow-up',
         'CITAS Y RECORDATORIOS': 'APPOINTMENTS AND REMINDERS', 'Cada mascota llega a su cita.': 'Every pet makes it to its appointment.',
         'Organiza la agenda de consultas, vacunas y estética, y no dejes pasar ninguna fecha importante de tus pacientes.': 'Organize the schedule for visits, vaccines and grooming, and never miss an important date for your patients.',
@@ -877,19 +878,19 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
         'Administra los productos y operaciones correspondientes a cada sucursal.': 'Manage the products and operations for each branch.',
         'Los responsables de cada sede pueden gestionar las operaciones de su sucursal.': 'Branch managers can manage their location operations.',
         'Realizan las ventas y consultan la información necesaria para trabajar.': 'They make sales and access the information they need to work.',
-        'SIMPLE Y ORGANIZADO': 'SIMPLE AND ORGANIZED', 'Comienza a utilizar PETKO': 'Start using PETKO',
-        'Organiza las operaciones de tu veterinaria desde un solo sistema.': 'Organize your veterinary clinic operations from one system.',
+        'SIMPLE Y ORGANIZADO': 'SIMPLE AND ORGANIZED', 'Comienza con PETKO': 'Start using PETKO',
+        'Ventas, inventario y sucursales en un solo lugar.': 'Organize your veterinary clinic operations from one system.',
         'Registra': 'Register', 'Administra': 'Manage', 'Vende': 'Sell',
         'Agrega tus productos, sucursales, usuarios y a tus pacientes al sistema.': 'Add your products, branches, users and patients to the system.',
         'Controla inventario, citas y operaciones de cada sucursal.': 'Control inventory, appointments and every branch operation.',
         'Registra las ventas y mantén actualizado tu inventario.': 'Record sales and keep your inventory updated.',
         '¿POR QUÉ PETKO?': 'WHY PETKO?', 'Menos complicaciones. Más control.': 'Less hassle. More control.',
-        '🐾 Especializado': '🐾 Specialized', '⚡ Sencillo': '⚡ Simple', '📦 Organizado': '📦 Organized', '🏪 Centralizado': '🏪 Centralized',
-        'Diseñado pensando en las necesidades de negocios veterinarios.': 'Designed for the needs of veterinary businesses.',
-        'Una interfaz pensada para facilitar las operaciones diarias.': 'An interface designed to simplify daily operations.',
-        'Mantén tus productos e información organizada.': 'Keep your products and information organized.',
-        'Gestiona las diferentes sucursales desde un mismo sistema.': 'Manage different branches from one system.',
-        'Tu veterinaria necesita control.': 'Your veterinary clinic needs control.',
+        '<i class="fa-solid fa-paw" aria-hidden="true"></i> Especializado': '<i class="fa-solid fa-paw" aria-hidden="true"></i> Specialized', '<i class="fa-solid fa-bolt" aria-hidden="true"></i> Sencillo': '<i class="fa-solid fa-bolt" aria-hidden="true"></i> Simple', '<i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i> Organizado': '<i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i> Organized', '<i class="fa-solid fa-store" aria-hidden="true"></i> Centralizado': '<i class="fa-solid fa-store" aria-hidden="true"></i> Centralized',
+        'Hecho para negocios veterinarios.': 'Designed for the needs of veterinary businesses.',
+        'Operaciones sencillas y rápidas.': 'An interface designed to simplify daily operations.',
+        'Productos organizados.': 'Keep your products and information organized.',
+        'Administra varias sucursales.': 'Manage different branches from one system.',
+        'Tu negocio, bajo control.': 'Your veterinary clinic needs control.',
         '© 2026 PETKO · Punto de Venta e Inventario para Veterinarias': '© 2026 PETKO · Point of Sale and Inventory for Veterinary Clinics',
         'NUESTRO ÁLBUM': 'OUR ALBUM', 'Cada mascota tiene su historia': 'Every pet has a story',
         'Fotos, recuerdos y cuidados: en PETKO cada paciente es parte de la familia.': 'Photos, memories and care: at PETKO every patient is part of the family.',
