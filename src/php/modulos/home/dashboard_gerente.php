@@ -1,7 +1,6 @@
 <?php
 declare(strict_types=1);
 
-
 ob_start();
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -12,7 +11,14 @@ header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
 
-if (!isset($_SESSION['usuario']) && !isset($_GET['action'])) {
+// Guardia de sesión: si no hay sesión activa, redirigir (o devolver JSON en AJAX)
+if (!isset($_SESSION['usuario'])) {
+    if (isset($_GET['action'])) {
+        ob_end_clean();
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'msg' => '[SESIÓN EXPIRADA] Tu sesión ha caducado. Vuelve a iniciar sesión.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     header('Location: ../../../../inicioSesion.php');
     exit;
 }
@@ -41,9 +47,52 @@ if (isset($pdo) && $pdo instanceof PDO && $id_usuario_actual > 0) {
     $stG->execute([$id_usuario_actual]);
     $gerente = $stG->fetch(PDO::FETCH_ASSOC) ?: null;
 }
-$id_sucursal = (int)($gerente['id_sucursal'] ?? 0);
-$nombreGerente = trim(($gerente['nombre'] ?? 'Gerente') . ' ' . ($gerente['apellido'] ?? ''));
-$esGerente = stripos((string)($gerente['rol'] ?? ''), 'gerente') !== false;
+
+// Determinar rol: Admin o Gerente
+$rolDB       = (string)($gerente['rol'] ?? $_SESSION['usuario']['rol'] ?? '');
+$esGerente   = stripos($rolDB, 'gerente') !== false;
+$esAdmin     = stripos($rolDB, 'admin') !== false;
+
+$id_sucursal = (int)($gerente['id_sucursal'] ?? $_SESSION['usuario']['id_sucursal'] ?? 0);
+
+// Si es Admin sin sucursal asignada, tomar la primera sucursal activa disponible
+if (($esAdmin || ($id_sucursal <= 0)) && isset($pdo) && $pdo instanceof PDO) {
+    $sucursalForzada = (int)($_SESSION['sucursal_gerente'] ?? 0);
+    if ($sucursalForzada > 0) {
+        $id_sucursal = $sucursalForzada;
+    } elseif ($id_sucursal <= 0) {
+        $stFallback = $pdo->query("SELECT id_sucursal FROM sucursales WHERE estado='ACTIVA' ORDER BY id_sucursal LIMIT 1");
+        $id_sucursal = (int)($stFallback ? $stFallback->fetchColumn() : 0);
+    }
+}
+
+$nombreGerente = trim(($gerente['nombre'] ?? $_SESSION['usuario']['nombre'] ?? 'Usuario') . ' ' . ($gerente['apellido'] ?? $_SESSION['usuario']['apellido'] ?? ''));
+if ($nombreGerente === '') $nombreGerente = 'Gerente';
+
+// Helper para procesamiento seguro de imágenes de producto (subida física o URL)
+function procesarSubidaImagen(?array $file, string $urlTexto = ''): ?string {
+    if ($file && isset($file['error']) && $file['error'] === UPLOAD_ERR_OK && $file['size'] > 0) {
+        $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+        
+        if (isset($allowed[$mime])) {
+            $ext = $allowed[$mime];
+            $dirDestino = __DIR__ . '/../../../img/productos/';
+            if (!is_dir($dirDestino)) {
+                @mkdir($dirDestino, 0777, true);
+            }
+            $nombreArchivo = 'prod_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+            $destino = $dirDestino . $nombreArchivo;
+            if (move_uploaded_file($file['tmp_name'], $destino)) {
+                return '../../img/productos/' . $nombreArchivo;
+            }
+        }
+    }
+    $urlTexto = trim($urlTexto);
+    return $urlTexto !== '' ? $urlTexto : null;
+}
 
 // --------------------------------------------------------------
 // API (AJAX) — todas las acciones quedan restringidas a $id_sucursal
@@ -57,13 +106,14 @@ if (isset($_GET['action'])) {
         }
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         
-        // 1. Validar explícitamente el rol desde la sesión
-        $rolSesion = $_SESSION['usuario']['rol'] ?? '';
-        $esGerente = stripos((string)$rolSesion, 'gerente') !== false;
+        // 1. Validar rol: permitir Gerente Y Admin
+        if (!$esGerente && !$esAdmin) {
+            throw new RuntimeException('[ACCESO DENEGADO] No tienes permisos para acceder a este panel.');
+        }
 
-        // 2. Bloquear si no es gerente o si no tiene sucursal
-        if (!$esGerente || $id_sucursal <= 0) {
-            throw new RuntimeException('[ACCESO DENEGADO] No tienes permisos de gerente o no tienes una sucursal asignada. Contacta al administrador.');
+        // 2. Si aún no hay sucursal resuelta, bloquear
+        if ($id_sucursal <= 0) {
+            throw new RuntimeException('[ACCESO DENEGADO] No hay ninguna sucursal activa disponible. Crea una primero desde el panel de Administrador.');
         }
 
         if ($action === 'get_metrics') {
@@ -104,20 +154,6 @@ if (isset($_GET['action'])) {
             try { $data = $pdo->query("SELECT id_metodo_pago, nombre FROM metodos_pago ORDER BY id_metodo_pago")->fetchAll(PDO::FETCH_ASSOC); } catch (Exception $e) { $data = []; }
             $out = ['ok' => true, 'data' => $data];
 
-        } elseif ($action === 'get_productos') {
-            $q = trim($_GET['q'] ?? '');
-            $sql = "SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.id_categoria, p.precio, p.estado,
-                           COALESCE(c.nombre,'Sin categoría') AS categoria, i.existencias, i.stock_minimo
-                    FROM productos p
-                    JOIN inventarios i ON i.id_producto=p.id_producto AND i.id_sucursal=?
-                    LEFT JOIN categorias c ON c.id_categoria=p.id_categoria
-                    WHERE 1=1";
-            $params = [$id_sucursal];
-            if ($q !== '') { $sql .= " AND (p.codigo LIKE ? OR p.nombre LIKE ?)"; $params[] = "%$q%"; $params[] = "%$q%"; }
-            $sql .= " ORDER BY p.nombre ASC LIMIT 200";
-            $st = $pdo->prepare($sql); $st->execute($params);
-            $out = ['ok' => true, 'data' => $st->fetchAll(PDO::FETCH_ASSOC)];
-
         } elseif ($action === 'create_producto') {
             $codigo = trim($_POST['codigo'] ?? ''); $nombre = trim($_POST['nombre'] ?? '');
             $descripcion = trim($_POST['descripcion'] ?? ''); $categoria = (int)($_POST['id_categoria'] ?? 0);
@@ -126,10 +162,12 @@ if (isset($_GET['action'])) {
             $stockMin = max(0, (int)($_POST['stock_minimo'] ?? 5));
             if ($codigo === '' || $nombre === '') throw new Exception('[ERROR DE USUARIO] El código y el nombre son obligatorios.');
 
+            $imagenUrl = procesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
+
             $pdo->beginTransaction();
             try {
-                $pdo->prepare("INSERT INTO productos(codigo,nombre,descripcion,id_categoria,precio,estado) VALUES(?,?,?,?,?,'ACTIVO')")
-                    ->execute([$codigo, $nombre, $descripcion ?: null, $categoria > 0 ? $categoria : null, $precio]);
+                $pdo->prepare("INSERT INTO productos(codigo,nombre,descripcion,id_categoria,precio,estado,imagen_url) VALUES(?,?,?,?,?,'ACTIVO',?)")
+                    ->execute([$codigo, $nombre, $descripcion ?: null, $categoria > 0 ? $categoria : null, $precio, $imagenUrl ?: null]);
                 $newId = (int)$pdo->lastInsertId();
                 $pdo->prepare("INSERT INTO inventarios(id_producto,id_sucursal,existencias,stock_minimo) VALUES(?,?,?,?)")
                     ->execute([$newId, $id_sucursal, $existInicial, $stockMin]);
@@ -150,22 +188,65 @@ if (isset($_GET['action'])) {
             $chk->execute([$id, $id_sucursal]);
             if (!$chk->fetchColumn()) throw new Exception('[ERROR DE USUARIO] Este producto no pertenece a tu sucursal.');
 
-            $pdo->prepare("UPDATE productos SET codigo=?,nombre=?,descripcion=?,id_categoria=?,precio=?,estado=? WHERE id_producto=?")
-                ->execute([$codigo, $nombre, $descripcion ?: null, $categoria > 0 ? $categoria : null, $precio, $estado, $id]);
+            $imagenUrl = procesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
+            if ($imagenUrl === null && !isset($_POST['imagen_url'])) {
+                $stAct = $pdo->prepare("SELECT imagen_url FROM productos WHERE id_producto=?");
+                $stAct->execute([$id]);
+                $imagenUrl = $stAct->fetchColumn() ?: null;
+            }
+
+            $pdo->prepare("UPDATE productos SET codigo=?,nombre=?,descripcion=?,id_categoria=?,precio=?,estado=?,imagen_url=? WHERE id_producto=?")
+                ->execute([$codigo, $nombre, $descripcion ?: null, $categoria > 0 ? $categoria : null, $precio, $estado, $imagenUrl ?: null, $id]);
             $pdo->prepare("UPDATE inventarios SET stock_minimo=? WHERE id_producto=? AND id_sucursal=?")
                 ->execute([$stockMin, $id, $id_sucursal]);
             $out = ['ok' => true, 'msg' => 'Producto actualizado correctamente.'];
 
+        } elseif ($action === 'delete_producto') {
+            $id = (int)($_POST['id'] ?? 0);
+            
+            // Validar stock global antes de eliminar
+            $stStock = $pdo->prepare("SELECT COALESCE(SUM(existencias), 0) FROM inventarios WHERE id_producto=?");
+            $stStock->execute([$id]);
+            $totalStock = (int)$stStock->fetchColumn();
+            
+            if ($totalStock > 0) {
+                throw new Exception("[ACCIÓN DENEGADA] No puedes eliminar este producto. Aún existen $totalStock unidades. Debes ajustar el stock a 0 antes de eliminar.");
+            }
+
+            $pdo->beginTransaction();
+            try {
+                $pdo->prepare("UPDATE detalle_ventas SET id_producto = NULL WHERE id_producto=?")->execute([$id]);
+                $pdo->prepare("DELETE FROM inventarios WHERE id_producto=?")->execute([$id]);
+                $pdo->prepare("DELETE FROM productos WHERE id_producto=?")->execute([$id]);
+                $pdo->commit();
+                $out = ['ok' => true, 'msg' => 'Producto eliminado permanentemente.'];
+            } catch (Exception $e) { 
+                $pdo->rollBack(); 
+                throw $e; 
+            }
+
         } elseif ($action === 'get_inventario') {
-            $q = trim($_GET['q'] ?? ''); $soloBajo = ($_GET['solo_bajo'] ?? '') === '1';
-            $sql = "SELECT i.id_inventario, p.id_producto, p.nombre AS producto, p.codigo, i.existencias, i.stock_minimo, p.precio,
+            $q = trim($_GET['q'] ?? ''); 
+            $cat = (int)($_GET['categoria'] ?? 0);
+            $stock = $_GET['stock'] ?? '';
+            
+            $sql = "SELECT i.id_inventario, p.id_producto, p.nombre AS producto, p.nombre AS nombre, p.codigo, p.descripcion, p.id_categoria, i.existencias, i.stock_minimo, p.precio, p.imagen_url, p.estado, COALESCE(c.nombre, 'Sin categoría') AS categoria,
                            CASE WHEN i.existencias<=0 THEN 'AGOTADO' WHEN i.existencias<=i.stock_minimo THEN 'BAJO' ELSE 'OK' END AS nivel
-                    FROM inventarios i JOIN productos p ON p.id_producto=i.id_producto
+                    FROM inventarios i 
+                    JOIN productos p ON p.id_producto=i.id_producto
+                    LEFT JOIN categorias c ON c.id_categoria=p.id_categoria
                     WHERE i.id_sucursal=?";
             $params = [$id_sucursal];
+            
             if ($q !== '') { $sql .= " AND (p.nombre LIKE ? OR p.codigo LIKE ?)"; $params[] = "%$q%"; $params[] = "%$q%"; }
-            if ($soloBajo) { $sql .= " AND i.existencias<=i.stock_minimo"; }
-            $sql .= " ORDER BY i.existencias ASC LIMIT 200";
+            if ($cat > 0) { $sql .= " AND p.id_categoria=?"; $params[] = $cat; }
+            if ($stock === 'bajo') { $sql .= " AND i.existencias<=i.stock_minimo AND i.existencias > 0"; }
+            elseif ($stock === 'agotado') { $sql .= " AND i.existencias<=0"; }
+            
+            // Si viene el flag viejo 'solo_bajo', se respeta para el dashboard principal
+            if (($_GET['solo_bajo'] ?? '') === '1') { $sql .= " AND i.existencias<=i.stock_minimo"; }
+
+            $sql .= " ORDER BY p.nombre ASC LIMIT 200";
             $st = $pdo->prepare($sql); $st->execute($params);
             $out = ['ok' => true, 'data' => $st->fetchAll(PDO::FETCH_ASSOC)];
 
@@ -281,7 +362,7 @@ if (isset($_GET['action'])) {
             if (!$cajero) throw new Exception('[ERROR DE USUARIO] Ese cajero no tiene acceso a la caja seleccionada.');
             if (!password_verify($pass, $cajero['password_hash'])) throw new Exception('[ERROR DE USUARIO] Contraseña de cajero incorrecta.');
 
-            // ¿Ya hay un turno abierto en esta caja? Si es del mismo cajero, se reanuda; si no, se bloquea.
+            // ¿Ya hay un turno abierto en esta caja?
             $stAbierto = $pdo->prepare("SELECT id_turno, id_cajero, dinero_inicial, fecha_inicio, horas_extra FROM turnos_caja WHERE id_caja=? AND estado='ABIERTO' LIMIT 1");
             $stAbierto->execute([$id_caja]);
             $abierto = $stAbierto->fetch(PDO::FETCH_ASSOC);
@@ -298,7 +379,10 @@ if (isset($_GET['action'])) {
                 $pdo->prepare("INSERT INTO turnos_caja(id_caja,id_cajero,id_sucursal,fecha_inicio,dinero_inicial,estado) VALUES(?,?,?,NOW(),?,'ABIERTO')")
                     ->execute([$id_caja, $id_cajero, $id_sucursal, $dineroInicial]);
                 $idTurno = (int)$pdo->lastInsertId();
-                $fInicio = $pdo->query("SELECT fecha_inicio FROM turnos_caja WHERE id_turno=" . $idTurno)->fetchColumn();
+                
+$stFI = $pdo->prepare("SELECT fecha_inicio FROM turnos_caja WHERE id_turno = ?");
+$stFI->execute([$idTurno]);
+$fInicio = $stFI->fetchColumn();
                 $out = ['ok' => true, 'msg' => 'Acceso concedido.', 'data' => [
                     'nombre_cajero' => $cajero['nombre'], 'nombre_caja' => $nombreCaja, 'id_caja' => $id_caja, 'id_cajero' => $id_cajero,
                     'id_turno' => $idTurno, 'dinero_inicial' => $dineroInicial, 'fecha_inicio' => $fInicio, 'horas_extra' => false, 'reanudado' => false
@@ -424,10 +508,12 @@ if (isset($_GET['action'])) {
         } elseif ($action === 'get_ventas') {
             $desde = trim($_GET['desde'] ?? ''); $hasta = trim($_GET['hasta'] ?? '');
             $sql = "SELECT v.id_venta, v.fecha_hora, v.total, v.estado, mp.nombre AS metodo_pago,
-                           CONCAT(u.nombre,' ',COALESCE(u.apellido,'')) AS empleado
+                           COALESCE(cj.nombre, CONCAT(u.nombre,' ',COALESCE(u.apellido,''))) AS empleado
                     FROM ventas v
                     JOIN metodos_pago mp ON mp.id_metodo_pago=v.id_metodo_pago
                     JOIN usuarios u ON u.id_usuario=v.id_usuario
+                    LEFT JOIN turnos_caja tc ON tc.id_turno = v.id_turno
+                    LEFT JOIN cajeros cj ON cj.id_cajero = tc.id_cajero
                     WHERE v.id_sucursal=?";
             $params = [$id_sucursal];
             if ($desde !== '') { $sql .= " AND DATE(v.fecha_hora)>=?"; $params[] = $desde; }
@@ -543,8 +629,23 @@ if (isset($_GET['action'])) {
 // --------------------------------------------------------------
 if ($id_sucursal <= 0) {
     ob_end_clean();
-    echo '<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:60px;text-align:center;color:#6c4630;">
-    <h2>Tu usuario no tiene una sucursal asignada</h2><p>Contacta al administrador para que te asigne una sucursal.</p></body>';
+    echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>KION · Sin Sucursal</title><style>
+    body { font-family: "Segoe UI", system-ui, sans-serif; background: #fffaf6; color: #38281f; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .card { background: #fff; padding: 40px; border-radius: 16px; border: 1px solid #eeddd1; text-align: center; max-width: 440px; box-shadow: 0 10px 30px rgba(80,50,30,0.08); }
+    h2 { font-size: 22px; color: #2f80ed; margin-bottom: 10px; }
+    p { font-size: 14px; color: #5b7396; margin-bottom: 24px; line-height: 1.5; }
+    .btn { display: inline-block; padding: 10px 20px; border-radius: 8px; font-weight: 600; text-decoration: none; margin: 0 6px; font-size: 13.5px; }
+    .btn-main { background: #2f80ed; color: #fff; }
+    .btn-sub { background: #f4ece4; color: #2f80ed; }
+    </style></head><body>
+    <div class="card">
+        <h2>Tu usuario no tiene una sucursal asignada</h2>
+        <p>Para ingresar al panel de gerencia debes tener una sucursal vinculada. Contacta al administrador general.</p>
+        <div>
+            <a href="home.php" class="btn btn-main">Volver al inicio</a>
+            <a href="cerrarSesion.php" class="btn btn-sub">Cerrar sesión</a>
+        </div>
+    </div></body></html>';
     exit;
 }
 $stSuc = $pdo->prepare("SELECT nombre FROM sucursales WHERE id_sucursal=?");
@@ -558,140 +659,276 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>KION · Panel de Gerente</title>
 
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
 
     <style>
-        :root {
-            --bg-app: oklch(96.5% 0.014 72); --bg-surface: oklch(100% 0 0); --bg-panel: oklch(99% 0.006 75);
-            --ink: oklch(24% 0.028 50); --ink-soft: oklch(42% 0.030 48); --border-soft: oklch(89% 0.016 65);
-            --coffee-main: oklch(32% 0.040 50); --coffee-light: oklch(91% 0.018 60);
-            --coffee-gradient: linear-gradient(155deg, oklch(40% 0.045 48), oklch(26% 0.035 52));
-            --success: oklch(34% 0.06 152); --success-bg: oklch(94% 0.035 152);
-            --danger: oklch(50% 0.14 25); --danger-bg: oklch(95% 0.035 20);
-            --warning: oklch(42% 0.09 70); --warning-bg: oklch(95% 0.045 90);
-            --font-display: 'Fraunces', serif; --font-body: 'Plus Jakarta Sans', sans-serif;
-            --shadow-sm: 0 4px 12px rgba(0,0,0,0.05); --shadow-md: 0 8px 24px rgba(0,0,0,0.08);
-            --radius: 14px; --sidebar-w: 260px; --sidebar-w-collapsed: 84px;
-            --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        body.dark-mode {
-            --bg-app: oklch(20% 0.01 250); --bg-surface: oklch(25% 0.01 250); --bg-panel: oklch(23% 0.01 250);
-            --ink: oklch(95% 0.01 250); --ink-soft: oklch(75% 0.01 250); --border-soft: oklch(35% 0.01 250);
-            --coffee-main: oklch(80% 0.03 60); --coffee-light: oklch(30% 0.02 250);
-            --coffee-gradient: linear-gradient(155deg, oklch(40% 0.045 48), oklch(20% 0.035 52));
-            --success-bg: oklch(25% 0.04 152); --danger-bg: oklch(30% 0.06 20); --warning-bg: oklch(30% 0.05 85);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: var(--font-body); background: var(--bg-app); color: var(--ink); transition: background 0.3s, color 0.3s; }
-        button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+        /* ESTILOS CONTROL DE CANTIDAD EN CARRITO */
+.qty-ctrl { display:inline-flex; align-items:center; background:rgba(47, 128, 237, 0.12); border-radius:20px; padding:4px; gap:4px; }
+.qty-btn { width:26px; height:26px; border-radius:50%; border:none; display:grid; place-items:center; font-weight:800; font-size:16px; cursor:pointer; transition:0.2s; }
+.qty-btn:active { transform:scale(0.9); }
+.qty-btn.minus { background:#fff; color:var(--accent); box-shadow:0 2px 4px rgba(0,0,0,0.1); }
+.qty-btn.plus { background:var(--accent); color:#fff; box-shadow:0 2px 4px rgba(47,128,237,0.3); }
+.qty-input { width:32px; text-align:center; border:none; background:transparent; font-weight:800; color:var(--accent); font-size:15px; outline:none; -moz-appearance:textfield; }
+.qty-input::-webkit-outer-spin-button, .qty-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap');
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .view-section { display: none; animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .view-section.active { display: block; }
+:root {
+    --bg-app: #f3f8ff; 
+    --bg-surface: #ffffff; 
+    --bg-panel: #f4f9ff;
+    
+    --ink: #0d2548; 
+    --ink-soft: #5b7396; 
+    --ink-faint: #a9bfdc;
+    --border-soft: #d9e6f7;
+    
+    --accent: #2f80ed; 
+    --accent-light: #5cc8ff; 
+    --accent-glow: rgba(47, 128, 237, 0.35);
+    
+    --success: #1f9a73; 
+    --success-bg: #dcecff;
+    --danger: #d8584a; 
+    --danger-bg: #ffe4e6;
+    --warning: #F59E0B; 
+    --warning-bg: #FFFBEB;
 
-        .app-layout { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; transition: grid-template-columns .35s var(--ease-expo, cubic-bezier(0.16,1,0.3,1)); }
-        .app-layout.is-collapsed { grid-template-columns: var(--sidebar-w-collapsed, 84px) 1fr; }
-        .sidebar { position: sticky; top: 0; height: 100vh; background: var(--bg-surface); border-right: 1px solid var(--border-soft); padding: 22px 16px; display: flex; flex-direction: column; gap: 26px; z-index: 40; transition: padding .35s ease, background .3s ease; }
-        .brand { display: flex; align-items: center; gap: 12px; font-family: var(--font-display); font-size: 19px; font-weight: 600; padding: 0 8px; position: relative; }
-        .brand i { font-size: 26px; color: var(--coffee-main); flex: none; }
-        .brand-text { overflow: hidden; white-space: nowrap; transition: opacity .2s ease; }
-        .brand-sub { font-size: 10.5px; letter-spacing: .6px; color: var(--ink-soft); font-weight: 700; text-transform: uppercase; margin-top: 1px; opacity: .7; }
-        .app-layout.is-collapsed .brand-text, .app-layout.is-collapsed .nav-label, .app-layout.is-collapsed .nav-section-title { opacity: 0; width: 0; pointer-events: none; }
-        .sidebar-collapse-btn { position: absolute; top: 22px; right: -13px; width: 26px; height: 26px; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border-soft); color: var(--coffee-main); display: grid; place-items: center; box-shadow: var(--shadow-sm); z-index: 41; transition: transform .3s var(--ease-expo, cubic-bezier(0.16,1,0.3,1)); }
-        .app-layout.is-collapsed .sidebar-collapse-btn { transform: rotate(180deg); }
-        .sidebar-collapse-btn i { font-size: 13px; }
-        .nav-section-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--ink-soft); opacity: .6; font-weight: 700; padding: 4px 12px 4px; white-space: nowrap; }
-        .nav-menu { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
-        .nav-btn { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: var(--radius); font-weight: 600; font-size: 14px; color: var(--ink-soft); transition: all 0.2s; white-space: nowrap; }
-        .nav-btn i { font-size: 19px; flex: none; }
-        .nav-btn:hover { background: var(--bg-app); color: var(--ink); transform: translateX(2px); }
-        .nav-btn.active { background: var(--coffee-gradient); color: #fff; box-shadow: var(--shadow-sm); }
-        .sidebar-scrim { display: none; position: fixed; inset: 0; background: rgba(20,16,12,.45); z-index: 39; opacity: 0; transition: opacity .3s ease; }
-        .hamburger-btn { display: none; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border-soft); background: var(--bg-surface); align-items: center; justify-content: center; font-size: 18px; }
+    --font-display: 'Playfair Display', Georgia, serif;
+    --font-body: 'Inter', 'Segoe UI', sans-serif;
 
-        .topbar { height: 70px; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; border-bottom: 1px solid var(--border-soft); background: var(--bg-panel); position: sticky; top: 0; z-index: 30; }
-        .topbar-actions { display: flex; gap: 16px; align-items: center; }
-        .icon-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-app); border: 1px solid var(--border-soft); font-size: 20px; transition: 0.2s; }
-        .icon-btn:hover { background: var(--coffee-light); color: var(--coffee-main); transform: translateY(-1px); }
-        .icon-btn:active { transform: scale(.92); }
-        .user-profile { display: flex; align-items: center; gap: 10px; font-weight: 600; padding-left: 16px; border-left: 1px solid var(--border-soft); }
-        .role-chip { font-size: 10px; font-weight: 800; letter-spacing: .5px; padding: 3px 8px; border-radius: 20px; background: var(--coffee-light); color: var(--coffee-main); text-transform: uppercase; }
+    --shadow-sm: 0 8px 20px rgba(30, 80, 160, 0.1);
+    --shadow-md: 0 15px 40px rgba(30, 90, 200, 0.1);
+    --shadow-lux: 0 22px 48px rgba(30, 90, 200, 0.14);
+    
+    --radius: 22px; 
+    --radius-pill: 999px;
+    --sidebar-w: 264px; 
+    --sidebar-w-collapsed: 84px;
+    --ease-lux: cubic-bezier(0.22, 1, 0.36, 1);
+}
 
-        .content { padding: 32px; max-width: 1400px; margin: 0 auto; }
-        .header-row { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-        .title { font-family: var(--font-display); font-size: 28px; font-weight: 600; }
-        .subtitle { color: var(--ink-soft); font-size: 14px; margin-top: 4px; }
+body.dark-mode {
+    --bg-app: #071225; 
+    --bg-surface: #040b18; 
+    --bg-panel: #0b1d3a;
+    
+    --ink: #eaf3ff; 
+    --ink-soft: #a3b8d6; 
+    --ink-faint: #7f9bc0;
+    --border-soft: #16305a;
+    
+    --accent: #5cc8ff; 
+    --accent-light: #8fd6ff; 
+    --accent-glow: rgba(92, 200, 255, 0.35);
+    
+    --shadow-sm: 0 8px 20px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 15px 40px rgba(0, 0, 0, 0.5);
+    --shadow-lux: 0 30px 60px rgba(0, 0, 0, 0.55);
+    
+    --success-bg: rgba(31, 154, 115, 0.15);
+    --danger-bg: rgba(216, 88, 74, 0.15);
+}
 
-        .btn-primary { background: var(--coffee-gradient); color: #fff; padding: 10px 20px; border-radius: 8px; font-weight: 600; box-shadow: var(--shadow-sm); transition: transform 0.2s; display:inline-flex; align-items:center; gap:8px; }
-        .btn-primary:active { transform: scale(0.96); }
-        .btn-danger { background: var(--danger); color: #fff; padding: 10px 20px; border-radius: 8px; font-weight: 600; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
 
-        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 24px; }
-        .kpi-card { background: var(--bg-surface); padding: 24px; border-radius: var(--radius); border: 1px solid var(--border-soft); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 12px; }
-        .kpi-card i { font-size: 28px; color: var(--coffee-main); padding: 12px; background: var(--coffee-light); border-radius: 10px; width: fit-content; }
-        .kpi-val { font-family: var(--font-display); font-size: 32px; font-weight: 600; }
+body { 
+    font-family: var(--font-body); 
+    background: var(--bg-app); 
+    color: var(--ink); 
+    transition: background .3s ease, color .3s ease; 
+    background-image: radial-gradient(rgba(47, 128, 237, 0.07) 1px, transparent 1.2px);
+    background-size: 7px 7px;
+    background-attachment: fixed;
+}
+body.dark-mode {
+    background-image: radial-gradient(rgba(92, 200, 255, 0.04) 1px, transparent 1.2px);
+}
 
-        .panel { background: var(--bg-surface); border-radius: var(--radius); border: 1px solid var(--border-soft); padding: 24px; overflow-x: auto; margin-bottom:24px; }
-        .grid-2col { display:grid; grid-template-columns: 1.4fr 1fr; gap:24px; }
-        .chart-box { position:relative; height:260px; }
-        table { width: 100%; border-collapse: collapse; text-align: left; }
-        th { font-size: 12px; text-transform: uppercase; color: var(--ink-soft); padding-bottom: 16px; border-bottom: 1px solid var(--border-soft); }
-        td { padding: 16px 0; border-bottom: 1px solid var(--border-soft); font-weight: 500; }
-        tr:last-child td { border: none; }
-        .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
-        .badge.b-red { background: var(--danger-bg); color: var(--danger); }
-        .badge.b-green { background: var(--success-bg); color: var(--success); }
-        .badge.b-yellow { background: var(--warning-bg); color: var(--warning); }
-        .chip-btn { border:1px solid var(--border-soft); background:var(--bg-app); color:var(--coffee-main); font-size:12px; font-weight:700; padding:6px 12px; border-radius:8px; }
-        .chip-btn:hover { background:var(--coffee-main); color:#fff; }
-        .icon-x { width:30px; height:30px; border-radius:8px; border:1px solid var(--border-soft); display:inline-grid; place-items:center; color:var(--ink-soft); }
-        .icon-x:hover { background:var(--danger-bg); color:var(--danger); }
-        .form-inline { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-        .search-input { padding:10px 16px; border:1px solid var(--border-soft); border-radius:8px; background:var(--bg-app); color:var(--ink); min-width:220px; }
-        .info-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; }
-        .info-item span { display:block; color:var(--ink-soft); font-size:12px; text-transform:uppercase; margin-bottom:6px; }
-        .info-item b { font-size:18px; }
+button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
 
-        .pos-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
-        .pos-scanner { background: var(--bg-surface); padding: 24px; border-radius: var(--radius); border: 1px solid var(--border-soft); margin-bottom: 20px; display: flex; gap: 16px; }
-        .pos-scanner input { flex: 1; padding: 14px 20px; font-size: 16px; border: 2px solid var(--border-soft); border-radius: 8px; background: var(--bg-app); color: var(--ink); outline: none; transition: border 0.3s; }
-        .pos-scanner input:focus { border-color: var(--coffee-main); }
-        .pos-cart { background: var(--bg-surface); border-radius: var(--radius); border: 1px solid var(--border-soft); min-height: 400px; display: flex; flex-direction: column; }
-        .pos-summary { background: var(--coffee-main); color: #fff; border-radius: var(--radius); padding: 32px 24px; display: flex; flex-direction: column; gap: 20px; }
-        .summary-row { display: flex; justify-content: space-between; font-size: 16px; font-weight: 500; opacity: 0.9; }
-        .summary-total { font-family: var(--font-display); font-size: 42px; font-weight: 700; margin: 10px 0 20px; text-align: right; }
-        .pay-btn { background: #fff; color: var(--coffee-main); width: 100%; padding: 16px; border-radius: 8px; font-size: 18px; font-weight: 700; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: transform 0.2s; }
-        .pay-btn:active { transform: scale(0.97); }
-        .pay-select { width:100%; padding:12px; border-radius:8px; border:none; font-weight:600; color:var(--coffee-main); }
-        .pos-search-dropdown { position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--bg-surface); border:1px solid var(--border-soft); border-radius:10px; box-shadow:var(--shadow-md); max-height:280px; overflow-y:auto; z-index:50; display:none; }
-        .pos-search-dropdown.show { display:block; }
-        .pos-search-item { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--border-soft); }
-        .pos-search-item:last-child { border-bottom:none; }
-        .pos-search-item:hover { background:var(--bg-app); }
-        .pos-search-item.disabled { opacity:.5; cursor:not-allowed; }
-        .pos-search-item .psi-name { font-weight:700; font-size:13.5px; }
-        .pos-search-item .psi-meta { font-size:11.5px; color:var(--ink-soft); }
-        .app-layout.pos-mode .sidebar, .app-layout.pos-mode .sidebar-collapse-btn, .app-layout.pos-mode .hamburger-btn { display:none !important; }
-        .app-layout.pos-mode { grid-template-columns: 1fr !important; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes wave { 0%,60%,100% { transform: rotate(0deg); } 10% { transform: rotate(16deg); } 20% { transform: rotate(-8deg); } 30% { transform: rotate(16deg); } 40% { transform: rotate(-4deg); } }
+@keyframes pulseGlow { 0% { box-shadow: 0 0 0 0 var(--accent-glow); } 70% { box-shadow: 0 0 0 10px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 
-        .dark-mode .swal2-popup { background: var(--bg-surface); color: var(--ink); }
-        .dark-mode .swal2-input, .dark-mode .swal2-select, .dark-mode .swal2-textarea { background: var(--bg-app); color: var(--ink); border-color: var(--border-soft); }
+.view-section { display: none; animation: fadeIn .45s var(--ease-lux) forwards; }
+.view-section.active { display: block; }
+.wave { display: inline-block; transform-origin: 70% 70%; animation: wave 2.2s ease-in-out .3s infinite; } 
 
-        .cajero-row { display:flex; justify-content:space-between; align-items:center; padding:10px 4px; border-bottom:1px solid var(--border-soft); font-size:13.5px; }
-        .cajero-row:last-child { border-bottom:none; }
+.app-layout { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; transition: grid-template-columns .35s var(--ease-lux); }
+.app-layout.is-collapsed { grid-template-columns: var(--sidebar-w-collapsed) 1fr; }
 
-        @media (max-width: 980px){
-            .grid-2col{ grid-template-columns:1fr; } .pos-layout{ grid-template-columns:1fr; }
-            .app-layout { grid-template-columns: 1fr; }
-            .sidebar { position: fixed; left: 0; top: 0; width: 280px; height: 100vh; transform: translateX(-100%); transition: transform .35s var(--ease-expo); box-shadow: var(--shadow-md); }
-            .app-layout.mobile-open .sidebar { transform: translateX(0); }
-            .app-layout.mobile-open .sidebar-scrim { display: block; opacity: 1; }
-            .sidebar-collapse-btn { display: none; }
-            .hamburger-btn { display: inline-flex; }
-        }
+.sidebar { 
+    position: sticky; top: 0; height: 100vh; 
+    background: rgba(255, 255, 255, 0.92); 
+    border-right: 1px solid var(--border-soft); 
+    padding: 22px 16px; display: flex; flex-direction: column; gap: 26px; z-index: 40; 
+    backdrop-filter: blur(18px);
+    transition: padding .35s var(--ease-lux), background .3s ease; 
+}
+body.dark-mode .sidebar { background: rgba(2, 6, 14, 0.96); }
+
+.brand { display: flex; align-items: center; gap: 12px; font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--ink); padding: 0 8px; position: relative; letter-spacing: 1px; }
+.brand i { font-size: 28px; color: var(--accent); flex: none; }
+.brand-text { overflow: hidden; white-space: nowrap; transition: opacity .2s ease; }
+.brand-sub { font-size: 11px; letter-spacing: .6px; color: var(--ink-faint); font-weight: 700; text-transform: uppercase; margin-top: 1px; font-family: var(--font-body); }
+.app-layout.is-collapsed .brand-text, .app-layout.is-collapsed .nav-label, .app-layout.is-collapsed .nav-section-title { opacity: 0; width: 0; pointer-events: none; }
+
+.sidebar-collapse-btn { position: absolute; top: 26px; right: -13px; width: 26px; height: 26px; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border-soft); color: var(--accent); display: grid; place-items: center; box-shadow: var(--shadow-sm); z-index: 41; transition: transform .3s var(--ease-lux); }
+.app-layout.is-collapsed .sidebar-collapse-btn { transform: rotate(180deg); }
+
+.nav-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--ink-faint); font-weight: 700; padding: 4px 12px 6px; white-space: nowrap; }
+.nav-menu { display: flex; flex-direction: column; gap: 6px; overflow-y: auto;}
+
+.nav-btn { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: var(--radius-pill); font-weight: 600; font-size: 14px; color: var(--ink-soft); transition: background .25s var(--ease-lux), color .25s ease, transform .25s var(--ease-lux); white-space: nowrap; }
+.nav-btn i { font-size: 20px; flex: none; }
+.nav-btn:hover { color: var(--accent); transform: translateX(4px); }
+.nav-btn.active { position: relative; background: linear-gradient(135deg, #7fd6ff, #2f80ed); color: #fff; font-weight: 700; box-shadow: 0 10px 28px rgba(47,128,237,.35); }
+body.dark-mode .nav-btn.active { background: linear-gradient(135deg, #5cc8ff, #2f80ed); color: #04142e; }
+.nav-btn.active i { color: inherit; }
+
+.sidebar-scrim { display: none; position: fixed; inset: 0; background: rgba(7, 26, 50, 0.48); backdrop-filter: blur(3px); z-index: 39; opacity: 0; transition: opacity .3s ease; }
+
+.topbar { height: 76px; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; border-bottom: 1px solid rgba(124, 196, 255, 0.16); background: rgba(8, 18, 38, 0.96); backdrop-filter: blur(18px); position: sticky; top: 0; z-index: 30; box-shadow: 0 10px 28px rgba(7, 26, 50, 0.28); color: #f2f8ff; }
+body.dark-mode .topbar { background: rgba(2, 6, 14, 0.97); border-bottom-color: rgba(200, 225, 255, 0.1); }
+.topbar-title-block .eyebrow { font-size: 11.5px; color: rgba(255,255,255,0.72); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.topbar-title-block .title-main { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: 0.04em; }
+.hamburger-btn { display: none; width: 38px; height: 38px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); align-items: center; justify-content: center; font-size: 18px; color: white; }
+.topbar-actions { display: flex; gap: 12px; align-items: center; }
+.icon-btn { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); font-size: 20px; transition: transform .2s ease, background .2s ease, border-color .2s ease; }
+.icon-btn:hover { background: var(--accent); border-color: var(--accent-light); color: #fff; transform: translateY(-2px); }
+.user-profile { display: flex; align-items: center; gap: 10px; font-weight: 600; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.18); font-size: 14px; }
+.admin-chip { display: inline-flex; align-items: center; background: rgba(92, 200, 255, 0.16); color: var(--accent-light); border: 1px solid rgba(92, 200, 255, 0.35); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 10px; border-radius: var(--radius-pill); }
+
+.content { padding: 36px; max-width: 1440px; margin: 0 auto; }
+.header-row { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 32px; flex-wrap: wrap; gap: 16px; }
+
+.title { font-family: var(--font-display); font-size: clamp(28px, 3vw, 46px); font-weight: 700; display: flex; align-items: center; gap: 10px; line-height: 1.1; letter-spacing: -0.02em; color: var(--ink); }
+.subtitle { color: var(--ink-soft); font-size: 17px; margin-top: 8px; line-height: 1.6; }
+
+.btn-primary { background: linear-gradient(135deg, #7fd6ff, #2f80ed); color: #04142e; padding: 14px 24px; border-radius: var(--radius-pill); font-weight: 800; font-size: 15px; box-shadow: 0 10px 28px rgba(47,128,237,.35); display: inline-flex; align-items: center; gap: 8px; transition: transform .3s var(--ease-lux), box-shadow .3s ease; }
+.btn-primary:hover { box-shadow: 0 16px 36px rgba(47,128,237,.5); transform: translateY(-4px); }
+body.dark-mode .btn-primary { background: linear-gradient(135deg, #5cc8ff, #2f80ed); }
+
+.btn-danger { background: var(--danger); color: #fff; padding: 14px 24px; border-radius: var(--radius-pill); font-weight: 800; font-size: 15px; box-shadow: 0 10px 28px rgba(216,88,74,.35); display: inline-flex; align-items: center; gap: 8px; transition: transform .3s var(--ease-lux), box-shadow .3s ease; }
+.btn-danger:hover { box-shadow: 0 16px 36px rgba(216,88,74,.5); transform: translateY(-4px); }
+
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px; }
+.kpi-card { background: var(--bg-surface); padding: 28px; border-radius: var(--radius); border: 1.5px solid var(--border-soft); box-shadow: inset 0 0 0 4px var(--bg-surface), inset 0 0 0 5px var(--bg-panel), var(--shadow-sm); display: flex; flex-direction: column; gap: 14px; transition: .3s; }
+body.dark-mode .kpi-card { box-shadow: var(--shadow-sm); }
+.kpi-card:hover { transform: translateY(-7px); border-color: var(--accent-light); box-shadow: var(--shadow-lux); }
+.kpi-top { display: flex; align-items: flex-start; justify-content: space-between; }
+.kpi-card i.kpi-icon { font-size: 26px; color: var(--accent); padding: 14px; background: rgba(92, 200, 255, 0.18); border-radius: 16px; transition: transform 0.3s ease; }
+.kpi-card:hover i.kpi-icon { transform: scale(1.1) rotate(-6deg); animation: pulseGlow 1.5s infinite; }
+.kpi-tag { font-size: 11px; font-weight: 800; padding: 6px 12px; border-radius: var(--radius-pill); background: var(--success-bg); color: var(--success); text-transform: uppercase; letter-spacing: 0.06em; }
+.kpi-val { font-family: var(--font-display); font-size: 38px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
+.kpi-label { color: var(--ink-soft); font-size: 15px; font-weight: 600; }
+
+.panel { background: var(--bg-surface); border-radius: var(--radius); border: 1.5px solid var(--border-soft); padding: 30px; overflow-x: auto; margin-bottom: 24px; box-shadow: var(--shadow-md); transition: .3s; }
+.panel:hover { border-color: var(--accent-light); }
+.panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.panel-title { font-family: var(--font-display); font-size: 24px; font-weight: 700; color: var(--ink); }
+.panel-sub { font-size: 14px; color: var(--ink-faint); margin-top: 6px; }
+
+.grid-2col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; }
+.chart-box { position: relative; height: 260px; }
+
+table { width: 100%; border-collapse: collapse; text-align: left; }
+th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); padding: 16px 14px; border-bottom: 1px solid var(--border-soft); font-weight: 800; text-align: left;}
+td { padding: 18px 14px; border-bottom: 1px solid var(--border-soft); font-weight: 500; vertical-align: middle; font-size: 15px; color: var(--ink); }
+tbody tr { transition: background 0.25s ease, transform 0.2s ease; }
+tbody tr:hover { background: var(--bg-panel); transform: scale(1.01); border-radius: 12px; }
+
+.badge { padding: 6px 14px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+.badge.b-red { background: var(--danger-bg); color: var(--danger); }
+.badge.b-green { background: var(--success-bg); color: var(--success); }
+.badge.b-yellow { background: var(--warning-bg); color: var(--warning); }
+
+.chip-btn { border: 1.5px solid var(--border-soft); background: var(--bg-surface); color: var(--ink-soft); font-size: 13px; font-weight: 700; padding: 10px 18px; border-radius: var(--radius-pill); transition: .25s ease; cursor: pointer;}
+.chip-btn:hover, .chip-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+
+.icon-x { width: 36px; height: 36px; border-radius: 12px; border: 1px solid transparent; display: inline-grid; place-items: center; color: var(--danger); font-size: 20px; transition: .2s ease; }
+.icon-x:hover { background: var(--danger-bg); transform: scale(1.1); }
+.row-actions { display: flex; gap: 10px; align-items: center; }
+
+.form-inline { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.search-input, .select-input { padding: 14px 20px; border: 1.5px solid var(--border-soft); border-radius: var(--radius-pill); background: var(--bg-surface); color: var(--ink); min-width: 240px; font-family: var(--font-body); font-size: 15px; font-weight: 500; transition: .3s ease; }
+.search-input:focus, .select-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-glow); }
+body.dark-mode .search-input:focus, body.dark-mode .select-input:focus { box-shadow: 0 0 0 4px rgba(92, 200, 255, 0.15); }
+
+.info-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; }
+.info-item span { display:block; color:var(--ink-soft); font-size:12px; text-transform:uppercase; margin-bottom:6px; font-weight: 700; letter-spacing: 0.04em;}
+.info-item b { font-size:18px; color:var(--ink); }
+
+.swal-preview-img { max-width: 150px; max-height: 150px; border-radius: 16px; border: 1.5px solid var(--border-soft); object-fit: cover; }
+.swal2-popup { background: var(--bg-surface) !important; color: var(--ink) !important; border-radius: 28px !important; box-shadow: var(--shadow-lux) !important; font-family: var(--font-body) !important; border: 1.5px solid var(--border-soft) !important; }
+.swal2-title { font-family: var(--font-display) !important; color: var(--ink) !important; }
+.swal2-input, .swal2-select, .swal2-textarea, .swal2-file { background: var(--bg-surface) !important; color: var(--ink) !important; border: 1.5px solid var(--border-soft) !important; border-radius: 16px !important; font-family: var(--font-body) !important; }
+.swal2-input:focus, .swal2-select:focus, .swal2-textarea:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 4px var(--accent-glow) !important; }
+
+.prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 32px 28px; }
+.prod-card { background: var(--bg-surface); border: 1.5px solid var(--border-soft); border-radius: 26px; overflow: hidden; display: flex; flex-direction: column; padding: 12px; box-shadow: var(--shadow-sm); transition: .3s var(--ease-lux); position: relative; }
+.prod-card:hover { box-shadow: var(--shadow-lux); transform: translateY(-7px); border-color: var(--accent-light); }
+.prod-card-img-wrap { width: 100%; aspect-ratio: 1 / 1; border-radius: 18px; background: linear-gradient(135deg, #dcecff, #a9c8ee); overflow: hidden; position: relative; }
+body.dark-mode .prod-card-img-wrap { background: linear-gradient(135deg, #17315e, #0c1c3a); }
+.prod-card-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s var(--ease-lux); }
+.prod-card:hover .prod-card-img { transform: scale(1.08); }
+.prod-card-body { padding: 20px 14px 14px; flex: 1; display: flex; flex-direction: column; }
+.prod-meta { font-size: 11px; color: var(--accent); display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; }
+.prod-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; line-height: 1.3; color: var(--ink); margin-bottom: 18px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 46px; }
+.prod-price-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; margin-top: auto; }
+.prod-price { font-size: 26px; font-family: var(--font-display); font-weight: 700; color: var(--accent); letter-spacing: -0.01em; }
+.tarjeta__stock { font-size: 12px; font-weight: 800; background: var(--success-bg); padding: 6px 14px; border-radius: var(--radius-pill); color: var(--success); }
+.tarjeta__stock.stock-none { color: var(--danger); background: var(--danger-bg); }
+.tarjeta__stock.stock-low { color: var(--warning); background: var(--warning-bg); }
+.prod-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border-top: 1px dashed var(--border-soft); padding-top: 16px; }
+.btn-card { padding: 12px; border-radius: var(--radius-pill); font-size: 13.5px; font-weight: 800; text-align: center; border: 1.5px solid var(--border-soft); background: transparent; color: var(--ink-soft); transition: .3s var(--ease-lux); display: flex; align-items: center; justify-content: center; gap: 8px;}
+.btn-card:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.btn-card-del:hover { background: var(--danger-bg); color: var(--danger); border-color: transparent; }
+.btn-card-full { grid-column: span 2; background: linear-gradient(135deg, #7fd6ff, #2f80ed); color: #04142e; border-color: transparent; box-shadow: 0 8px 20px rgba(47,128,237,.35); }
+.btn-card-full:hover { background: linear-gradient(135deg, #5cc8ff, #1f6bd6); color: #fff; box-shadow: 0 12px 30px rgba(47,128,237,.5); }
+body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f80ed); }
+
+/* ESTILOS PUNTO DE VENTA ADAPTADOS */
+.pos-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+.pos-scanner { background: var(--bg-surface); padding: 24px; border-radius: var(--radius); border: 1.5px solid var(--border-soft); margin-bottom: 20px; display: flex; gap: 16px; }
+.pos-scanner input { flex: 1; padding: 14px 20px; font-size: 16px; border: 2px solid var(--border-soft); border-radius: 8px; background: var(--bg-app); color: var(--ink); outline: none; transition: border 0.3s; }
+.pos-scanner input:focus { border-color: var(--accent); }
+.pos-cart { background: var(--bg-surface); border-radius: var(--radius); border: 1.5px solid var(--border-soft); min-height: 400px; display: flex; flex-direction: column; }
+.pos-summary { background: linear-gradient(135deg, #2f80ed, #0d2548); color: #fff; border-radius: var(--radius); padding: 32px 24px; display: flex; flex-direction: column; gap: 20px; box-shadow: var(--shadow-md); }
+.summary-row { display: flex; justify-content: space-between; font-size: 16px; font-weight: 500; opacity: 0.9; }
+.summary-total { font-family: var(--font-display); font-size: 42px; font-weight: 700; margin: 10px 0 20px; text-align: right; }
+.pay-btn { background: #fff; color: var(--accent); width: 100%; padding: 16px; border-radius: var(--radius-pill); font-size: 18px; font-weight: 800; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: transform 0.2s; display: flex; justify-content: center; gap: 10px;}
+.pay-btn:active { transform: scale(0.97); }
+.pay-select { width:100%; padding:12px; border-radius:8px; border:none; font-weight:600; color:var(--accent); }
+.pos-search-dropdown { position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--bg-surface); border:1.5px solid var(--border-soft); border-radius:10px; box-shadow:var(--shadow-md); max-height:280px; overflow-y:auto; z-index:50; display:none; }
+.pos-search-dropdown.show { display:block; }
+.pos-search-item { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--border-soft); }
+.pos-search-item:last-child { border-bottom:none; }
+.pos-search-item:hover { background:var(--bg-app); }
+.pos-search-item.disabled { opacity:.5; cursor:not-allowed; }
+.pos-search-item .psi-name { font-weight:700; font-size:13.5px; }
+.pos-search-item .psi-meta { font-size:11.5px; color:var(--ink-soft); }
+.app-layout.pos-mode .sidebar, .app-layout.pos-mode .sidebar-collapse-btn, .app-layout.pos-mode .hamburger-btn { display:none !important; }
+.app-layout.pos-mode .user-profile { display: none !important; }
+.app-layout.pos-mode { grid-template-columns: 1fr !important; }
+.cajero-row { display:flex; justify-content:space-between; align-items:center; padding:10px 4px; border-bottom:1px solid var(--border-soft); font-size:13.5px; }
+.cajero-row:last-child { border-bottom:none; }
+
+@media (max-width: 1180px) { .grid-2col { grid-template-columns: 1fr; } }
+@media (max-width: 980px) {
+    .pos-layout { grid-template-columns: 1fr; }
+    .app-layout { grid-template-columns: 1fr; }
+    .sidebar { position: fixed; left: 0; top: 0; width: 280px; height: 100vh; transform: translateX(-100%); transition: transform .4s var(--ease-lux); box-shadow: 0 10px 40px rgba(7, 26, 50, 0.45); border-right: none; }
+    .app-layout.mobile-open .sidebar { transform: translateX(0); }
+    .app-layout.mobile-open .sidebar-scrim { display: block; opacity: 1; pointer-events: auto; }
+    .sidebar-collapse-btn { display: none; }
+    .hamburger-btn { display: inline-flex; }
+}
     </style>
 </head>
 <body>
@@ -707,15 +944,14 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
             <div class="nav-section-title" data-i18n="nav_section_panel">Panel</div>
             <button class="nav-btn active" data-target="view-dash"><i class="ph ph-squares-four"></i><span class="nav-label" data-i18n="nav_dash">Panel Principal</span></button>
             <div class="nav-section-title" data-i18n="nav_section_gestion">Gestión</div>
-            <button class="nav-btn" data-target="view-sucursal"><i class="ph ph-storefront"></i><span class="nav-label" data-i18n="nav_sucursal">Mi Sucursal</span></button>
             <button class="nav-btn" data-target="view-inventario"><i class="ph ph-package"></i><span class="nav-label" data-i18n="nav_inventario">Inventario</span></button>
-            <button class="nav-btn" data-target="view-productos"><i class="ph ph-tag"></i><span class="nav-label" data-i18n="nav_productos">Productos</span></button>
             <button class="nav-btn" data-target="view-cajas"><i class="ph ph-desktop"></i><span class="nav-label" data-i18n="nav_cajas">Cajas</span></button>
             <button class="nav-btn" data-target="view-ventas"><i class="ph ph-chart-line-up"></i><span class="nav-label" data-i18n="nav_ventas">Ventas</span></button>
             <button class="nav-btn" data-target="view-cortes"><i class="ph ph-calculator"></i><span class="nav-label" data-i18n="nav_cortes">Cortes de Caja</span></button>
             <div class="nav-section-title" data-i18n="nav_section_caja">Caja</div>
             <button class="nav-btn" id="btnIrPOS"><i class="ph ph-monitor"></i><span class="nav-label" data-i18n="nav_pos">Punto de Venta</span></button>
             <div class="nav-section-title" data-i18n="nav_section_nav">Navegación</div>
+            <a class="nav-btn" href="../../componentes/catalogo.php"><i class="ph ph-storefront"></i><span class="nav-label" data-i18n="nav_catalogo">Ir al Catálogo</span></a>
             <a class="nav-btn" href="home.php"><i class="ph ph-house"></i><span class="nav-label" data-i18n="nav_home">Volver a Home</span></a>
             <a class="nav-btn" href="cerrarSesion.php" style="color:var(--danger)"><i class="ph ph-sign-out"></i><span class="nav-label" data-i18n="nav_logout">Cerrar sesión</span></a>
         </nav>
@@ -726,15 +962,18 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
         <header class="topbar">
             <div style="display:flex; align-items:center; gap:14px;">
                 <button class="hamburger-btn" id="btnMobileMenu"><i class="ph ph-list"></i></button>
-                <b id="branchName">📍 <span data-i18n="branch_prefix">Sucursal</span>: <?= htmlspecialchars($nombreSucursal) ?></b>
+                <div class="topbar-title-block">
+                    <div class="eyebrow" data-i18n="branch_prefix">Sucursal</div>
+                    <div class="title-main" id="branchName"><?= htmlspecialchars($nombreSucursal) ?></div>
+                </div>
             </div>
             <div class="topbar-actions">
                 <button class="icon-btn" id="btnLang" title="Switch language / Cambiar idioma"><i class="ph ph-translate"></i></button>
                 <button class="icon-btn" id="btnTheme" title="Modo Oscuro"><i class="ph ph-moon"></i></button>
                 <div class="user-profile">
-                    <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--coffee-main)"></i>
+                    <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--accent)"></i>
                     <span><?= htmlspecialchars($nombreGerente) ?></span>
-                    <span class="role-chip" data-i18n="role_chip">Gerente</span>
+                    <span class="admin-chip" data-i18n="role_chip">Gerente</span>
                 </div>
             </div>
         </header>
@@ -742,57 +981,80 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
         <div class="content">
 
             <!-- PANEL PRINCIPAL -->
-            <section id="view-dash" class="view-section active">
-                <div class="header-row"><div><h1 class="title" data-i18n="dash_title">Resumen de Operaciones</h1><p class="subtitle" data-i18n="dash_sub">Métricas en tiempo real de tu sucursal.</p></div></div>
-                <div class="kpi-grid">
-                    <div class="kpi-card"><i class="ph-fill ph-money"></i><span style="color:var(--ink-soft); font-weight:600;" data-i18n="kpi_ingresos">Ingresos Hoy</span><div class="kpi-val" id="kpiIngresos">$0.00</div></div>
-                    <div class="kpi-card"><i class="ph-fill ph-warning-circle" style="color:var(--danger)"></i><span style="color:var(--ink-soft); font-weight:600;" data-i18n="kpi_bajo">Stock Bajo</span><div class="kpi-val" id="kpiBajo" style="color:var(--danger)">0</div></div>
-                    <div class="kpi-card"><i class="ph-fill ph-desktop"></i><span style="color:var(--ink-soft); font-weight:600;" data-i18n="kpi_cajas">Cajas Activas</span><div class="kpi-val" id="kpiCajas">0</div></div>
-                    <div class="kpi-card"><i class="ph-fill ph-package"></i><span style="color:var(--ink-soft); font-weight:600;" data-i18n="kpi_productos">Productos Asignados</span><div class="kpi-val" id="kpiProductos">0</div></div>
-                </div>
-                <div class="grid-2col">
-                    <div class="panel"><h3 style="margin-bottom:16px;" data-i18n="chart_ventas">Ventas (7 días)</h3><div class="chart-box"><canvas id="salesChart"></canvas></div></div>
-                    <div class="panel"><h3 data-i18n="alertas_title">Alertas de Inventario Bajo</h3><table style="margin-top:16px;" id="tblAlertas"><tr><th data-i18n="th_producto">Producto</th><th data-i18n="th_existencia">Existencia</th><th data-i18n="th_estado">Estado</th></tr></table></div>
-                </div>
-            </section>
+<section id="view-dash" class="view-section active">
+    <div class="header-row"><div><h1 class="title" data-i18n="dash_title">Resumen de Operaciones <span class="wave">👋</span></h1><p class="subtitle" data-i18n="dash_sub">Métricas en tiempo real de tu sucursal.</p></div></div>
+    
+    <div class="panel" style="margin-bottom: 24px;">
+        <div class="panel-head"><div><h2 class="panel-title" data-i18n="misuc_title">Mi Sucursal</h2><p class="panel-sub" data-i18n="misuc_sub">Información general de tu punto de venta.</p></div></div>
+        <div class="info-grid" id="infoSucursal" data-i18n="cargando">Cargando...</div>
+    </div>
 
-            <!-- MI SUCURSAL -->
-            <section id="view-sucursal" class="view-section">
-                <div class="header-row"><div><h1 class="title" data-i18n="misuc_title">Mi Sucursal</h1><p class="subtitle" data-i18n="misuc_sub">Información general de tu punto de venta.</p></div></div>
-                <div class="panel"><div class="info-grid" id="infoSucursal" data-i18n="cargando">Cargando...</div></div>
-            </section>
+    <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-money kpi-icon"></i></div><div class="kpi-val" id="kpiIngresos">$0.00</div><div class="kpi-label" data-i18n="kpi_ingresos">Ingresos Hoy</div></div>
+        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-warning-circle kpi-icon" style="color:var(--danger); background:var(--danger-bg);"></i></div><div class="kpi-val" id="kpiBajo" style="color:var(--danger)">0</div><div class="kpi-label" data-i18n="kpi_bajo">Stock Bajo</div></div>
+        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-desktop kpi-icon"></i></div><div class="kpi-val" id="kpiCajas">0</div><div class="kpi-label" data-i18n="kpi_cajas">Cajas Activas</div></div>
+        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-package kpi-icon"></i></div><div class="kpi-val" id="kpiProductos">0</div><div class="kpi-label" data-i18n="kpi_productos">Productos Asignados</div></div>
+    </div>
+
+    <div class="grid-2col">
+        <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="chart_ventas">Ventas (7 días)</h2></div></div><div class="chart-box"><canvas id="salesChart"></canvas></div></div>
+        <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="alertas_title">Alertas de Inventario Bajo</h2></div></div><table style="margin-top:16px;" id="tblAlertas"><tr><th data-i18n="th_producto">Producto</th><th data-i18n="th_existencia">Existencia</th><th data-i18n="th_estado">Estado</th></tr></table></div>
+    </div>
+</section>
 
             <!-- INVENTARIO -->
             <section id="view-inventario" class="view-section">
                 <div class="header-row">
-                    <div><h1 class="title" data-i18n="inv_title">Inventario</h1><p class="subtitle" data-i18n="inv_sub">Consulta y actualiza existencias de tu sucursal.</p></div>
-                    <button class="btn-primary" id="btnAjustarStock"><i class="ph ph-plus"></i> <span data-i18n="btn_actualizar_existencias">Actualizar Existencias</span></button>
-                </div>
-                <div class="panel">
-                    <div class="form-inline" style="margin-bottom:16px;">
-                        <input class="search-input" id="invSearch" data-i18n-placeholder="placeholder_buscar_producto" placeholder="Buscar producto o código...">
-                        <label style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:14px;"><input type="checkbox" id="invSoloBajo"> <span data-i18n="solo_bajo_stock">Solo bajo stock</span></label>
+                    <div>
+                        <h1 class="title"><i class="ph ph-package"></i> <span data-i18n="inv_title">Inventario y Productos</span></h1>
+                        <p class="subtitle" data-i18n="inv_sub">Gestiona productos, existencias y controla tu catálogo en la sucursal.</p>
                     </div>
-                    <table><thead><tr><th data-i18n="th_producto">Producto</th><th data-i18n="th_codigo">Código</th><th data-i18n="th_existencia">Existencia</th><th data-i18n="th_precio">Precio</th><th data-i18n="th_nivel">Nivel</th></tr></thead><tbody id="tblInventario"></tbody></table>
+                    <div class="form-inline">
+                        <button class="btn-primary" id="btnNuevoProducto"><i class="ph ph-plus"></i> <span data-i18n="btn_nuevo_producto">Nuevo Producto</span></button>
+                    </div>
                 </div>
-            </section>
-
-            <!-- PRODUCTOS -->
-            <section id="view-productos" class="view-section">
-                <div class="header-row">
-                    <div><h1 class="title" data-i18n="prod_title">Productos</h1><p class="subtitle" data-i18n="prod_sub">Registra, consulta y modifica productos de tu sucursal.</p></div>
-                    <button class="btn-primary" id="btnNuevoProducto"><i class="ph ph-plus"></i> <span data-i18n="btn_nuevo_producto">Nuevo Producto</span></button>
-                </div>
-                <div class="panel">
-                    <div class="form-inline" style="margin-bottom:16px;"><input class="search-input" id="prodSearch" data-i18n-placeholder="placeholder_buscar_producto" placeholder="Buscar producto o código..."></div>
-                    <table><thead><tr><th data-i18n="th_codigo">Código</th><th data-i18n="th_producto">Producto</th><th data-i18n="th_categoria">Categoría</th><th data-i18n="th_precio">Precio</th><th data-i18n="th_stock">Stock</th><th data-i18n="th_estado">Estado</th><th></th></tr></thead><tbody id="tblProductos"></tbody></table>
+                
+                <div class="panel" style="background: transparent; border: none; padding: 0; box-shadow: none;">
+                    <div class="form-inline" style="margin-bottom:24px; background: var(--bg-surface); padding: 20px; border-radius: var(--radius); border: 1px solid rgba(11, 37, 69, 0.06); box-shadow: var(--shadow-sm); justify-content: space-between;">
+                        <div class="form-inline" style="flex:1; gap:12px;">
+                            <input class="search-input" id="invSearch" data-i18n-placeholder="placeholder_buscar_producto" placeholder="Buscar por nombre o código..." style="flex:1; min-width: 200px;">
+                            <select class="select-input" id="invCategory"><option value="" data-i18n="todas_categorias">Todas las categorías</option></select>
+                            <select class="select-input" id="invStock">
+                                <option value="" data-i18n="cualquier_stock">Cualquier nivel de stock</option>
+                                <option value="bajo" data-i18n="stock_bajo">Stock Bajo</option>
+                                <option value="agotado" data-i18n="stock_agotado">Agotados</option>
+                            </select>
+                        </div>
+                        <div class="form-inline" style="gap: 8px;">
+                            <button class="chip-btn active" id="btnViewVisual"><i class="ph ph-grid-four"></i> Visual</button>
+                            <button class="chip-btn" id="btnViewTech"><i class="ph ph-list"></i> Técnico</button>
+                        </div>
+                    </div>
+                    
+                    <div id="invVisualView" class="prod-grid"></div>
+                    
+                    <div id="invTechView" class="panel" style="display:none;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-i18n="th_producto">Producto</th>
+                                    <th data-i18n="th_codigo">Código</th>
+                                    <th data-i18n="th_existencia">Existencia</th>
+                                    <th data-i18n="th_precio">Precio</th>
+                                    <th data-i18n="th_nivel">Nivel</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="tblInventario"></tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 
             <!-- CAJAS -->
             <section id="view-cajas" class="view-section">
                 <div class="header-row">
-                    <div><h1 class="title" data-i18n="caj_title">Cajas</h1><p class="subtitle" data-i18n="caj_sub">Registra cajas y cajeros de tu sucursal.</p></div>
+                    <div><h1 class="title"><i class="ph ph-desktop"></i> <span data-i18n="caj_title">Cajas</span></h1><p class="subtitle" data-i18n="caj_sub">Registra cajas y cajeros de tu sucursal.</p></div>
                     <button class="btn-primary" id="btnNuevaCaja"><i class="ph ph-plus"></i> <span data-i18n="btn_nueva_caja">Nueva Caja</span></button>
                 </div>
                 <div class="panel"><table><thead><tr><th data-i18n="th_nombre">Nombre</th><th data-i18n="th_estado">Estado</th><th data-i18n="th_cajeros">Cajeros</th><th data-i18n="th_registrada">Registrada</th><th></th></tr></thead><tbody id="tblCajas"></tbody></table></div>
@@ -800,7 +1062,7 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
 
             <!-- VENTAS -->
             <section id="view-ventas" class="view-section">
-                <div class="header-row"><div><h1 class="title" data-i18n="ven_title">Historial de Ventas</h1><p class="subtitle" data-i18n="ven_sub">Supervisa las ventas realizadas en tu sucursal.</p></div></div>
+                <div class="header-row"><div><h1 class="title"><i class="ph ph-chart-line-up"></i> <span data-i18n="ven_title">Historial de Ventas</span></h1><p class="subtitle" data-i18n="ven_sub">Supervisa las ventas realizadas en tu sucursal.</p></div></div>
                 <div class="panel">
                     <div class="form-inline" style="margin-bottom:16px;">
                         <input class="search-input" type="date" id="ventasDesde"><input class="search-input" type="date" id="ventasHasta">
@@ -811,54 +1073,75 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
 
             <!-- CORTES DE CAJA -->
             <section id="view-cortes" class="view-section">
-                <div class="header-row"><div><h1 class="title" data-i18n="cortes_title">Cortes de Caja</h1><p class="subtitle" data-i18n="cortes_sub">Consulta los cortes registrados por cada turno de caja.</p></div></div>
+                <div class="header-row"><div><h1 class="title"><i class="ph ph-calculator"></i> <span data-i18n="cortes_title">Cortes de Caja</span></h1><p class="subtitle" data-i18n="cortes_sub">Consulta los cortes registrados por cada turno de caja.</p></div></div>
                 <div class="panel" style="overflow-x:auto;">
-                    <table style="min-width:1100px;"><thead><tr>
-                        <th data-i18n="th_cajero">Cajero</th><th data-i18n="th_caja">Caja</th><th data-i18n="th_inicio">Inicio</th><th data-i18n="th_fin">Fin</th>
-                        <th data-i18n="th_inicial">Inicial</th><th data-i18n="th_vendido">Vendido</th><th data-i18n="th_esperado">Esperado</th><th data-i18n="th_contado">Contado</th>
-                        <th data-i18n="th_diferencia">Diferencia</th><th data-i18n="th_extra">H. Extra</th><th data-i18n="th_estado">Estado</th>
-                    </tr></thead><tbody id="tblCortes"></tbody></table>
+                    <table style="width:100%; min-width: 1000px;">
+                        <thead><tr>
+                            <th data-i18n="th_cajero">Cajero</th>
+                            <th data-i18n="th_caja">Caja</th>
+                            <th data-i18n="th_inicio">Inicio</th>
+                            <th data-i18n="th_fin">Fin</th>
+                            <th data-i18n="th_inicial">Inicial</th>
+                            <th data-i18n="th_vendido">Vendido</th>
+                            <th data-i18n="th_contado">Contado</th>
+                            <th data-i18n="th_diferencia">Diferencia</th>
+                            <th data-i18n="th_extra">H. Extra</th>
+                            <th data-i18n="th_estado">Estado</th>
+                        </tr></thead>
+                        <tbody id="tblCortes"></tbody>
+                    </table>
                 </div>
             </section>
 
-            <!-- PUNTO DE VENTA -->
-            <section id="view-pos" class="view-section">
-                <div class="header-row" style="margin-bottom: 12px;">
-                    <div><h1 class="title"><span data-i18n="pos_caja_label">Caja</span> <span id="lblCajaActual">-</span></h1><p class="subtitle"><span data-i18n="pos_cajero_label">Cajero:</span> <b id="lblCajeroActual">—</b> · <span id="lblTurnoTiempo" style="color:var(--ink-soft);"></span></p></div>
-                    <button class="btn-danger" id="btnCerrarCaja"><i class="ph ph-sign-out"></i> <span data-i18n="btn_cerrar_turno">Cerrar Turno</span></button>
-                </div>
-                <div class="pos-layout">
-                    <div>
-                        <div class="pos-scanner" style="position:relative;">
-                            <i class="ph ph-barcode" style="font-size:32px; color:var(--coffee-main); align-self:center;"></i>
-                            <div style="flex:1; position:relative;">
-                                <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
-                                <div id="posSearchResults" class="pos-search-dropdown"></div>
-                            </div>
-                        </div>
-                        <div class="pos-cart panel" style="padding:0;">
-                            <table style="width:100%; margin:0;">
-                                <thead><tr><th style="padding:16px 24px;" data-i18n="th_producto">Producto</th><th style="text-align:center;" data-i18n="th_cant">Cant.</th><th style="text-align:right;" data-i18n="th_precio">Precio</th><th style="text-align:right; padding-right:24px;" data-i18n="th_subtotal">Subtotal</th></tr></thead>
-                                <tbody id="cartBody"><tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--ink-soft);" data-i18n="carrito_vacio">El carrito está vacío. Escanea un producto.</td></tr></tbody>
-                            </table>
-                        </div>
+            <!-- PUNTO DE VENTA (ESTRUCTURA CORREGIDA DE 2 COLUMNAS) -->
+<section id="view-pos" class="view-section">
+    <div class="header-row" style="margin-bottom: 12px;">
+        <div><h1 class="title"><span data-i18n="pos_caja_label">Caja</span> <span id="lblCajaActual" style="color:var(--accent);">-</span></h1><p class="subtitle" style="margin-top:4px;"><span data-i18n="pos_cajero_label">Cajero:</span> <b id="lblCajeroActual" style="color:var(--ink);">—</b> <span style="margin:0 8px;">·</span> <span id="lblTurnoTiempo" style="color:var(--ink-soft); font-weight:600;"></span></p></div>
+        <button class="btn-danger" id="btnCerrarCaja"><i class="ph ph-sign-out"></i> <span data-i18n="btn_cerrar_turno">Cerrar Turno</span></button>
+    </div>
+    
+    <div class="pos-layout">
+        <!-- COLUMNA IZQUIERDA (Escáner + Carrito dentro del mismo contenedor) -->
+        <div>
+            <div class="pos-scanner" style="position:relative;">
+                <div style="display:flex; gap:16px; width:100%;">
+                    <i class="ph ph-barcode" style="font-size:32px; color:var(--accent); align-self:center;"></i>
+                    <div style="flex:1; position:relative;">
+                        <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
+                        <div id="posSearchResults" class="pos-search-dropdown"></div>
                     </div>
-                    <div class="pos-summary">
-                        <h2 data-i18n="resumen_venta">Resumen de Venta</h2>
-                        <select class="pay-select" id="posMetodo"><option value="" data-i18n="cargando_metodos">Cargando métodos de pago...</option></select>
-                        <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="fondo_inicial_label">Fondo inicial:</span><span id="posFondoInicial">$0.00</span></div>
-                        <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="efectivo_esperado_label">Efectivo esperado:</span><span id="posEfectivoEsperado">$0.00</span></div>
-                        <button class="chip-btn" id="btnRetiroManual" style="align-self:flex-start; background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.3); color:#fff;" type="button"><span data-i18n="btn_registrar_retiro">+ Registrar retiro</span></button>
-                        <div style="flex:1;"></div>
-                        <div class="summary-row"><span data-i18n="subtotal_label">Subtotal:</span><span id="posSubtotal">$0.00</span></div>
-                        <div class="summary-row"><span data-i18n="iva_label">IVA (16%):</span><span id="posIva">$0.00</span></div>
-                        <hr style="border:1px solid rgba(255,255,255,0.2)">
-                        <div style="font-size:18px; font-weight:600; opacity:0.9;" data-i18n="total_pagar">Total a Pagar</div>
-                        <div class="summary-total" id="posTotal">$0.00</div>
-                        <button class="pay-btn" id="btnCobrar"><i class="ph-fill ph-credit-card"></i> <span data-i18n="btn_procesar_cobro">PROCESAR COBRO</span></button>
-                    </div>
+                    <button type="button" class="chip-btn" id="btnStartCameraScan" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
+    <i class="ph ph-barcode" style="font-size:20px;"></i>
+    <span style="font-weight:700;">Escanear</span>
+</button>
                 </div>
-            </section>
+            </div>
+
+            <div class="pos-cart panel" style="padding:0;">
+                <table style="width:100%; margin:0;">
+                    <thead><tr><th style="padding:16px 24px;" data-i18n="th_producto">Producto</th><th style="text-align:center;" data-i18n="th_cant">Cant.</th><th style="text-align:right;" data-i18n="th_precio">Precio</th><th style="text-align:right; padding-right:24px;" data-i18n="th_subtotal">Subtotal</th></tr></thead>
+                    <tbody id="cartBody"><tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--ink-faint); font-weight:600;" data-i18n="carrito_vacio">El carrito está vacío. Escanea un producto.</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- COLUMNA DERECHA (Resumen de venta) -->
+        <div class="pos-summary">
+            <h2 data-i18n="resumen_venta" style="font-family:var(--font-display); font-size:24px;">Resumen de Venta</h2>
+            <select class="pay-select" id="posMetodo"><option value="" data-i18n="cargando_metodos">Cargando métodos de pago...</option></select>
+            <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="fondo_inicial_label">Fondo inicial:</span><span id="posFondoInicial">$0.00</span></div>
+            <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="efectivo_esperado_label">Efectivo esperado:</span><span id="posEfectivoEsperado">$0.00</span></div>
+            <button class="chip-btn" id="btnRetiroManual" style="align-self:flex-start; background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.3); color:#fff;" type="button"><span data-i18n="btn_registrar_retiro">+ Registrar retiro</span></button>
+            <div style="flex:1;"></div>
+            <div class="summary-row"><span data-i18n="subtotal_label">Subtotal:</span><span id="posSubtotal">$0.00</span></div>
+            <div class="summary-row"><span data-i18n="iva_label">IVA (16%):</span><span id="posIva">$0.00</span></div>
+            <hr style="border:1px solid rgba(255,255,255,0.2)">
+            <div style="font-size:18px; font-weight:600; opacity:0.9;" data-i18n="total_pagar">Total a Pagar</div>
+            <div class="summary-total" id="posTotal">$0.00</div>
+            <button class="pay-btn" id="btnCobrar"><i class="ph-fill ph-credit-card"></i> <span data-i18n="btn_procesar_cobro">PROCESAR COBRO</span></button>
+        </div>
+    </div>
+</section>
 
         </div>
     </main>
@@ -868,9 +1151,9 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
 const endpoint = 'dashboard_gerente.php';
 const $ = s => document.querySelector(s);
 const escapeHtml = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-const money = v => '$' + Number(v || 0).toFixed(2);
+const money = v => '$' + Number(v || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-const notify = (msg, icon='success') => Swal.fire({ toast:true, position:'top-end', icon, title: msg, showConfirmButton:false, timer:2500 });
+const notify = (msg, icon='success') => Swal.fire({ toast:true, position:'top-end', icon, title: msg, showConfirmButton:false, timer:2500, background: 'var(--bg-surface)', color: 'var(--ink)' });
 
 async function request(actionStr, options = {}) {
     const r = await fetch(`${endpoint}?action=${actionStr}`, options);
@@ -902,19 +1185,16 @@ const I18N = {
     es: {
         brand_sub: 'Gerencia de Sucursal', role_chip: 'Gerente', branch_prefix: 'Sucursal',
         nav_section_panel: 'Panel', nav_section_gestion: 'Gestión', nav_section_caja: 'Caja', nav_section_nav: 'Navegación',
-        nav_dash: 'Panel Principal', nav_sucursal: 'Mi Sucursal', nav_inventario: 'Inventario', nav_productos: 'Productos',
-        nav_cajas: 'Cajas', nav_ventas: 'Ventas', nav_pos: 'Punto de Venta', nav_home: 'Volver a Home', nav_logout: 'Cerrar sesión',
-        topbar_dash: 'Panel Principal', topbar_sucursal: 'Mi Sucursal', topbar_inventario: 'Inventario', topbar_productos: 'Productos',
-        topbar_cajas: 'Cajas', topbar_ventas: 'Ventas', topbar_pos: 'Punto de Venta',
+        nav_dash: 'Panel Principal', nav_inventario: 'Inventario', 
+        nav_cajas: 'Cajas', nav_ventas: 'Ventas', nav_pos: 'Punto de Venta', nav_catalogo: 'Ir al Catálogo', nav_home: 'Volver a Home', nav_logout: 'Cerrar sesión',
         dash_title: 'Resumen de Operaciones', dash_sub: 'Métricas en tiempo real de tu sucursal.',
         kpi_ingresos: 'Ingresos Hoy', kpi_bajo: 'Stock Bajo', kpi_cajas: 'Cajas Activas', kpi_productos: 'Productos Asignados',
         chart_ventas: 'Ventas (7 días)', alertas_title: 'Alertas de Inventario Bajo', sin_alertas: 'Sin alertas.',
         misuc_title: 'Mi Sucursal', misuc_sub: 'Información general de tu punto de venta.', cargando: 'Cargando...', no_encontrada: 'No encontrada.',
         lbl_nombre: 'Nombre', lbl_direccion: 'Dirección', lbl_telefono: 'Teléfono', lbl_contacto: 'Contacto', lbl_estado: 'Estado',
-        inv_title: 'Inventario', inv_sub: 'Consulta y actualiza existencias de tu sucursal.', btn_actualizar_existencias: 'Actualizar Existencias',
-        placeholder_buscar_producto: 'Buscar producto o código...', solo_bajo_stock: 'Solo bajo stock', sin_resultados: 'Sin resultados.',
-        prod_title: 'Productos', prod_sub: 'Registra, consulta y modifica productos de tu sucursal.', btn_nuevo_producto: 'Nuevo Producto',
-        sin_productos: 'Sin productos registrados.',
+        inv_title: 'Inventario y Productos', inv_sub: 'Gestiona productos, existencias y controla tu catálogo en la sucursal.', btn_actualizar_existencias: 'Ajustar Stock',
+        placeholder_buscar_producto: 'Buscar por nombre o código...', solo_bajo_stock: 'Solo bajo stock', sin_resultados: 'Sin resultados.',
+        btn_nuevo_producto: 'Nuevo Producto', sin_productos: 'Sin productos registrados.',
         caj_title: 'Cajas', caj_sub: 'Registra cajas y cajeros de tu sucursal.', btn_nueva_caja: 'Nueva Caja', sin_cajas: 'Sin cajas registradas.',
         ven_title: 'Historial de Ventas', ven_sub: 'Supervisa las ventas realizadas en tu sucursal.', sin_ventas: 'Sin ventas en el rango.',
         pos_caja_label: 'Caja', pos_cajero_label: 'Cajero:', btn_cerrar_turno: 'Cerrar Turno',
@@ -924,31 +1204,31 @@ const I18N = {
         th_producto: 'Producto', th_codigo: 'Código', th_existencia: 'Existencia', th_precio: 'Precio', th_nivel: 'Nivel',
         th_categoria: 'Categoría', th_stock: 'Stock', th_estado: 'Estado', th_nombre: 'Nombre', th_cajeros: 'Cajeros', th_registrada: 'Registrada',
         th_folio: 'Folio', th_fecha: 'Fecha', th_personal: 'Personal', th_metodo: 'Método', th_total: 'Total', th_cant: 'Cant.', th_subtotal: 'Subtotal',
-        editar: 'Editar', eliminar: 'Eliminar', ver: 'Ver', ver_stock: 'Ver stock', guardar: 'Guardar', cancelar: 'Cancelar', registrar: 'Registrar',
-        cajeros_btn: 'Cajeros', mas_cajero_btn: '+ Cajero',
+        editar: 'Editar', eliminar: 'Eliminar', si_eliminar: 'Sí, eliminar', ver: 'Ver', guardar: 'Guardar', cancelar: 'Cancelar', registrar: 'Registrar',
+        cajeros_btn: 'Cajeros', mas_cajero_btn: '+ Cajero', th_cajero: 'Cajero',
         nav_cortes: 'Cortes de Caja', cortes_title: 'Cortes de Caja', cortes_sub: 'Consulta los cortes registrados por cada turno de caja.',
         th_caja: 'Caja', th_inicio: 'Inicio', th_fin: 'Fin', th_inicial: 'Inicial', th_vendido: 'Vendido', th_esperado: 'Esperado',
         th_contado: 'Contado', th_diferencia: 'Diferencia', th_extra: 'H. Extra', sin_cortes: 'Aún no hay cortes registrados.',
         si: 'Sí', no: 'No', abierto: 'Abierto',
         pos_scan_placeholder: 'Escanea, o escribe nombre/código...', fondo_inicial_label: 'Fondo inicial:', efectivo_esperado_label: 'Efectivo esperado:',
-        btn_registrar_retiro: '+ Registrar retiro', agotado_label: 'Agotado'
+        btn_registrar_retiro: '+ Registrar retiro', agotado_label: 'Agotado',
+        modal_prod_new: 'Nuevo Producto', modal_prod_edit: 'Editar Producto', img_url: 'Imagen del Producto (URL)', desc_lbl: 'Descripción', asign_suc: 'Stock Inicial y Mínimo',
+        todas_categorias: 'Todas las categorías', cualquier_stock: 'Cualquier nivel de stock', stock_bajo: 'Stock Bajo', stock_agotado: 'Agotados',
+        title_eliminar_prod: '¿Eliminar producto?', desc_eliminar_prod: 'Solo procederá si el stock global es 0.'
     },
     en: {
         brand_sub: 'Branch Management', role_chip: 'Manager', branch_prefix: 'Branch',
         nav_section_panel: 'Overview', nav_section_gestion: 'Management', nav_section_caja: 'Register', nav_section_nav: 'Navigation',
-        nav_dash: 'Dashboard', nav_sucursal: 'My Branch', nav_inventario: 'Inventory', nav_productos: 'Products',
-        nav_cajas: 'Registers', nav_ventas: 'Sales', nav_pos: 'Point of Sale', nav_home: 'Back to Home', nav_logout: 'Log out',
-        topbar_dash: 'Dashboard', topbar_sucursal: 'My Branch', topbar_inventario: 'Inventory', topbar_productos: 'Products',
-        topbar_cajas: 'Registers', topbar_ventas: 'Sales', topbar_pos: 'Point of Sale',
+        nav_dash: 'Dashboard', nav_inventario: 'Inventory', 
+        nav_cajas: 'Registers', nav_ventas: 'Sales', nav_pos: 'Point of Sale', nav_catalogo: 'Go to Catalog', nav_home: 'Back to Home', nav_logout: 'Log out',
         dash_title: 'Operations Overview', dash_sub: 'Real-time metrics for your branch.',
         kpi_ingresos: 'Revenue Today', kpi_bajo: 'Low Stock', kpi_cajas: 'Active Registers', kpi_productos: 'Assigned Products',
         chart_ventas: 'Sales (7 days)', alertas_title: 'Low Inventory Alerts', sin_alertas: 'No alerts.',
         misuc_title: 'My Branch', misuc_sub: 'General information about your store.', cargando: 'Loading...', no_encontrada: 'Not found.',
         lbl_nombre: 'Name', lbl_direccion: 'Address', lbl_telefono: 'Phone', lbl_contacto: 'Contact', lbl_estado: 'Status',
-        inv_title: 'Inventory', inv_sub: 'Check and update your branch stock.', btn_actualizar_existencias: 'Update Stock',
-        placeholder_buscar_producto: 'Search product or code...', solo_bajo_stock: 'Low stock only', sin_resultados: 'No results.',
-        prod_title: 'Products', prod_sub: 'Register, check and edit your branch products.', btn_nuevo_producto: 'New Product',
-        sin_productos: 'No products registered.',
+        inv_title: 'Inventory & Products', inv_sub: 'Manage products, stock and catalog in your branch.', btn_actualizar_existencias: 'Adjust Stock',
+        placeholder_buscar_producto: 'Search by name or code...', solo_bajo_stock: 'Low stock only', sin_resultados: 'No results.',
+        btn_nuevo_producto: 'New Product', sin_productos: 'No products registered.',
         caj_title: 'Registers', caj_sub: 'Register cash registers and cashiers for your branch.', btn_nueva_caja: 'New Register', sin_cajas: 'No registers yet.',
         ven_title: 'Sales History', ven_sub: 'Monitor the sales made at your branch.', sin_ventas: 'No sales in range.',
         pos_caja_label: 'Register', pos_cajero_label: 'Cashier:', btn_cerrar_turno: 'Close Shift',
@@ -958,14 +1238,17 @@ const I18N = {
         th_producto: 'Product', th_codigo: 'Code', th_existencia: 'Stock', th_precio: 'Price', th_nivel: 'Level',
         th_categoria: 'Category', th_stock: 'Stock', th_estado: 'Status', th_nombre: 'Name', th_cajeros: 'Cashiers', th_registrada: 'Registered',
         th_folio: 'ID', th_fecha: 'Date', th_personal: 'Staff', th_metodo: 'Method', th_total: 'Total', th_cant: 'Qty', th_subtotal: 'Subtotal',
-        editar: 'Edit', eliminar: 'Delete', ver: 'View', ver_stock: 'View stock', guardar: 'Save', cancelar: 'Cancel', registrar: 'Register',
-        cajeros_btn: 'Cashiers', mas_cajero_btn: '+ Cashier',
+        editar: 'Edit', eliminar: 'Delete', si_eliminar: 'Yes, delete', ver: 'View', guardar: 'Save', cancelar: 'Cancel', registrar: 'Register',
+        cajeros_btn: 'Cashiers', mas_cajero_btn: '+ Cashier', th_cajero: 'Cashier',
         nav_cortes: 'Cash Closings', cortes_title: 'Cash Closings', cortes_sub: 'Check the closings recorded for each cash shift.',
         th_caja: 'Register', th_inicio: 'Start', th_fin: 'End', th_inicial: 'Initial', th_vendido: 'Sold', th_esperado: 'Expected',
         th_contado: 'Counted', th_diferencia: 'Difference', th_extra: 'Overtime', sin_cortes: 'No closings recorded yet.',
         si: 'Yes', no: 'No', abierto: 'Open',
         pos_scan_placeholder: 'Scan, or type name/code...', fondo_inicial_label: 'Initial fund:', efectivo_esperado_label: 'Expected cash:',
-        btn_registrar_retiro: '+ Register withdrawal', agotado_label: 'Out of stock'
+        btn_registrar_retiro: '+ Register withdrawal', agotado_label: 'Out of stock',
+        modal_prod_new: 'New Product', modal_prod_edit: 'Edit Product', img_url: 'Product Image (URL)', desc_lbl: 'Description', asign_suc: 'Initial and Minimum Stock',
+        todas_categorias: 'All categories', cualquier_stock: 'Any stock level', stock_bajo: 'Low Stock', stock_agotado: 'Out of stock',
+        title_eliminar_prod: 'Delete product?', desc_eliminar_prod: 'Will only proceed if global stock is 0.'
     }
 };
 let currentLang = localStorage.getItem('kion-gerente-lang') || 'es';
@@ -980,7 +1263,6 @@ btnLang.addEventListener('click', () => {
     currentLang = currentLang === 'es' ? 'en' : 'es';
     localStorage.setItem('kion-gerente-lang', currentLang);
     applyLanguage();
-    // Recargar vista activa para traducir contenido generado dinámicamente
     const activeView = document.querySelector('.view-section.active');
     if (activeView) switchView(activeView.id);
 });
@@ -997,16 +1279,14 @@ function switchView(targetId) {
     if (btn) btn.classList.add('active');
     appLayout.classList.remove('mobile-open');
     if (targetId === 'view-dash') loadDashboard();
-    if (targetId === 'view-sucursal') loadSucursal();
     if (targetId === 'view-inventario') loadInventario();
-    if (targetId === 'view-productos') loadProductos();
     if (targetId === 'view-cajas') loadCajas();
     if (targetId === 'view-ventas') loadVentas();
     if (targetId === 'view-cortes') loadCortes();
 }
 navButtons.forEach(btn => btn.addEventListener('click', e => switchView(e.currentTarget.dataset.target)));
 
-// -------- DASHBOARD --------
+// -------- DASHBOARD Y MI SUCURSAL --------
 let salesChartInstance = null;
 async function loadDashboard() {
     try {
@@ -1017,72 +1297,163 @@ async function loadDashboard() {
         $('#kpiProductos').innerText = data.totalProd;
 
         if (salesChartInstance) salesChartInstance.destroy();
+        Chart.defaults.font.family = '"Inter", sans-serif';
         salesChartInstance = new Chart($('#salesChart'), {
             type: 'line',
-            data: { labels: data.labels, datasets: [{ label: 'Ingresos', data: data.ingresos, borderColor:'#6c4630', backgroundColor:'rgba(147,101,69,.14)', fill:true, tension:.38, pointRadius:3 }] },
-            options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+            data: { labels: data.labels, datasets: [{ label: 'Ingresos', data: data.ingresos, borderColor:'#2f80ed', backgroundColor:'rgba(47, 128, 237, 0.12)', fill:true, tension:.38, pointRadius:4, pointBackgroundColor:'#2f80ed', pointBorderColor:'#fff', pointBorderWidth:2 }] },
+            options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, grid:{color:'rgba(13, 37, 72, 0.05)'}}, x:{grid:{display:false}}} }
         });
 
         const { data: inv } = await request('get_inventario&solo_bajo=1');
         const rows = inv.slice(0, 6).map(x => {
             const cls = x.nivel === 'AGOTADO' ? 'b-red' : 'b-yellow';
-            return `<tr><td>${escapeHtml(x.producto)}</td><td><b>${x.existencias}</b> / ${x.stock_minimo}</td><td><span class="badge ${cls}">${escapeHtml(x.nivel)}</span></td></tr>`;
+            return `<tr><td><b>${escapeHtml(x.producto)}</b></td><td><b style="font-size:16px;">${x.existencias}</b> <span style="font-size:12px;color:var(--ink-faint)">/ ${x.stock_minimo}</span></td><td><span class="badge ${cls}">${escapeHtml(x.nivel)}</span></td></tr>`;
         }).join('');
-        $('#tblAlertas').innerHTML = `<tr><th>${t('th_producto')}</th><th>${t('th_existencia')}</th><th>${t('th_estado')}</th></tr>` + (rows || `<tr><td colspan="3" style="text-align:center;color:var(--ink-soft);padding:20px">${t('sin_alertas')}</td></tr>`);
-    } catch (e) { notify(e.message, 'error'); }
-}
+        $('#tblAlertas').innerHTML = `<tr><th>${t('th_producto')}</th><th>${t('th_existencia')}</th><th>${t('th_estado')}</th></tr>` + (rows || `<tr><td colspan="3" style="text-align:center;color:var(--ink-faint);padding:20px;font-weight:600;">${t('sin_alertas')}</td></tr>`);
+    } catch (e) {}
 
-// -------- MI SUCURSAL --------
-async function loadSucursal() {
     try {
-        const { data } = await request('get_sucursal');
-        if (!data) { $('#infoSucursal').innerHTML = t('no_encontrada'); return; }
+        const { data: suc } = await request('get_sucursal');
+        if (!suc) { $('#infoSucursal').innerHTML = t('no_encontrada'); return; }
         $('#infoSucursal').innerHTML = `
-            <div class="info-item"><span>${t('lbl_nombre')}</span><b>${escapeHtml(data.nombre)}</b></div>
-            <div class="info-item"><span>${t('lbl_direccion')}</span><b>${escapeHtml(data.direccion || '-')}</b></div>
-            <div class="info-item"><span>${t('lbl_telefono')}</span><b>${escapeHtml(data.telefono || '-')}</b></div>
-            <div class="info-item"><span>${t('lbl_contacto')}</span><b>${escapeHtml(data.contacto || '-')}</b></div>
-            <div class="info-item"><span>${t('lbl_estado')}</span><span class="badge ${data.estado==='ACTIVA'?'b-green':'b-red'}">${escapeHtml(data.estado)}</span></div>`;
-    } catch (e) { notify(e.message, 'error'); }
+            <div class="info-item"><span>${t('lbl_nombre')}</span><b>${escapeHtml(suc.nombre)}</b></div>
+            <div class="info-item"><span>${t('lbl_direccion')}</span><b>${escapeHtml(suc.direccion || '-')}</b></div>
+            <div class="info-item"><span>${t('lbl_telefono')}</span><b>${escapeHtml(suc.telefono || '-')}</b></div>
+            <div class="info-item"><span>${t('lbl_contacto')}</span><b>${escapeHtml(suc.contacto || '-')}</b></div>`;
+    } catch (e) { $('#infoSucursal').innerHTML = t('no_encontrada'); }
 }
 
-// -------- INVENTARIO --------
+// -------- INVENTARIO (Visual y Técnico) --------
+let currentInventarioView = localStorage.getItem('kion-gerente-inv-view') || 'visual';
+
+function setInventarioView(view) {
+    currentInventarioView = view;
+    localStorage.setItem('kion-gerente-inv-view', view);
+    if (view === 'visual') {
+        $('#invVisualView').style.display = 'grid';
+        $('#invTechView').style.display = 'none';
+        $('#btnViewVisual').classList.add('active');
+        $('#btnViewTech').classList.remove('active');
+    } else {
+        $('#invVisualView').style.display = 'none';
+        $('#invTechView').style.display = 'block';
+        $('#btnViewTech').classList.add('active');
+        $('#btnViewVisual').classList.remove('active');
+    }
+}
+$('#btnViewVisual').addEventListener('click', () => setInventarioView('visual'));
+$('#btnViewTech').addEventListener('click', () => setInventarioView('tech'));
+setInventarioView(currentInventarioView);
+
+async function loadFiltrosInv() {
+    try {
+        const cats = await request('get_categorias');
+        $('#invCategory').innerHTML = `<option value="">${t('todas_categorias')}</option>` + cats.data.map(c => `<option value="${c.id_categoria}">${escapeHtml(c.nombre)}</option>`).join('');
+    } catch(e) {}
+}
+
 async function loadInventario() {
     try {
-        const q = $('#invSearch').value, solo = $('#invSoloBajo').checked ? '1' : '0';
-        const { data } = await request(`get_inventario&q=${encodeURIComponent(q)}&solo_bajo=${solo}`);
+        const q = $('#invSearch').value;
+        const cat = $('#invCategory').value;
+        const stock = $('#invStock').value;
+        const { data } = await request(`get_inventario&q=${encodeURIComponent(q)}&categoria=${cat}&stock=${stock}`);
+        
+        // Vista Técnica (Tabla)
         $('#tblInventario').innerHTML = data.length ? data.map(x => {
             const cls = x.nivel === 'OK' ? 'b-green' : (x.nivel === 'BAJO' ? 'b-yellow' : 'b-red');
-            return `<tr><td><b>${escapeHtml(x.producto)}</b></td><td>${escapeHtml(x.codigo)}</td><td><b>${x.existencias}</b> / mín. ${x.stock_minimo}</td><td>${money(x.precio)}</td><td><span class="badge ${cls}">${escapeHtml(x.nivel)}</span></td></tr>`;
-        }).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--ink-soft);padding:30px">${t('sin_resultados')}</td></tr>`;
+            return `<tr>
+                <td>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <img src="${x.imagen_url ? escapeHtml(x.imagen_url) : 'https://placehold.co/100x100?text=Sin+Imagen'}" style="width:40px; height:40px; border-radius:10px; object-fit:cover; border:1px solid var(--border-soft);">
+                        <b>${escapeHtml(x.producto)}</b>
+                    </div>
+                </td>
+                <td><span style="font-weight:600; color:var(--ink-soft);">${escapeHtml(x.codigo)}</span></td>
+                <td><b style="font-size:16px;">${x.existencias}</b> <span style="font-size:12px; color:var(--ink-faint);">/ mín. ${x.stock_minimo}</span></td>
+                <td><b style="color:var(--accent);">${money(x.precio)}</b></td>
+                <td><span class="badge ${cls}">${escapeHtml(x.nivel)}</span></td>
+                <td class="row-actions">
+                    <button class="chip-btn" data-edit-prod='${JSON.stringify(x).replace(/'/g,'&#39;')}' title="${t('editar')}"><i class="ph ph-pencil-simple"></i></button>
+                    <button class="chip-btn" data-ajustar-stock="${x.id_producto}" title="Ajustar Stock"><i class="ph ph-arrows-left-right"></i></button>
+                    <button class="icon-x" data-del-prod="${x.id_producto}" title="${t('eliminar')}"><i class="ph ph-trash"></i></button>
+                </td>
+            </tr>`;
+        }).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--ink-faint);padding:30px;font-weight:600;">${t('sin_resultados')}</td></tr>`;
+
+        // Vista Visual (Grid)
+        $('#invVisualView').innerHTML = data.length ? data.map(x => {
+            const statusCls = x.estado === 'ACTIVO' ? 'color: var(--success);' : 'color: var(--danger);';
+            const img = x.imagen_url ? escapeHtml(x.imagen_url) : 'https://placehold.co/300x300?text=Sin+Imagen';
+            
+            let stockClass = 'stock-ok';
+            let stockLabel = `Stock: ${x.existencias}`;
+            
+            if (x.existencias <= 0) { 
+                stockClass = 'stock-none'; 
+                stockLabel = 'AGOTADO';
+            } else if (x.existencias <= x.stock_minimo) { 
+                stockClass = 'stock-low'; 
+                stockLabel = `Bajo: ${x.existencias}`;
+            }
+
+            return `
+            <div class="prod-card">
+                <div class="prod-card-img-wrap">
+                    <img src="${img}" class="prod-card-img" alt="${escapeHtml(x.producto)}">
+                </div>
+                <div class="prod-card-body">
+                    <div class="prod-meta"><span>${escapeHtml(x.categoria)}</span> <span style="${statusCls}">${escapeHtml(x.estado)}</span></div>
+                    <h3 class="prod-title" title="${escapeHtml(x.producto)}">${escapeHtml(x.producto)}</h3>
+                    <div style="font-size:12px; color:var(--ink-faint); margin-bottom:12px; font-weight:600;">Código: ${escapeHtml(x.codigo)}</div>
+                    
+                    <div class="prod-price-row">
+                        <div class="prod-price">${money(x.precio)}</div>
+                        <div class="tarjeta__stock ${stockClass}">${stockLabel}</div>
+                    </div>
+
+                    <div class="prod-actions">
+                        <button class="btn-card" data-edit-prod='${JSON.stringify(x).replace(/'/g,'&#39;')}'><i class="ph ph-pencil-simple"></i> ${t('editar')}</button>
+                        <button class="btn-card btn-card-del" data-del-prod="${x.id_producto}"><i class="ph ph-trash"></i> ${t('eliminar')}</button>
+                        <button class="btn-card btn-card-full" data-ajustar-stock="${x.id_producto}"><i class="ph ph-arrows-left-right"></i> Ajustar Stock</button>
+                    </div>
+                </div>
+            </div>`;
+        }).join('') : `<div style="grid-column: 1 / -1; text-align:center; padding: 40px; color:var(--ink-faint); font-weight:600; font-size:16px;">${t('sin_resultados')}</div>`;
+
     } catch (e) { notify(e.message, 'error'); }
 }
-$('#invSearch').addEventListener('input', loadInventario);
-$('#invSoloBajo').addEventListener('change', loadInventario);
+$('#invSearch').addEventListener('input', () => { clearTimeout(window.invTimer); window.invTimer = setTimeout(loadInventario, 300); });
+$('#invCategory').addEventListener('change', loadInventario);
+$('#invStock').addEventListener('change', loadInventario);
 
-$('#btnAjustarStock').addEventListener('click', async () => {
-    let productos = [];
-    try { productos = (await request('get_productos_simple')).data; } catch(e) { notify(e.message,'error'); return; }
-    const options = productos.map(p => `<option value="${p.id_producto}">${escapeHtml(p.nombre)} (${escapeHtml(p.codigo)})</option>`).join('');
+// Ajustar stock desde botón directo de la tarjeta/tabla
+document.addEventListener('click', e => {
+    const btnAjustar = e.target.closest('[data-ajustar-stock]');
+    if (btnAjustar) {
+        abrirModalAjuste(btnAjustar.dataset.ajustarStock, null);
+    }
+});
+
+async function abrirModalAjuste(id_producto) {
     const movLabels = currentLang === 'en'
-        ? { in:'Inbound (add)', out:'Outbound (subtract)', fix:'Fixed adjustment (replace)', prod:'Product:', tipo:'Movement type:', cant:'Quantity:' }
-        : { in:'Entrada (sumar)', out:'Salida (restar)', fix:'Ajuste fijo (reemplazar)', prod:'Producto:', tipo:'Tipo de movimiento:', cant:'Cantidad:' };
+        ? { title:'Adjust Stock', in:'Inbound (add)', out:'Outbound (subtract)', fix:'Fixed adjustment (replace)', tipo:'Movement type:', cant:'Quantity:' }
+        : { title:'Ajustar Existencias', in:'Entrada (sumar)', out:'Salida (restar)', fix:'Ajuste fijo (reemplazar)', tipo:'Tipo de movimiento:', cant:'Cantidad:' };
+    
     const { value: form } = await Swal.fire({
-        title: t('btn_actualizar_existencias'),
+        title: movLabels.title,
         html: `<div style="text-align:left;">
-            <label><b>${movLabels.prod}</b></label>
-            <select id="swal-prod" class="swal2-input" style="width:100%;margin:8px 0 16px;">${options}</select>
-            <label><b>${movLabels.tipo}</b></label>
-            <select id="swal-tipo" class="swal2-input" style="width:100%;margin:8px 0 16px;">
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${movLabels.tipo}</label>
+            <select id="swal-tipo" class="swal2-select" style="width:100%;margin:0 0 16px;">
                 <option value="entrada">${movLabels.in}</option>
                 <option value="salida">${movLabels.out}</option>
                 <option value="reemplazo">${movLabels.fix}</option>
             </select>
-            <label><b>${movLabels.cant}</b></label>
-            <input id="swal-cant" type="number" min="0" class="swal2-input" style="width:100%;margin-top:8px;" value="1">
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${movLabels.cant}</label>
+            <input id="swal-cant" type="number" min="0" class="swal2-input" style="width:100%;margin:0;" value="1">
         </div>`,
-        confirmButtonText: t('guardar'), confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar'),
-        preConfirm: () => ({ id_producto: document.getElementById('swal-prod').value, tipo: document.getElementById('swal-tipo').value, cantidad: document.getElementById('swal-cant').value })
+        confirmButtonText: t('guardar'), confirmButtonColor: 'var(--accent)', showCancelButton: true, cancelButtonText: t('cancelar'),
+        preConfirm: () => ({ id_producto: id_producto, tipo: document.getElementById('swal-tipo').value, cantidad: document.getElementById('swal-cant').value })
     });
     if (!form) return;
     try {
@@ -1090,54 +1461,85 @@ $('#btnAjustarStock').addEventListener('click', async () => {
         const d = await request('ajustar_stock', { method:'POST', body: fd });
         notify(d.msg); loadInventario(); loadDashboard();
     } catch (e) { notify(e.message, 'error'); }
-});
-
-// -------- PRODUCTOS --------
-async function loadProductos() {
-    try {
-        const q = $('#prodSearch').value;
-        const { data } = await request(`get_productos&q=${encodeURIComponent(q)}`);
-        $('#tblProductos').innerHTML = data.length ? data.map(x => `<tr>
-            <td><b>${escapeHtml(x.codigo)}</b></td><td>${escapeHtml(x.nombre)}</td><td>${escapeHtml(x.categoria)}</td>
-            <td>${money(x.precio)}</td><td>${x.existencias}</td>
-            <td><span class="badge ${x.estado==='ACTIVO'?'b-green':'b-red'}">${escapeHtml(x.estado)}</span></td>
-            <td><button class="chip-btn" data-edit-prod='${JSON.stringify(x).replace(/'/g,'&#39;')}'>${t('editar')}</button></td>
-        </tr>`).join('') : `<tr><td colspan="7" style="text-align:center;color:var(--ink-soft);padding:30px">${t('sin_productos')}</td></tr>`;
-    } catch (e) { notify(e.message, 'error'); }
 }
-$('#prodSearch').addEventListener('input', loadProductos);
 
+// NUEVO/EDITAR/ELIMINAR PRODUCTO
 async function productoModal(record = null) {
     let categorias = [];
     try { categorias = (await request('get_categorias')).data; } catch(e) {}
     const catOptions = categorias.map(c => `<option value="${c.id_categoria}" ${record && +record.id_categoria===+c.id_categoria?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('');
     const editing = !!record;
+    
     const L = currentLang === 'en'
-        ? { titleNew:'New Product', titleEdit:'Edit Product', codigo:'Code *', nombre:'Name *', desc:'Description', cat:'Category', precio:'Base price *', minStock:'Minimum stock', initStock:'Initial stock', estado:'Status', required:'Code and name are required.' }
-        : { titleNew:'Nuevo Producto', titleEdit:'Editar Producto', codigo:'Código *', nombre:'Nombre *', desc:'Descripción', cat:'Categoría', precio:'Precio base *', minStock:'Stock mínimo', initStock:'Existencia inicial', estado:'Estado', required:'Código y nombre son obligatorios.' };
+        ? { titleNew:'New Product', titleEdit:'Edit Product', img:'Product Image (Upload or URL)', codigo:'Code *', nombre:'Name *', desc:'Description', cat:'Category', precio:'Base price *', minStock:'Minimum stock', initStock:'Initial stock', estado:'Status', required:'Code and name are required.' }
+        : { titleNew:'Nuevo Producto', titleEdit:'Editar Producto', img:'Imagen del Producto (Subir o URL)', codigo:'Código *', nombre:'Nombre *', desc:'Descripción', cat:'Categoría', precio:'Precio base *', minStock:'Stock mínimo', initStock:'Existencia inicial', estado:'Estado', required:'Código y nombre son obligatorios.' };
 
     const { value: form } = await Swal.fire({
         title: editing ? L.titleEdit : L.titleNew,
         html: `<div style="text-align:left;">
-            <label><b>${L.codigo}</b></label><input id="swal-codigo" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.codigo):''}">
-            <label><b>${L.nombre}</b></label><input id="swal-nombre" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.nombre):''}">
-            <label><b>${L.desc}</b></label><input id="swal-desc" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?escapeHtml(record.descripcion||''):''}">
-            <label><b>${L.cat}</b></label><select id="swal-cat" class="swal2-input" style="width:100%;margin:6px 0 12px;">${catOptions}</select>
-            <label><b>${L.precio}</b></label><input id="swal-precio" type="number" step="0.01" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${editing?record.precio:''}">
-            ${editing ? `<label><b>${L.minStock}</b></label><input id="swal-min" type="number" min="0" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="${record.stock_minimo}">`
-                      : `<label><b>${L.initStock}</b></label><input id="swal-exist" type="number" min="0" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="0">
-                         <label><b>${L.minStock}</b></label><input id="swal-min" type="number" min="0" class="swal2-input" style="width:100%;margin:6px 0 12px;" value="5">`}
-            ${editing ? `<label><b>${L.estado}</b></label><select id="swal-estado" class="swal2-input" style="width:100%;margin:6px 0;"><option ${record.estado==='ACTIVO'?'selected':''}>ACTIVO</option><option ${record.estado==='INACTIVO'?'selected':''}>INACTIVO</option></select>` : ''}
+            <div style="text-align:center; margin-bottom:18px;">
+                <img id="swal-preview" class="swal-preview-img" src="${editing && record.imagen_url ? escapeHtml(record.imagen_url) : 'https://placehold.co/150x150?text=Sin+Imagen'}" style="max-width:140px; max-height:140px; object-fit:cover; border-radius:18px; border:1.5px solid rgba(11, 37, 69, 0.22); box-shadow:var(--shadow-sm);">
+            </div>
+            
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.img}</label>
+            <input type="file" id="swal-file" accept="image/jpeg,image/png,image/webp,image/gif" class="swal2-file" style="width:100%; margin:0 0 10px; font-size:13px; border-radius:12px;">
+            <input id="swal-img" class="swal2-input" style="width:100%;margin:0 0 16px; font-size:13px;" value="${editing?escapeHtml(record.imagen_url||''):''}" placeholder="O pega un enlace (https://...)">
+            
+            <div style="display:flex; gap:12px; margin-bottom:16px;">
+                <div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.codigo}</label><input id="swal-codigo" class="swal2-input" style="width:100%;margin:0;" value="${editing?escapeHtml(record.codigo):''}"></div>
+                <div style="flex:2"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.nombre}</label><input id="swal-nombre" class="swal2-input" style="width:100%;margin:0;" value="${editing?escapeHtml(record.nombre):''}"></div>
+            </div>
+            
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.desc}</label>
+            <textarea id="swal-desc" class="swal2-textarea" style="width:100%;margin:0 0 16px; min-height:80px;">${editing?escapeHtml(record.descripcion||''):''}</textarea>
+            
+            <div style="display:flex; gap:12px; margin-bottom:16px;">
+                <div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.cat}</label><select id="swal-cat" class="swal2-select" style="width:100%;margin:0;">${catOptions}</select></div>
+                <div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.precio}</label><input id="swal-precio" type="number" step="0.01" class="swal2-input" style="width:100%;margin:0;" value="${editing?record.precio:''}"></div>
+            </div>
+
+            <div style="display:flex; gap:12px; margin-bottom:16px;">
+                ${editing 
+                    ? `<div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.minStock}</label><input id="swal-min" type="number" min="0" class="swal2-input" style="width:100%;margin:0;" value="${record.stock_minimo}"></div>
+                       <div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.estado}</label><select id="swal-estado" class="swal2-select" style="width:100%;margin:0;"><option ${record.estado==='ACTIVO'?'selected':''}>ACTIVO</option><option ${record.estado==='INACTIVO'?'selected':''}>INACTIVO</option></select></div>`
+                    : `<div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.initStock}</label><input id="swal-exist" type="number" min="0" class="swal2-input" style="width:100%;margin:0;" value="0"></div>
+                       <div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.minStock}</label><input id="swal-min" type="number" min="0" class="swal2-input" style="width:100%;margin:0;" value="5"></div>`
+                }
+            </div>
         </div>`,
-        confirmButtonText: t('guardar'), confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar'),
+        confirmButtonText: t('guardar'), confirmButtonColor: 'var(--accent)', showCancelButton: true, cancelButtonText: t('cancelar'), width: 580,
+        didOpen: () => {
+            const preview = document.getElementById('swal-preview');
+            const fileIn = document.getElementById('swal-file');
+            const urlIn = document.getElementById('swal-img');
+
+            fileIn.addEventListener('change', e => {
+                if (e.target.files && e.target.files[0]) {
+                    preview.src = URL.createObjectURL(e.target.files[0]);
+                }
+            });
+            urlIn.addEventListener('input', e => {
+                const val = e.target.value.trim();
+                if (val) {
+                    preview.src = val;
+                } else if (fileIn.files && fileIn.files[0]) {
+                    preview.src = URL.createObjectURL(fileIn.files[0]);
+                } else {
+                    preview.src = 'https://placehold.co/150x150?text=Sin+Imagen';
+                }
+            });
+        },
         preConfirm: () => {
             const codigo = document.getElementById('swal-codigo').value.trim();
             const nombre = document.getElementById('swal-nombre').value.trim();
             if (!codigo || !nombre) { Swal.showValidationMessage(L.required); return false; }
+            const fileEl = document.getElementById('swal-file');
             const out = {
                 codigo, nombre, descripcion: document.getElementById('swal-desc').value,
                 id_categoria: document.getElementById('swal-cat').value, precio: document.getElementById('swal-precio').value,
-                stock_minimo: document.getElementById('swal-min').value
+                stock_minimo: document.getElementById('swal-min').value,
+                imagen_url: document.getElementById('swal-img').value.trim(),
+                imagen_archivo: (fileEl.files && fileEl.files[0]) ? fileEl.files[0] : null
             };
             if (editing) { out.id = record.id_producto; out.estado = document.getElementById('swal-estado').value; }
             else { out.existencias = document.getElementById('swal-exist').value; }
@@ -1146,15 +1548,35 @@ async function productoModal(record = null) {
     });
     if (!form) return;
     try {
-        const fd = new FormData(); Object.entries(form).forEach(([k,v]) => fd.append(k,v));
+        const fd = new FormData();
+        Object.entries(form).forEach(([k,v]) => {
+            if (k === 'imagen_archivo') {
+                if (v) fd.append('imagen_archivo', v);
+            } else if (v !== null && v !== undefined) {
+                fd.append(k, v);
+            }
+        });
         const d = await request(editing ? 'update_producto' : 'create_producto', { method:'POST', body: fd });
-        notify(d.msg); loadProductos(); loadInventario(); loadDashboard();
+        notify(d.msg); loadInventario(); loadDashboard();
     } catch (e) { notify(e.message, 'error'); }
 }
 $('#btnNuevoProducto').addEventListener('click', () => productoModal());
-document.addEventListener('click', e => {
+document.addEventListener('click', async e => {
     const editBtn = e.target.closest('[data-edit-prod]');
     if (editBtn) productoModal(JSON.parse(editBtn.dataset.editProd));
+    
+    const delBtn = e.target.closest('[data-del-prod]');
+    if (delBtn) {
+        const conf = await Swal.fire({ title:t('title_eliminar_prod'), text:t('desc_eliminar_prod'), icon:'warning', showCancelButton:true, confirmButtonColor:'var(--danger)', confirmButtonText:t('si_eliminar'), cancelButtonText:t('cancelar') });
+        if (!conf.isConfirmed) return;
+        try {
+            const fd = new FormData(); fd.append('id', delBtn.dataset.delProd);
+            const d = await request('delete_producto', { method:'POST', body:fd });
+            notify(d.msg); 
+            loadInventario(); 
+            loadDashboard();
+        } catch (err) { notify(err.message, 'error'); }
+    }
 });
 
 // -------- CAJAS --------
@@ -1162,22 +1584,22 @@ async function loadCajas() {
     try {
         const { data } = await request('get_cajas');
         $('#tblCajas').innerHTML = data.length ? data.map(x => `<tr>
-            <td><b>${escapeHtml(x.nombre)}</b></td>
+            <td><b style="color:var(--navy);font-weight:700;">${escapeHtml(x.nombre)}</b></td>
             <td><span class="badge ${x.estado==='ACTIVA'?'b-green':'b-red'}">${escapeHtml(x.estado)}</span></td>
             <td><button class="chip-btn" data-ver-cajeros="${x.id_caja}" data-caja-nombre="${escapeHtml(x.nombre)}">${t('cajeros_btn')} (${x.total_cajeros})</button></td>
             <td>${new Date(x.fecha_registro).toLocaleDateString(currentLang === 'en' ? 'en-US' : 'es-MX')}</td>
             <td class="row-actions">
                 <button class="chip-btn" data-add-cajero="${x.id_caja}" data-caja-nombre="${escapeHtml(x.nombre)}">${t('mas_cajero_btn')}</button>
-                <button class="icon-x" data-del-caja="${x.id_caja}">×</button>
+                <button class="icon-x" data-del-caja="${x.id_caja}"><i class="ph ph-trash"></i></button>
             </td>
-        </tr>`).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--ink-soft);padding:30px">${t('sin_cajas')}</td></tr>`;
+        </tr>`).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--ink-faint);padding:30px;font-weight:600;">${t('sin_cajas')}</td></tr>`;
     } catch (e) { notify(e.message, 'error'); }
 }
 $('#btnNuevaCaja').addEventListener('click', async () => {
     const L = currentLang === 'en' ? { title:'New Register', placeholder:'e.g. Main Register 01', required:'Name is required.' } : { title:'Nueva Caja', placeholder:'Ej. Caja Principal 01', required:'El nombre es obligatorio.' };
     const { value: nombre } = await Swal.fire({
         title: L.title, input: 'text', inputPlaceholder: L.placeholder,
-        confirmButtonText: t('registrar'), confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar'),
+        confirmButtonText: t('registrar'), confirmButtonColor: 'var(--accent)', showCancelButton: true, cancelButtonText: t('cancelar'),
         inputValidator: v => !v && L.required
     });
     if (!nombre) return;
@@ -1196,10 +1618,12 @@ async function cajeroModal(idCaja, nombreCaja) {
     const { value: form } = await Swal.fire({
         title: L.title,
         html: `<div style="text-align:left;">
-            <label><b>${L.nombre}</b></label><input id="swal-cnom" class="swal2-input" style="width:100%;margin:6px 0 12px;">
-            <label><b>${L.pass}</b></label><input id="swal-cpass" type="password" class="swal2-input" style="width:100%;margin:6px 0;">
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.nombre}</label>
+            <input id="swal-cnom" class="swal2-input" style="width:100%;margin:0 0 16px;">
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.pass}</label>
+            <input id="swal-cpass" type="password" class="swal2-input" style="width:100%;margin:0;">
         </div>`,
-        confirmButtonText: t('registrar'), confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar'),
+        confirmButtonText: t('registrar'), confirmButtonColor: 'var(--accent)', showCancelButton: true, cancelButtonText: t('cancelar'),
         preConfirm: () => {
             const nombre = document.getElementById('swal-cnom').value.trim();
             const pass = document.getElementById('swal-cpass').value;
@@ -1219,11 +1643,11 @@ async function verCajerosModal(idCaja, nombreCaja) {
     const L = currentLang === 'en' ? { title:`Cashiers — ${nombreCaja}`, none:'No cashiers registered yet.', add:'+ New cashier' } : { title:`Cajeros — ${nombreCaja}`, none:'Aún no hay cajeros registrados.', add:'+ Nuevo cajero' };
     try {
         const { data } = await request(`get_cajeros_caja&id_caja=${idCaja}&solo_activos=0`);
-        const listHtml = data.length ? data.map(c => `<div class="cajero-row"><span>${escapeHtml(c.nombre)} <span class="badge ${c.estado==='ACTIVO'?'b-green':'b-red'}" style="margin-left:6px;">${escapeHtml(c.estado)}</span></span><button class="icon-x" data-del-cajero="${c.id_cajero}" data-caja-id="${idCaja}" data-caja-nombre="${escapeHtml(nombreCaja)}">×</button></div>`).join('') : `<p style="font-size:13px;color:var(--ink-soft);">${L.none}</p>`;
+        const listHtml = data.length ? data.map(c => `<div class="cajero-row"><span><b style="color:var(--navy);">${escapeHtml(c.nombre)}</b> <span class="badge ${c.estado==='ACTIVO'?'b-green':'b-red'}" style="margin-left:6px;">${escapeHtml(c.estado)}</span></span><button class="icon-x" data-del-cajero="${c.id_cajero}" data-caja-id="${idCaja}" data-caja-nombre="${escapeHtml(nombreCaja)}"><i class="ph ph-trash"></i></button></div>`).join('') : `<p style="font-size:13px;color:var(--ink-faint); font-weight:600;">${L.none}</p>`;
         const result = await Swal.fire({
             title: L.title,
             html: `<div style="text-align:left; max-height:300px; overflow-y:auto;">${listHtml}</div>`,
-            confirmButtonText: L.add, confirmButtonColor: 'var(--coffee-main)', showCancelButton: true, cancelButtonText: t('cancelar')
+            confirmButtonText: L.add, confirmButtonColor: 'var(--accent)', showCancelButton: true, cancelButtonText: t('cancelar')
         });
         if (result.isConfirmed) cajeroModal(idCaja, nombreCaja);
     } catch (e) { notify(e.message, 'error'); }
@@ -1265,11 +1689,11 @@ async function loadVentas() {
         const p = new URLSearchParams({ desde: $('#ventasDesde').value, hasta: $('#ventasHasta').value });
         const { data } = await request(`get_ventas&${p}`);
         $('#tblVentas').innerHTML = data.length ? data.map(x => `<tr>
-            <td>#${x.id_venta}</td><td>${new Date(x.fecha_hora).toLocaleString('es-MX')}</td><td>${escapeHtml(x.empleado)}</td>
-            <td>${escapeHtml(x.metodo_pago)}</td><td><b>${money(x.total)}</b></td>
+            <td><b style="color:var(--navy);font-weight:700;">#${x.id_venta}</b></td><td>${new Date(x.fecha_hora).toLocaleString('es-MX')}</td><td>${escapeHtml(x.empleado)}</td>
+            <td><span style="font-weight:600;color:var(--ink-soft);">${escapeHtml(x.metodo_pago)}</span></td><td><b style="font-size:16px;color:var(--accent);">${money(x.total)}</b></td>
             <td><span class="badge b-green">${escapeHtml(x.estado)}</span></td>
             <td><button class="chip-btn" data-ver-venta="${x.id_venta}">${t('ver')}</button></td>
-        </tr>`).join('') : `<tr><td colspan="7" style="text-align:center;color:var(--ink-soft);padding:30px">${t('sin_ventas')}</td></tr>`;
+        </tr>`).join('') : `<tr><td colspan="7" style="text-align:center;color:var(--ink-faint);padding:30px;font-weight:600;">${t('sin_ventas')}</td></tr>`;
     } catch (e) { notify(e.message, 'error'); }
 }
 ['#ventasDesde','#ventasHasta'].forEach(s => $(s).addEventListener('change', loadVentas));
@@ -1281,7 +1705,7 @@ document.addEventListener('click', async e => {
         const Ld = currentLang === 'en' ? { title:'Sale Detail', noData:'No data.' } : { title:'Detalle Venta', noData:'Sin datos.' };
         Swal.fire({
             title: `${Ld.title} #${verBtn.dataset.verVenta}`,
-            html: data.length ? `<table style="width:100%;text-align:left;"><tr><th>${t('th_producto')}</th><th>${t('th_cant')}</th><th style="text-align:right">${t('th_subtotal')}</th></tr>${data.map(x=>`<tr><td>${escapeHtml(x.producto)}</td><td>${x.cantidad}</td><td style="text-align:right">${money(x.subtotal)}</td></tr>`).join('')}</table>` : Ld.noData
+            html: data.length ? `<table style="width:100%;text-align:left;font-size:14px;"><tr style="border-bottom:2px solid var(--border-soft);"><th style="padding-bottom:10px;">${t('th_producto')}</th><th style="padding-bottom:10px;">${t('th_cant')}</th><th style="text-align:right;padding-bottom:10px;">${t('th_subtotal')}</th></tr>${data.map(x=>`<tr><td style="padding:12px 0;">${escapeHtml(x.producto)}</td><td style="padding:12px 0;font-weight:700;">${x.cantidad}</td><td style="text-align:right;padding:12px 0;font-weight:700;color:var(--navy);">${money(x.subtotal)}</td></tr>`).join('')}</table>` : `<div style="padding:20px; font-weight:600; color:var(--ink-faint);">${Ld.noData}</div>`
         });
     } catch (e) { notify(e.message, 'error'); }
 });
@@ -1294,18 +1718,22 @@ async function loadCortes() {
             const abierto = x.estado === 'ABIERTO';
             const diffCls = abierto ? '' : (x.estado_corte === 'EXACTO' ? 'b-green' : (x.estado_corte === 'SOBRANTE' ? 'b-yellow' : 'b-red'));
             return `<tr>
-                <td><b>${escapeHtml(x.cajero_nombre)}</b></td><td>${escapeHtml(x.caja_nombre)}</td>
+                <td><b style="color:var(--navy);">${escapeHtml(x.cajero_nombre)}</b></td>
+                <td><span style="font-weight:600;color:var(--ink-soft);">${escapeHtml(x.caja_nombre)}</span></td>
                 <td>${new Date(x.fecha_inicio).toLocaleString(currentLang === 'en' ? 'en-US' : 'es-MX')}</td>
                 <td>${x.fecha_fin ? new Date(x.fecha_fin).toLocaleString(currentLang === 'en' ? 'en-US' : 'es-MX') : `<span class="badge b-yellow">${t('abierto')}</span>`}</td>
-                <td>${money(x.dinero_inicial)}</td><td>${x.total_vendido !== null ? money(x.total_vendido) : '-'}</td>
-                <td>${x.dinero_esperado !== null ? money(x.dinero_esperado) : '-'}</td><td>${x.dinero_contado !== null ? money(x.dinero_contado) : '-'}</td>
+                <td>${money(x.dinero_inicial)}</td>
+                <td>${x.total_vendido !== null ? money(x.total_vendido) : '-'}</td>
+                <td>${x.dinero_contado !== null ? `<b style="color:var(--accent);">${money(x.dinero_contado)}</b>` : '-'}</td>
                 <td>${x.diferencia !== null ? `<span class="badge ${diffCls}">${money(x.diferencia)}</span>` : '-'}</td>
                 <td>${x.horas_extra == 1 ? t('si') : t('no')}</td>
                 <td><span class="badge ${abierto ? 'b-yellow' : 'b-green'}">${escapeHtml(x.estado)}</span></td>
             </tr>`;
-        }).join('') : `<tr><td colspan="11" style="text-align:center;color:var(--ink-soft);padding:30px">${t('sin_cortes')}</td></tr>`;
+        }).join('') : `<tr><td colspan="10" style="text-align:center;color:var(--ink-faint);padding:30px;font-weight:600;">${t('sin_cortes')}</td></tr>`;
     } catch (e) { notify(e.message, 'error'); }
 }
+
+// -------- FUNCIONALIDAD POS --------
 const btnIrPOS = $('#btnIrPOS'), btnCerrarCaja = $('#btnCerrarCaja');
 let cart = [], shiftOpen = false;
 let currentCajaId = null, currentCajeroId = null, currentTurnoId = null;
@@ -1366,7 +1794,7 @@ async function manejarTurno8h() {
     if (r.isConfirmed) {
         const Lp = currentLang === 'en' ? { title:'Authorize overtime', placeholder:'Manager password', confirmBtn:'Authorize', required:'Enter the manager password.' } : { title:'Autorizar horas extra', placeholder:'Contraseña del gerente', confirmBtn:'Autorizar', required:'Ingresa la contraseña del gerente.' };
         const pr = await Swal.fire({
-            title: Lp.title, input:'password', inputPlaceholder: Lp.placeholder, showCancelButton:true, confirmButtonText: Lp.confirmBtn, cancelButtonText:t('cancelar'), confirmButtonColor:'var(--coffee-main)',
+            title: Lp.title, input:'password', inputPlaceholder: Lp.placeholder, showCancelButton:true, confirmButtonText: Lp.confirmBtn, cancelButtonText:t('cancelar'), confirmButtonColor:'var(--accent)',
             inputValidator: v => !v && Lp.required,
             preConfirm: async (pass) => {
                 try { const fd = new FormData(); fd.append('id_turno', currentTurnoId); fd.append('password', pass); await request('autorizar_horas_extra', { method:'POST', body: fd }); return true; }
@@ -1396,7 +1824,7 @@ async function promptRetiro() {
         : { title:'Se sugiere un retiro de efectivo', text:'El efectivo en caja superó el doble del fondo inicial. Registra el monto a retirar (deja vacío para omitir por ahora).', confirmBtn:'Registrar retiro', later:'Ahora no', motivo:'Retiro por umbral' };
     const { value: monto } = await Swal.fire({
         title: L.title, html: `<p style="font-size:13px;text-align:left;">${L.text}</p>`, input:'number', inputAttributes:{ min:0, step:'0.01' },
-        confirmButtonText: L.confirmBtn, confirmButtonColor: 'var(--coffee-main)', showCancelButton:true, cancelButtonText: L.later
+        confirmButtonText: L.confirmBtn, confirmButtonColor: 'var(--accent)', showCancelButton:true, cancelButtonText: L.later
     });
     retiroPromptOpen = false;
     if (!monto || parseFloat(monto) <= 0) return;
@@ -1410,7 +1838,7 @@ $('#btnRetiroManual').addEventListener('click', async () => {
     const L = currentLang === 'en' ? { title:'Register cash withdrawal', placeholder:'Amount', confirmBtn:'Register', required:'Enter a valid amount.' } : { title:'Registrar retiro de efectivo', placeholder:'Monto', confirmBtn:'Registrar', required:'Ingresa un monto válido.' };
     const { value: monto } = await Swal.fire({
         title: L.title, input:'number', inputAttributes:{ min:0, step:'0.01' }, inputPlaceholder: L.placeholder,
-        confirmButtonText: L.confirmBtn, confirmButtonColor: 'var(--coffee-main)', showCancelButton:true, cancelButtonText: t('cancelar'),
+        confirmButtonText: L.confirmBtn, confirmButtonColor: 'var(--accent)', showCancelButton:true, cancelButtonText: t('cancelar'),
         inputValidator: v => (!v || parseFloat(v) <= 0) && L.required
     });
     if (!monto) return;
@@ -1435,10 +1863,10 @@ async function abrirFlujoCierre(obligatorio = false) {
             <div class="cajero-row"><span>${L.vendido}</span><b>${money(estado.total_vendido)}</b></div>
             <div class="cajero-row"><span>${L.retiros}</span><b>${money(estado.total_retiros)}</b></div>
             <div class="cajero-row"><span>${L.esperado}</span><b>${money(estado.dinero_esperado)}</b></div>
-            <label style="display:block;margin-top:14px;"><b>${L.contado}</b></label>
-            <input id="swal-contado" type="number" step="0.01" min="0" class="swal2-input" style="width:100%;margin:6px 0 12px;">
-            <label><b>${L.pass}</b></label>
-            <input id="swal-pass-cierre" type="password" class="swal2-input" style="width:100%;margin:6px 0;">
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin:14px 0 6px;">${L.contado}</label>
+            <input id="swal-contado" type="number" step="0.01" min="0" class="swal2-input" style="width:100%;margin:0 0 16px;">
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.pass}</label>
+            <input id="swal-pass-cierre" type="password" class="swal2-input" style="width:100%;margin:0;">
         </div>`,
         confirmButtonText: L.confirmar, confirmButtonColor: 'var(--danger)',
         showCancelButton: !obligatorio, cancelButtonText: t('cancelar'), allowOutsideClick: !obligatorio, allowEscapeKey: !obligatorio,
@@ -1460,7 +1888,8 @@ async function abrirFlujoCierre(obligatorio = false) {
     const diffIcon = r.estado_corte === 'FALTANTE' ? 'warning' : 'success';
     await Swal.fire({
         title: L.guardado, icon: diffIcon,
-        html: `<div style="text-align:left; font-size:13.5px;"><div class="cajero-row"><span>${L.diferencia}</span><b>${money(r.diferencia)} — ${diffLabel}</b></div></div>`
+        html: `<div style="text-align:left; font-size:13.5px;"><div class="cajero-row"><span>${L.diferencia}</span><b>${money(r.diferencia)} — ${diffLabel}</b></div></div>`,
+        background: 'var(--bg-surface)', color: 'var(--ink)'
     });
 
     detenerTemporizadorTurno();
@@ -1487,14 +1916,14 @@ btnIrPOS.addEventListener('click', async () => {
     const result = await Swal.fire({
         title: Lo.title,
         html: `<div style="text-align:left; font-size:14px;">
-            <label><b>${Lo.selCaja}</b></label>
-            <select id="swal-caja" class="swal2-input" style="width:100%; margin: 8px 0 16px;">${options}</select>
-            <label><b>${Lo.selCajero}</b></label>
-            <select id="swal-cajero" class="swal2-input" style="width:100%; margin: 8px 0 16px;" disabled><option value="">${Lo.selCajeroPlaceholder}</option></select>
-            <label><b>${Lo.pass}</b></label>
-            <input id="swal-pass-cajero" type="password" class="swal2-input" style="width:100%; margin: 8px 0 16px;" disabled>
-            <label><b>${Lo.fondo}</b></label>
-            <input id="swal-fondo-inicial" type="number" step="0.01" min="0" class="swal2-input" style="width:100%; margin: 8px 0;" value="0" disabled>
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${Lo.selCaja}</label>
+            <select id="swal-caja" class="swal2-select" style="width:100%; margin: 0 0 16px;">${options}</select>
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${Lo.selCajero}</label>
+            <select id="swal-cajero" class="swal2-select" style="width:100%; margin: 0 0 16px;" disabled><option value="">${Lo.selCajeroPlaceholder}</option></select>
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${Lo.pass}</label>
+            <input id="swal-pass-cajero" type="password" class="swal2-input" style="width:100%; margin: 0 0 16px;" disabled>
+            <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${Lo.fondo}</label>
+            <input id="swal-fondo-inicial" type="number" step="0.01" min="0" class="swal2-input" style="width:100%; margin: 0;" value="0" disabled>
         </div>`,
         confirmButtonText: Lo.confirmBtn, confirmButtonColor: 'var(--success)', showCancelButton: true, cancelButtonText: t('cancelar'),
         didOpen: () => {
@@ -1535,26 +1964,45 @@ btnIrPOS.addEventListener('click', async () => {
         $('#posMetodo').innerHTML = metodos.length ? metodos.map(m => `<option value="${m.id_metodo_pago}">${escapeHtml(m.nombre)}</option>`).join('') : '<option value="">-</option>';
     } catch (e) {}
 
-    Swal.fire({ icon:'success', title: result.value.reanudado ? Lo.resumed : Lo.opened, timer:1200, showConfirmButton:false });
+    Swal.fire({ icon:'success', title: result.value.reanudado ? Lo.resumed : Lo.opened, timer:1200, showConfirmButton:false, background: 'var(--bg-surface)', color: 'var(--ink)' });
     switchView('view-pos');
     $('#posBarcode').focus();
 });
 
 btnCerrarCaja.addEventListener('click', () => abrirFlujoCierre(false));
 
-// -------- BÚSQUEDA / ESCANEO DE PRODUCTOS --------
+// -------- BÚSQUEDA / ESCANEO DE PRODUCTOS (POS) --------
 const posBarcode = $('#posBarcode');
 const posSearchResults = $('#posSearchResults');
 let posSearchTimer = null;
 
 function addProductToCart(data) {
+    const maxStock = parseInt(data.existencias);
     const existing = cart.find(i => i.id_producto === data.id_producto);
-    if (existing) { existing.qty++; } else { cart.push({ id_producto: data.id_producto, nombre: data.nombre, precio: parseFloat(data.precio), qty: 1 }); }
+    
+    if (existing) { 
+        if (existing.qty + 1 > existing.maxStock) {
+            notify(`Stock insuficiente. Solo hay ${existing.maxStock} disponibles.`, 'warning');
+            return;
+        }
+        existing.qty++; 
+    } else { 
+        if (maxStock < 1) {
+            notify('Este producto está agotado.', 'error');
+            return;
+        }
+        cart.push({ 
+            id_producto: data.id_producto, 
+            nombre: data.nombre, 
+            precio: parseFloat(data.precio), 
+            qty: 1, 
+            maxStock: maxStock // Guardamos el stock máximo permitido
+        }); 
+    }
     updateCartUI();
 }
 function hideSearchResults() { posSearchResults.classList.remove('show'); posSearchResults.innerHTML = ''; }
 
-// Escaneo por código de barras (Enter) — se conserva el comportamiento original
 posBarcode.addEventListener('keypress', async e => {
     if (e.key !== 'Enter' || posBarcode.value.trim() === '') return;
     const codigo = posBarcode.value.trim(); posBarcode.value = ''; hideSearchResults();
@@ -1564,7 +2012,6 @@ posBarcode.addEventListener('keypress', async e => {
     } catch (e) { notify(e.message, 'error'); }
 });
 
-// Búsqueda dinámica por nombre o código, sin recargar la página
 posBarcode.addEventListener('input', () => {
     const q = posBarcode.value.trim();
     clearTimeout(posSearchTimer);
@@ -1576,7 +2023,7 @@ posBarcode.addEventListener('input', () => {
             posSearchResults.innerHTML = data.map(p => {
                 const agotado = p.existencias <= 0;
                 return `<div class="pos-search-item ${agotado ? 'disabled' : ''}" ${agotado ? '' : `data-add-product='${JSON.stringify(p).replace(/'/g, '&#39;')}'`}>
-                    <div><div class="psi-name">${escapeHtml(p.nombre)}</div><div class="psi-meta">${escapeHtml(p.codigo)} · ${money(p.precio)}</div></div>
+                    <div><div class="psi-name" style="color:var(--navy);">${escapeHtml(p.nombre)}</div><div class="psi-meta">${escapeHtml(p.codigo)} · ${money(p.precio)}</div></div>
                     <span class="badge ${agotado ? 'b-red' : 'b-green'}">${agotado ? t('agotado_label') : p.existencias}</span>
                 </div>`;
             }).join('');
@@ -1597,21 +2044,75 @@ document.addEventListener('click', e => {
 function updateCartUI() {
     const tbody = $('#cartBody');
     if (cart.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:40px; color:var(--ink-soft);">${t('carrito_vacio')}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:40px; color:var(--ink-faint); font-weight:600;">${t('carrito_vacio')}</td></tr>`;
         $('#posSubtotal').innerText = money(0); $('#posIva').innerText = money(0); $('#posTotal').innerText = money(0);
         return;
     }
     let subtotal = 0;
     tbody.innerHTML = cart.map(item => {
         const lineTotal = item.precio * item.qty; subtotal += lineTotal;
-        return `<tr><td style="padding:16px 24px;"><b>${escapeHtml(item.nombre)}</b></td>
-            <td style="text-align:center;"><span style="background:var(--coffee-light); color:var(--coffee-main); padding:4px 12px; border-radius:20px; font-weight:700;">${item.qty}</span></td>
-            <td style="text-align:right; color:var(--ink-soft);">${money(item.precio)}</td>
-            <td style="text-align:right; padding-right:24px; font-weight:700;">${money(lineTotal)}</td></tr>`;
+        return `<tr>
+            <td style="padding:16px 24px;"><b>${escapeHtml(item.nombre)}</b></td>
+            <td style="text-align:center;">
+                <div class="qty-ctrl">
+                    <button class="qty-btn minus" data-action="minus" data-id="${item.id_producto}">-</button>
+                    <input type="number" class="qty-input" data-id="${item.id_producto}" value="${item.qty}" min="0">
+                    <button class="qty-btn plus" data-action="plus" data-id="${item.id_producto}">+</button>
+                </div>
+            </td>
+            <td style="text-align:right; color:var(--ink-soft); font-weight:600;">${money(item.precio)}</td>
+            <td style="text-align:right; padding-right:24px; font-weight:800; color:var(--accent);">${money(lineTotal)}</td>
+        </tr>`;
     }).join('');
+    
     const iva = subtotal * 0.16, total = subtotal + iva;
     $('#posSubtotal').innerText = money(subtotal); $('#posIva').innerText = money(iva); $('#posTotal').innerText = money(total);
 }
+
+// Eventos para detectar los clics en los botones de [+] y [-] del carrito
+$('#cartBody').addEventListener('click', e => {
+    const btn = e.target.closest('.qty-btn');
+    if (!btn) return;
+    
+    const id = parseInt(btn.dataset.id);
+    const item = cart.find(i => i.id_producto === id);
+    if (!item) return;
+
+    if (btn.dataset.action === 'plus') {
+        if (item.qty + 1 > item.maxStock) {
+            notify(`Límite alcanzado. Solo hay ${item.maxStock} en inventario.`, 'warning');
+        } else {
+            item.qty++;
+        }
+    } else if (btn.dataset.action === 'minus') {
+        item.qty--;
+        if (item.qty <= 0) cart = cart.filter(i => i.id_producto !== id); // Si llega a 0, se elimina
+    }
+    updateCartUI();
+});
+
+// Evento para cuando el usuario escribe manualmente un número en el input
+$('#cartBody').addEventListener('change', e => {
+    if (!e.target.classList.contains('qty-input')) return;
+    
+    const id = parseInt(e.target.dataset.id);
+    let newQty = parseInt(e.target.value) || 0;
+    const item = cart.find(i => i.id_producto === id);
+    if (!item) return;
+
+    // VALIDACIÓN: Si el usuario teclea más de lo que hay en stock
+    if (newQty > item.maxStock) {
+        notify(`Stock excedido. Se ajustó al máximo disponible (${item.maxStock}).`, 'warning');
+        newQty = item.maxStock;
+    }
+
+    if (newQty <= 0) {
+        cart = cart.filter(i => i.id_producto !== id); // Si pone 0 o menos, se elimina
+    } else {
+        item.qty = newQty;
+    }
+    updateCartUI();
+});
 
 $('#btnCobrar').addEventListener('click', async () => {
     const Lp = currentLang === 'en'
@@ -1623,7 +2124,7 @@ $('#btnCobrar').addEventListener('click', async () => {
 
     const conf = await Swal.fire({
         title: Lp.title, text: `${Lp.totalLabel} ${$('#posTotal').innerText}`, icon: 'info',
-        showCancelButton: true, confirmButtonColor: 'var(--coffee-main)', confirmButtonText: Lp.confirmBtn, cancelButtonText: t('cancelar')
+        showCancelButton: true, confirmButtonColor: 'var(--accent)', confirmButtonText: Lp.confirmBtn, cancelButtonText: t('cancelar')
     });
     if (!conf.isConfirmed) return;
 
@@ -1637,7 +2138,7 @@ $('#btnCobrar').addEventListener('click', async () => {
             $('#posEfectivoEsperado').innerText = money(d.data.dinero_esperado);
             if (dineroInicial > 0 && d.data.dinero_esperado > dineroInicial * 2) promptRetiro();
         }
-        Swal.fire({ title:Lp.success, text:d.msg, icon:'success', timer:1800, showConfirmButton:false }).then(() => {
+        Swal.fire({ title:Lp.success, text:d.msg, icon:'success', timer:1800, showConfirmButton:false, background: 'var(--bg-surface)', color: 'var(--ink)' }).then(() => {
             cart = []; updateCartUI(); posBarcode.focus(); loadDashboard();
         });
     } catch (e) { notify(e.message, 'error'); }
@@ -1668,6 +2169,132 @@ $('#btnCobrar').addEventListener('click', async () => {
 
 // -------- INICIO --------
 loadDashboard();
+loadFiltrosInv();
+
+// -------- ESCÁNER DE CÓDIGO DE BARRAS Y QR (SOPORTE COMPLETO) --------
+let html5QrCode = null;
+let procesandoEscaneo = false; // Evita que lea el código múltiples veces seguidas
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnCamara = document.getElementById('btnStartCameraScan');
+    if (btnCamara) {
+        btnCamara.addEventListener('click', abrirEscanerCamara);
+    }
+});
+
+function abrirEscanerCamara() {
+    procesandoEscaneo = false; // Reiniciamos la bandera
+    Swal.fire({
+        title: 'Escanear Código de Barras o QR',
+        html: `
+            <style>
+                #reader { width: 100% !important; max-width: 350px !important; margin: 0 auto !important; border-radius: 12px !important; overflow: hidden !important; background: #000 !important; }
+                #reader video { width: 100% !important; height: auto !important; max-height: 240px !important; object-fit: cover !important; border-radius: 12px !important; }
+            </style>
+            <div id="reader"></div>
+        `,
+        showCancelButton: true,
+        showConfirmButton: false,
+        cancelButtonText: typeof t === 'function' ? t('cancelar') : 'Cancelar',
+        width: '420px',
+        didOpen: () => {
+            iniciarCamaraModal();
+        },
+        willClose: () => {
+            detenerEscanerCamara();
+        }
+    });
+}
+
+function iniciarCamaraModal() {
+    html5QrCode = new Html5Qrcode("reader");
+
+    const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 140 },
+        aspectRatio: 1.0,
+        disableFlip: false,
+        // Habilitación explícita de todos los formatos de códigos 1D y 2D
+        formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.DATA_MATRIX,
+            Html5QrcodeSupportedFormats.PDF_417,
+            Html5QrcodeSupportedFormats.AZTEC
+        ]
+    };
+
+    html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        async (decodedText) => {
+            // Si ya se está procesando un código, ignorar lecturas consecutivas
+            if (procesandoEscaneo) return;
+            procesandoEscaneo = true;
+
+            // 1. Apagar la cámara de forma segura
+            if (html5QrCode && html5QrCode.isScanning) {
+                try {
+                    await html5QrCode.stop();
+                    html5QrCode.clear();
+                    html5QrCode = null;
+                } catch (err) {
+                    console.error("Error apagando cámara:", err);
+                }
+            }
+
+            // 2. Cerrar la ventana modal
+            Swal.close();
+
+            // 3. Colocar el texto leído en el campo de entrada
+            const posBarcode = document.getElementById('posBarcode');
+            if (posBarcode) posBarcode.value = decodedText;
+
+            // 4. Buscar el producto en la base de datos y agregarlo
+            try {
+                const { data } = await request(`buscar_producto_pos&codigo=${encodeURIComponent(decodedText)}`);
+                if (data) {
+                    addProductToCart(data);
+                    notify(`Producto agregado: ${data.nombre}`, 'success');
+                }
+            } catch (err) {
+                notify(err.message, 'error');
+            }
+        },
+        (errorMessage) => {
+            // Ignorar fotogramas sin detección
+        }
+    ).catch((err) => {
+        console.error("Error al iniciar cámara:", err);
+        Swal.showValidationMessage("No se pudo acceder a la cámara. Revisa los permisos.");
+    });
+}
+
+function detenerEscanerCamara() {
+    if (html5QrCode) {
+        if (html5QrCode.isScanning) {
+            html5QrCode.stop().then(() => {
+                html5QrCode.clear();
+                html5QrCode = null;
+            }).catch(err => {
+                console.error("Error al detener cámara manualmente:", err);
+                html5QrCode = null;
+            });
+        } else {
+            html5QrCode.clear();
+            html5QrCode = null;
+        }
+    }
+}
 </script>
 
 </body>
