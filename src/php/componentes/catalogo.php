@@ -124,54 +124,26 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PETKO · Catálogo</title>
-    <script>
-        (function () {
-            try {
-                var escala = parseFloat(localStorage.getItem('kion-font-scale'));
-                if (escala >= 0.9 && escala <= 1.3) {
-                    document.documentElement.style.setProperty('--font-scale', escala);
-                    if (escala >= 1.2) document.documentElement.classList.add('texto-grande');
-                }
-            } catch (e) {}
-        })();
-    </script>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500;1,9..144,600&family=Fredoka:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
     <link rel="stylesheet" href="../../css/catalogo.css?v=<?= (int) @filemtime(__DIR__ . '/../../css/catalogo.css') ?>">
 </head>
 <body class="catalogo-app">
+<script src="../../js/petko-prefs.js"></script>
 
 <header class="topbar">
     <div class="topbar__marca">
         <a href="../modulos/home/home.php" class="topbar__logo" aria-label="PETKO · Inicio">
-            <span class="topbar__logo-icono" aria-hidden="true"><i class="ph-fill ph-paw-print"></i></span>
-            <span class="topbar__logo-texto">PET<span>KO</span></span>
+            <img src="../../img/petko/logo_amarillo.png" alt="PETKO Veterinaria y Ganadería" width="520" height="161">
         </a>
         <span class="topbar__subtitulo" data-i18n="topbar_sub">Veterinaria y Farmacia · cuidado con patitas.</span>
         <span class="topbar__badge"><i class="ph-fill ph-heartbeat"></i> Clínica</span>
     </div>
 
     <div class="topbar__acciones">
-        <div class="a11y" id="a11y">
-            <button type="button" class="btn-icon a11y__toggle" id="a11y-toggle"
-                    aria-expanded="false" aria-controls="a11y-grupo"
-                    aria-label="Tamaño de texto" title="Tamaño de texto" data-i18n-aria="a11y_title">
-                <i class="ph ph-text-aa"></i>
-            </button>
-            <div class="a11y__grupo" id="a11y-grupo" role="group" aria-label="Tamaño de texto" data-i18n-aria="a11y_title">
-                <button type="button" class="a11y__btn a11y__btn--menos" data-a11y="menos"
-                        aria-label="Reducir texto" title="Reducir texto" data-i18n-aria="a11y_less">A<span aria-hidden="true">−</span></button>
-                <button type="button" class="a11y__btn a11y__btn--base" data-a11y="base"
-                        aria-label="Tamaño de texto por defecto" title="Tamaño de texto por defecto" data-i18n-aria="a11y_default">A</button>
-                <button type="button" class="a11y__btn a11y__btn--mas" data-a11y="mas"
-                        aria-label="Aumentar texto" title="Aumentar texto" data-i18n-aria="a11y_more">A<span aria-hidden="true">+</span></button>
-                <span class="a11y__nivel" id="a11y-nivel" aria-live="polite">100%</span>
-            </div>
-        </div>
-        <button class="btn-icon" id="btnTheme" title="Modo Oscuro / Claro"><i class="ph ph-moon"></i></button>
-        <button class="btn-icon" id="btnLang" title="English / Español"><i class="ph ph-translate"></i></button>
+        <button class="btn-icon" id="btnTheme" data-petko-theme type="button">🌙</button>
+        <button class="btn-icon" id="btnLang" data-petko-lang type="button">EN</button>
         
         <?php 
         // Determinar la ruta del dashboard dinámicamente con las rutas relativas correctas

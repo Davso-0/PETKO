@@ -99,9 +99,51 @@ $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { scroll-behavior: auto !important; }
         }
-    </style>
+    
+/* ===== PETKO · TEMA AZUL DE MARCA (solo estilos) ===== */
+:root{--green-primary:#3966B3;--green-hover:#294980;--green-glow:rgba(82,146,255,.35);--bg-gradient:linear-gradient(135deg,#EEF4FF 0%,#BAD3FF 55%,#86B3FF 100%);--bg-main:#EEF4FF;--field-border:#BAD3FF;--text-main:#14284a;--text-muted:#4f678c}
+.bg-viewport::before{background:radial-gradient(circle,#BAD3FF 0%,rgba(186,211,255,.6) 35%,transparent 70%)}
+.bg-viewport::after{background:radial-gradient(circle,#86B3FF 0%,rgba(134,179,255,.5) 35%,transparent 70%)}
+.bg-orb{background:radial-gradient(circle,rgba(82,146,255,.45),rgba(186,211,255,.15) 55%,transparent 72%)}
+.floating-paw{fill:#3966B3}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background:url(src/img/petko/patron.png) center/560px;opacity:.06}
+.auth-card{border:1px solid rgba(82,146,255,.28);box-shadow:0 24px 60px rgba(41,73,128,.22);transition:transform .35s cubic-bezier(.22,1,.36,1),box-shadow .35s}
+.auth-card:hover{transform:translateY(-4px);box-shadow:0 30px 70px rgba(41,73,128,.28)}
+.brand-badge{background:rgba(82,146,255,.12);border-color:rgba(82,146,255,.4);color:#294980}
+.brand-logo{color:#294980}.brand-logo span{color:#5292FF}
+.form-title,.dialog-head h2,.role-picker h2{color:#294980}
+input:focus{border-color:#5292FF;box-shadow:0 0 0 4px rgba(82,146,255,.22)}
+input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus{box-shadow:0 0 0 1000px #EEF4FF inset}
+.forgot-link,.form-footer a,.toggle-password:hover,.dialog-close:hover,.role-picker-close:hover{color:#3966B3}
+.forgot-link:hover,.form-footer a:hover{color:#294980}
+.check-row input{accent-color:#3966B3}
+.btn-submit,.dialog-submit{background:linear-gradient(135deg,#5292FF 0%,#3966B3 100%);color:#fff}
+.btn-submit:hover{box-shadow:0 8px 24px rgba(82,146,255,.4)}
+.btn-secondary:hover,.role-option:hover{border-color:#5292FF;color:#294980;background:rgba(82,146,255,.1)}
+.recovery-dialog,.role-picker{border:1px solid rgba(82,146,255,.3);background:rgba(255,255,255,.97);box-shadow:0 25px 60px rgba(41,73,128,.25)}
+.dialog-backdrop,.role-overlay{background:rgba(12,26,53,.6)}
+@media(max-width:480px){.auth-card{border-radius:20px}input[type="email"],input[type="password"],input[type="text"]{font-size:16px}}
+
+
+/* ===== PETKO · MODO OSCURO (términos) ===== */
+body.dark-mode{background:linear-gradient(135deg,#030710 0%,#071225 55%,#0b1d3a 100%);--text-main:#eaf3ff;--text-muted:#a3b8d6;--green-primary:#5cc8ff;--green-hover:#8fd6ff;color-scheme:dark}
+body.dark-mode .terms-card{border-color:rgba(92,200,255,.2);background:rgba(11,29,58,.92);color:#eaf3ff;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+body.dark-mode .brand-logo{color:#eaf3ff}
+body.dark-mode h2,body.dark-mode .terms-content h3{color:#8fd6ff}
+body.dark-mode .terms-content{scrollbar-color:#5cc8ff #0b1d3a}
+body.dark-mode .terms-content::-webkit-scrollbar-track{background:#0b1d3a}
+body.dark-mode .terms-content code{background:rgba(255,255,255,.08);color:#eaf3ff}
+body.dark-mode .terms-button{background:linear-gradient(135deg,#5cc8ff 0%,#2f80ed 100%);color:#04142e}
+</style>
 </head>
 <body>
+    <script>
+        try {
+            var d = localStorage.getItem('petko_dark');
+            if (d === null && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) d = '1';
+            if (d === '1') document.body.classList.add('dark-mode');
+        } catch (err) {}
+    </script>
     <video id="videoFondo" autoplay muted loop playsinline aria-hidden="true">
         <source src="src/videoEJEMPLO/22.mp4" type="video/mp4">
     </video>

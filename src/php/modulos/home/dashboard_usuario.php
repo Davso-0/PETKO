@@ -117,9 +117,8 @@ if (isset($_GET['action'])) {$action = $_GET['action'];$out = ['ok' => false, 'm
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>KION · Mi Cuenta</title>
+    <title>PETKO · Mi Cuenta</title>
 
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
@@ -217,17 +216,18 @@ if (isset($_GET['action'])) {$action = $_GET['action'];$out = ['ok' => false, 'm
             .sidebar-collapse-btn { display: none; }
             .hamburger-btn { display: inline-flex; }
         }
-    </style>
+    
+
+</style>
+    <link rel="stylesheet" href="../../../css/petko-ui.css?v=<?= (int) @filemtime(__DIR__ . '/../../../css/petko-ui.css') ?>">
 </head>
 <body>
+<script src="../../../js/petko-prefs.js"></script>
 
 <div class="app-layout" id="appLayout">
     <aside class="sidebar">
         <button class="sidebar-collapse-btn" id="btnCollapse"><i class="ph ph-caret-left"></i></button>
-        <div class="brand">
-            <i class="ph-fill ph-paw-print"></i>
-            <div class="brand-text"><div>KION</div><div class="brand-sub" data-i18n="brand_sub">Panel de Cliente</div></div>
-        </div>
+        <a class="brand" href="home.php" aria-label="PETKO · Inicio"><img src="../../../img/petko/logo_amarillo.png" alt="PETKO Veterinaria y Ganadería" width="520" height="161"></a>
         <nav class="nav-menu">
             <div class="nav-section-title">Mi Actividad</div>
             <button class="nav-btn active" data-target="view-apartados"><i class="ph ph-shopping-bag"></i><span class="nav-label">Mis Apartados</span></button>
@@ -248,8 +248,8 @@ if (isset($_GET['action'])) {$action = $_GET['action'];$out = ['ok' => false, 'm
                 <b id="topbarTitle" data-i18n="topbar_apartados" style="font-size: 16px;">Mis Apartados</b>
             </div>
             <div class="topbar-actions">
-                <button class="icon-btn" id="btnTheme" title="Modo Oscuro" data-i18n-title="theme_title"><i class="ph ph-moon"></i></button>
-                <button class="icon-btn" id="btnLang" title="Switch language / Cambiar idioma"><i class="ph ph-translate"></i></button>
+                <button class="icon-btn" id="btnTheme" data-petko-theme type="button">🌙</button>
+                <button class="icon-btn" id="btnLang" data-petko-lang type="button">EN</button>
                 <div class="user-profile">
                     <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--coffee-main)"></i>
                     <span><?= htmlspecialchars($nombreCompleto) ?></span>
@@ -375,7 +375,7 @@ const I18N = {
         entregado: 'DELIVERED', vencido: 'EXPIRED', cancelado: 'CANCELED', pendiente: 'PENDING'
     }
 };
-let currentLang = localStorage.getItem('kion-user-lang') === 'en' ? 'en' : 'es';
+let currentLang = PetkoPrefs.lang();
 function t(key) {
     return (I18N[currentLang] && I18N[currentLang][key]) || I18N.es[key] || key;
 }
@@ -394,22 +394,11 @@ async function request(actionStr, options = {}) {
     return data;
 }
 
-// -------- TEMA --------
-const body = document.body, btnTheme = $('#btnTheme');
-if (localStorage.getItem('kion-user-theme') === 'dark') {
-    body.classList.add('dark-mode');
-    btnTheme.querySelector('i').classList.replace('ph-moon', 'ph-sun');
-}
-btnTheme.addEventListener('click', () => {
-    body.classList.toggle('dark-mode');
-    const icon = btnTheme.querySelector('i');
-    icon.classList.toggle('ph-moon'); icon.classList.toggle('ph-sun');
-    localStorage.setItem('kion-user-theme', body.classList.contains('dark-mode') ? 'dark' : 'light');
-});
+// -------- TEMA (compartido con el home: petko_dark) --------
+const body = document.body;
 
-$('#btnLang').addEventListener('click', () => {
-    currentLang = currentLang === 'es' ? 'en' : 'es';
-    localStorage.setItem('kion-user-lang', currentLang);
+PetkoPrefs.onLang(function (l) {
+    currentLang = l;
     applyLanguage();
     const activeView = document.querySelector('.view-section.active');
     if (activeView) switchView(activeView.id);
