@@ -48,8 +48,8 @@ if (isset($pdo) && $pdo instanceof PDO) {
             $categoriasDisponibles = ['Medicamentos', 'Alimentos', 'Antiparasitarios', 'Higiene', 'Accesorios'];
         }
 
-        // Consulta exacta solicitada, sin modificaciones.
-        $sql = "SELECT p.id_producto, p.nombre, p.precio, c.nombre AS categoria, COALESCE(i.existencias, 10) AS stock FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria LEFT JOIN inventarios i ON p.id_producto = i.id_producto WHERE p.estado = 'ACTIVO'";
+        // Consulta de productos con su información completa (código, descripción e imagen)
+        $sql = "SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.imagen_url, p.precio, c.nombre AS categoria, COALESCE(i.existencias, 10) AS stock FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria LEFT JOIN inventarios i ON p.id_producto = i.id_producto WHERE p.estado = 'ACTIVO'";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute();
@@ -63,8 +63,7 @@ if (isset($pdo) && $pdo instanceof PDO) {
             $categoriaSeleccionada = null;
         }
 
-        // El filtro por categoría se aplica aquí, en PHP, para no tocar
-        // la consulta SQL pedida.
+        // El filtro por categoría se aplica aquí, en PHP
         if ($categoriaSeleccionada !== null) {
             $productos = array_values(array_filter($productos, function ($p) use ($categoriaSeleccionada) {
                 return ($p['categoria'] ?? null) === $categoriaSeleccionada;
@@ -74,10 +73,9 @@ if (isset($pdo) && $pdo instanceof PDO) {
         $errorConsulta = 'No pudimos cargar los productos en este momento.';
     }
 
-    // Consulta aparte y opcional para la vista ampliada: si falla, el
-    // catálogo sigue funcionando sin descripciones.
+    // Consulta de respaldo para detalles si hiciera falta
     try {
-        $detStmt = $pdo->query("SELECT id_producto, codigo, descripcion FROM productos");
+        $detStmt = $pdo->query("SELECT id_producto, codigo, descripcion, imagen_url FROM productos");
         foreach ($detStmt as $fila) {
             $detallesProducto[(int) $fila['id_producto']] = $fila;
         }
@@ -96,6 +94,29 @@ $rutasImagenesAntiguas = [
     3 => '../../img/purina.jpg',
     4 => '../../img/malta.jpg'
 ];
+
+function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categoria = 'PETKO'): string {
+    global $rutasImagenesAntiguas;
+    $img = trim((string)$imagenUrl);
+    if ($img !== '') {
+        if (preg_match('/^(https?:\/\/|data:image\/)/i', $img)) {
+            return $img;
+        }
+        if (strpos($img, 'src/img/') === 0) {
+            $img = '../../img/' . substr($img, 8);
+        }
+        return $img;
+    }
+    // Fallback si existe la imagen con el id en src/img/{id}.jpg
+    $rutaFisica = __DIR__ . '/../../img/' . $idProd . '.jpg';
+    if (file_exists($rutaFisica)) {
+        return '../../img/' . $idProd . '.jpg';
+    }
+    if (isset($rutasImagenesAntiguas[$idProd])) {
+        return $rutasImagenesAntiguas[$idProd];
+    }
+    return "https://placehold.co/400x400/E8F6EE/0B2545?text=" . urlencode($categoria);
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -312,23 +333,11 @@ $rutasImagenesAntiguas = [
                     $idProd  = (int) $producto['id_producto'];
                     $precio  = (float) $producto['precio'];
                     
-                    // La consulta exacta ya no trae imagen_url ni descripcion,
-                    // así que resolvemos la imagen con el mismo esquema de
-                    // respaldo de siempre y usamos un texto genérico.
-                    $imgSrc = $producto['imagen_url'] ?? '';
-                    if (!$imgSrc) {
-                        $rutaAutomatica = "../../img/{$idProd}.jpg";
-                        if (isset($rutasImagenesAntiguas[$idProd])) {
-                            $imgSrc = $rutasImagenesAntiguas[$idProd];
-                        } elseif (file_exists($rutaAutomatica)) {
-                            $imgSrc = $rutaAutomatica;
-                        } else {
-                            $imgSrc = "https://placehold.co/400x400/E8F6EE/0B2545?text=" . urlencode($producto['categoria'] ?? 'PETKO');
-                        }
-                    }
+                    // Resolver imagen con prioridad: BD -> Archivo físico -> Rutas antiguas -> Placeholder
+                    $imgSrc = resolverImagenProducto($producto['imagen_url'] ?? null, $idProd, $producto['categoria'] ?? 'PETKO');
                     $detalle     = $detallesProducto[$idProd] ?? [];
-                    $codigo      = htmlspecialchars((string) ($detalle['codigo'] ?? ''), ENT_QUOTES, 'UTF-8');
-                    $descripcion = htmlspecialchars((string) ($detalle['descripcion'] ?? ''), ENT_QUOTES, 'UTF-8');
+                    $codigo      = htmlspecialchars((string) ($producto['codigo'] ?? ($detalle['codigo'] ?? '')), ENT_QUOTES, 'UTF-8');
+                    $descripcion = htmlspecialchars((string) ($producto['descripcion'] ?? ($detalle['descripcion'] ?? '')), ENT_QUOTES, 'UTF-8');
                     $imgAttr     = htmlspecialchars($imgSrc, ENT_QUOTES, 'UTF-8');
                 ?>
                 <article class="tarjeta" data-id="<?= $idProd ?>" data-nombre="<?= $nombre ?>" data-categoria="<?= htmlspecialchars($categoriaProd, ENT_QUOTES, 'UTF-8') ?>"
