@@ -9,6 +9,16 @@ if (session_status() === PHP_SESSION_NONE) {
 $usuarioAutenticado = !empty($_SESSION['usuario']['id_usuario']);
 $rutaLogin = '../../../inicioSesion.php';
 
+
+// Usar la conexión centralizada con los datos de InfinityFree:
+
+//require_once __DIR__ . '/../config/conexion.php';
+
+//if (isset($errorConexion) && $errorConexion !== null) {
+ //   $errorConsulta = 'Fallo al conectar con la base de datos.';
+//}
+// final 
+
 // Conexión PDO básica para XAMPP local
 $dbHost = 'localhost';
 $dbName = 'kion';
