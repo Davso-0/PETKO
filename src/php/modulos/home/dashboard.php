@@ -18,6 +18,7 @@ if (!isset($_SESSION['usuario']) && !isset($_GET['action'])) {
 
 if (file_exists(__DIR__ . '/../../config/conexion_BD.php')) {
     require_once __DIR__ . '/../../config/conexion_BD.php';
+    require_once dirname(__DIR__, 2) . '/servicios/EmailService.php';
 } elseif (file_exists(__DIR__ . '/../../config/conexion.php')) {
     require_once __DIR__ . '/../../config/conexion.php';
 }
@@ -37,7 +38,7 @@ if (isset($pdo) && $pdo instanceof PDO && $id_usuario_actual > 0) {
     $stA->execute([$id_usuario_actual]);
     $admin = $stA->fetch(PDO::FETCH_ASSOC) ?: null;
 }
-$esAdmin = $admin && stripos((string)($admin['rol'] ?? ''), 'admin') !== false && ($admin['estado'] ?? '') !== 'INACTIVO';
+$esAdmin = $admin && stripos((string)($admin['rol'] ?? ''), 'admin') !== false && strtolower((string)($admin['estado'] ?? '')) !== 'inactivo';
 $nombreAdmin = trim(($admin['nombre'] ?? 'Administrador') . ' ' . ($admin['apellido'] ?? ''));
 
 // API AJAX
@@ -83,7 +84,7 @@ if (isset($_GET['action'])) {
             $out = ['ok' => true, 'msg' => 'Datos de la sucursal actualizados.'];
 
         } elseif ($action === 'get_gerentes') {
-            $st = $pdo->query("SELECT u.id_usuario,u.nombre,u.apellido,u.correo,u.estado,r.nombre AS rol,COALESCE(s.nombre,'-- Ninguna --') AS sucursal,u.id_sucursal,u.id_rol FROM usuarios u LEFT JOIN roles r ON r.id_rol=u.id_rol LEFT JOIN sucursales s ON s.id_sucursal=u.id_sucursal WHERE r.nombre NOT LIKE '%cliente%' AND r.nombre NOT LIKE '%usuario%' ORDER BY u.id_usuario");
+            $st = $pdo->query("SELECT u.id_usuario,u.nombre,u.apellido,u.correo,UPPER(u.estado) AS estado,r.nombre AS rol,COALESCE(s.nombre,'-- Ninguna --') AS sucursal,u.id_sucursal,u.id_rol FROM usuarios u LEFT JOIN roles r ON r.id_rol=u.id_rol LEFT JOIN sucursales s ON s.id_sucursal=u.id_sucursal WHERE r.nombre NOT LIKE '%cliente%' AND r.nombre NOT LIKE '%usuario%' ORDER BY u.id_usuario");
             $out = ['ok' => true, 'data' => $st->fetchAll(PDO::FETCH_ASSOC)];
 
         } elseif ($action === 'delete_gerente') {
@@ -177,12 +178,35 @@ if (isset($_GET['action'])) {
             if ($st_mail->fetchColumn() > 0) throw new Exception('Ya existe otro usuario con ese correo.');
 
             if ($action === 'create_gerente') {
-                if ($pas === '') throw new Exception('La contraseña es obligatoria.');
-                $pdo->prepare("INSERT INTO usuarios(nombre,apellido,correo,password_hash,id_rol,id_sucursal,estado)VALUES(?,?,?,?,?,?,'ACTIVO')")
-                    ->execute([$nom, trim($_POST['apellido'] ?? ''), $cor, password_hash($pas, PASSWORD_BCRYPT), $rol, $suc]);
-                $out = ['ok' => true, 'msg' => 'Personal registrado.'];
+                $st_role = $pdo->prepare("SELECT nombre FROM roles WHERE id_rol = ?");
+                $st_role->execute([$rol]);
+                $rolNombre = (string)($st_role->fetchColumn() ?: 'Personal');
+                $tokenActivacion = bin2hex(random_bytes(32));
+                $pdo->beginTransaction();
+                try {
+                    $pdo->prepare("INSERT INTO usuarios(nombre,apellido,correo,password_hash,id_rol,id_sucursal,reset_token,token_expira,estado) VALUES(?,?,?,?,?,?,?,DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 24 HOUR),'pendiente')")
+                        ->execute([$nom, trim($_POST['apellido'] ?? ''), $cor, null, $rol, $suc, $tokenActivacion]);
+                    $base = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+                    $urlActivacion = $base . rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/') . '/../../../../activar-cuenta.php?token=' . rawurlencode($tokenActivacion);
+                    $sucursalNombre = 'Sin sucursal';
+                    if ($suc !== null) {
+                        $st_suc = $pdo->prepare('SELECT nombre FROM sucursales WHERE id_sucursal = ?');
+                        $st_suc->execute([$suc]);
+                        $sucursalNombre = (string)($st_suc->fetchColumn() ?: $sucursalNombre);
+                    }
+                    if (!EmailService::enviarActivacion($cor, $nom, $rolNombre, $sucursalNombre, $urlActivacion)) {
+                        throw new RuntimeException('No se pudo enviar el correo de activación. Revisa la configuración SMTP y el error_log de PHP. No se creó el usuario.');
+                    }
+                    $pdo->commit();
+                } catch (Throwable $exception) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    throw $exception;
+                }
+                $out = ['ok' => true, 'msg' => 'Personal registrado. Se envió un enlace de activación.'];
             } else {
-                $est = ($_POST['estado'] ?? 'ACTIVO') === 'INACTIVO' ? 'INACTIVO' : 'ACTIVO';
+                $est = ($_POST['estado'] ?? 'ACTIVO') === 'INACTIVO' ? 'inactivo' : 'activo';
                 $pdo->prepare("UPDATE usuarios SET nombre=?,apellido=?,correo=?,id_rol=?,id_sucursal=?,estado=? WHERE id_usuario=?")
                     ->execute([$nom, trim($_POST['apellido'] ?? ''), $cor, $rol, $suc, $est, $id]);
                 if ($pas !== '') $pdo->prepare("UPDATE usuarios SET password_hash=? WHERE id_usuario=?")->execute([password_hash($pas, PASSWORD_BCRYPT), $id]);
@@ -216,6 +240,9 @@ if (isset($_GET['action'])) {
             $out = ['ok' => true, 'data' => $st->fetchAll(PDO::FETCH_ASSOC)];
         }
     } catch (Throwable $e) {
+        if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         $out = ['ok' => false, 'msg' => $e->getMessage()];
     }
     ob_end_clean();

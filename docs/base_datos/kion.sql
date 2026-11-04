@@ -155,14 +155,17 @@ CREATE TABLE `usuarios` (
   `nombre` varchar(100) NOT NULL,
   `apellido` varchar(100) NOT NULL,
   `correo` varchar(150) NOT NULL,
-  `password_hash` varchar(255) NOT NULL,
+  `password_hash` varchar(255) DEFAULT NULL,
+  `google_id` varchar(255) DEFAULT NULL,
   `id_rol` int(10) UNSIGNED NOT NULL,
   `id_sucursal` int(10) UNSIGNED DEFAULT NULL,
   `remember_token` char(64) DEFAULT NULL,
   `remember_expires_at` datetime DEFAULT NULL,
   `recovery_token` char(64) DEFAULT NULL,
   `recovery_expires_at` datetime DEFAULT NULL,
-  `estado` enum('ACTIVO','INACTIVO') NOT NULL DEFAULT 'ACTIVO'
+  `reset_token` char(64) DEFAULT NULL,
+  `token_expira` datetime DEFAULT NULL,
+  `estado` enum('pendiente','activo','inactivo') NOT NULL DEFAULT 'activo'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -243,6 +246,8 @@ ALTER TABLE `sucursales`
 ALTER TABLE `usuarios`
   ADD PRIMARY KEY (`id_usuario`),
   ADD UNIQUE KEY `correo` (`correo`),
+  ADD UNIQUE KEY `google_id` (`google_id`),
+  ADD KEY `reset_token` (`reset_token`),
   ADD KEY `id_rol` (`id_rol`),
   ADD KEY `id_sucursal` (`id_sucursal`);
 

@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/vendor/autoload.php';
+
+Dotenv\Dotenv::createMutable(__DIR__)->safeLoad();
+$googleClientId = trim((string)(getenv('GOOGLE_CLIENT_ID') ?: ($_ENV['GOOGLE_CLIENT_ID'] ?? $_SERVER['GOOGLE_CLIENT_ID'] ?? '')));
+
 function cookieSegura(): bool
 {
     $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
@@ -81,7 +86,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_usuarios_por_rol' && DEV_
                 FROM usuarios u 
                 LEFT JOIN roles r ON r.id_rol = u.id_rol 
                 LEFT JOIN sucursales s ON s.id_sucursal = u.id_sucursal 
-                WHERE u.estado = 'ACTIVO'";
+                WHERE LOWER(u.estado) = 'activo'";
 
         if ($rolBuscado === 'admin') {
             $sql .= " AND r.nombre LIKE '%admin%'";
@@ -121,7 +126,7 @@ if (!$metodoPost && !isset($_SESSION['usuario']) && isset($_COOKIE['kion_remembe
             $consultaRecordarme = $pdo->prepare('SELECT u.id_usuario, u.nombre, u.apellido, u.correo, u.id_rol, u.id_sucursal, u.estado, r.nombre AS rol FROM usuarios u INNER JOIN roles r ON r.id_rol = u.id_rol WHERE u.remember_token = ? AND u.remember_expires_at > CURRENT_TIMESTAMP LIMIT 1');
             $consultaRecordarme->execute([hash('sha256', $tokenRecordarme)]);
             $usuarioRecordado = $consultaRecordarme->fetch();
-            if ($usuarioRecordado && $usuarioRecordado['estado'] === 'ACTIVO') {
+            if ($usuarioRecordado && strtolower((string)$usuarioRecordado['estado']) === 'activo') {
                 session_regenerate_id(true);
                 $destino = obtenerDestinoUsuario($usuarioRecordado);
                 header('Location: ' . $destino);
@@ -163,7 +168,7 @@ if ($metodoPost) {
             if (!$usuario) {
                 responderInicioSesion(false, 'El usuario seleccionado no existe en la base de datos.');
             }
-            if ($usuario['estado'] !== 'ACTIVO') {
+            if (strtolower((string)$usuario['estado']) !== 'activo') {
                 responderInicioSesion(false, 'Esta cuenta se encuentra inactiva.');
             }
 
@@ -190,7 +195,7 @@ if ($metodoPost) {
             || (is_string($hostSolicitud) && str_contains($hostSolicitud, 'localhost'));
 
         try {
-            $consultaRecuperacion = $pdo->prepare("SELECT id_usuario, nombre FROM usuarios WHERE correo = ? AND estado = 'ACTIVO' LIMIT 1");
+            $consultaRecuperacion = $pdo->prepare("SELECT id_usuario, nombre FROM usuarios WHERE correo = ? AND LOWER(estado) = 'activo' LIMIT 1");
             $consultaRecuperacion->execute([$correoRecuperacion]);
             $usuarioRec = $consultaRecuperacion->fetch();
             if ($usuarioRec) {
@@ -294,7 +299,7 @@ if ($metodoPost) {
             }
             responderInicioSesion(false, 'La contraseña o correo electrónico no son correctos.');
         }
-        if ($usuario['estado'] !== 'ACTIVO') {
+        if (strtolower((string)$usuario['estado']) !== 'activo') {
             responderInicioSesion(false, 'Esta cuenta se encuentra inactiva.');
         }
 
@@ -338,7 +343,7 @@ if ($metodoPost) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PETKO | Iniciar sesión</title>
+    <title data-i18n="documentTitle">PETKO | Iniciar sesión</title>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
@@ -362,6 +367,8 @@ if ($metodoPost) {
             --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
             --font-brand: 'Fredoka', sans-serif;
             --bg-main: #f8fafc;
+            --bg-surface: var(--field-bg);
+            --ink: var(--text-main);
             --gold: var(--green-primary);
             --gold-light: var(--green-hover);
             --bg-card: var(--card-bg);
@@ -413,10 +420,14 @@ if ($metodoPost) {
             font-size: 14px;
         }
         input:focus { border-color: var(--gold-light); box-shadow: 0 0 0 2px rgba(201, 164, 68, .22); }
-        input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
-            -webkit-text-fill-color: var(--text-main);
-            box-shadow: 0 0 0 1000px #191815 inset;
-            transition: background-color 9999s ease-out;
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 30px var(--bg-surface) inset !important;
+            -webkit-text-fill-color: var(--ink) !important;
+            caret-color: var(--ink) !important;
+            transition: background-color 5000s ease-in-out 0s;
         }
         .input-wrapper { position: relative; }
         .input-wrapper input { padding-right: 46px; }
@@ -542,11 +553,38 @@ if ($metodoPost) {
         .role-option { border-radius: 10px; font-family: var(--font-main); }
         .role-option:hover { border-color: var(--green-primary); color: var(--success-green); background: rgba(34, 197, 94, .1); }
         .role-demo-link { color: var(--text-muted) !important; }
+        .top-controls { position: absolute; top: 20px; right: 24px; z-index: 100; display: flex; gap: 10px; }
+        .icon-btn { display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid var(--border-soft, var(--card-border)); border-radius: 50%; background: var(--bg-surface); color: var(--ink); cursor: pointer; font-size: 19px; text-decoration: none; transition: background .2s, transform .15s; }
+        .icon-btn:hover { background: var(--field-bg); color: var(--green-primary); transform: translateY(-1px); }
+        body.dark-mode {
+            --bg-gradient: linear-gradient(135deg, #0b1220 0%, #10251d 50%, #0c2030 100%);
+            --card-bg: rgba(15, 23, 42, .92);
+            --card-border: rgba(148, 163, 184, .25);
+            --field-bg: rgba(15, 23, 42, .82);
+            --field-border: #475569;
+            --text-main: #e2e8f0;
+            --text-muted: #a8b5c7;
+            --bg-main: #0b1220;
+            --bg-surface: #102033;
+            --ink: #e2e8f0;
+            --error-bg: #3b171b;
+            --success-bg: #12301f;
+        }
+        body.dark-mode .brand-logo { color: var(--text-main); }
+        body.dark-mode input[type="email"], body.dark-mode input[type="password"], body.dark-mode input[type="text"] { color: var(--text-main); }
+        body.dark-mode .recovery-dialog, body.dark-mode .role-picker { background: rgba(11, 34, 56, .97); }
+        body.dark-mode .dialog-backdrop, body.dark-mode .role-overlay { background: rgba(2, 12, 24, .78); }
+        @media (max-width: 540px) { .top-controls { top: 12px; right: 12px; gap: 7px; } .icon-btn { width: 36px; height: 36px; } }
         .notice.error { border-color: rgba(248, 113, 113, .35); background: var(--error-bg); color: var(--error-red); }
         .notice.success { border-color: rgba(74, 222, 128, .35); background: var(--success-bg); color: var(--success-green); }
     </style>
 </head>
 <body>
+    <nav class="top-controls" aria-label="Controles de página" data-i18n-aria="pageControls">
+        <a href="index.php" class="icon-btn" title="Volver al inicio" aria-label="Volver al inicio" data-i18n-title="homeTitle" data-i18n-aria="homeTitle"><i class="ph ph-house" aria-hidden="true"></i></a>
+        <button type="button" class="icon-btn" id="btnLang" title="Cambiar idioma" aria-label="Cambiar idioma" data-i18n-title="languageToggle" data-i18n-aria="languageToggle"><i class="ph ph-translate" aria-hidden="true"></i></button>
+        <button type="button" class="icon-btn" id="btnTheme" title="Modo Oscuro" aria-label="Modo Oscuro"><i class="ph ph-moon" aria-hidden="true"></i></button>
+    </nav>
     <div class="bg-viewport" aria-hidden="true">
         <span class="bg-orb"></span>
         <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
@@ -558,40 +596,52 @@ if ($metodoPost) {
 
     <main class="auth-card">
         <header class="brand-header">
-            <span class="brand-badge"><i class="ph-fill ph-paw-print" aria-hidden="true"></i> Veterinaria &amp; Farmacia</span>
+            <span class="brand-badge"><i class="ph-fill ph-paw-print" aria-hidden="true"></i> <span data-i18n="brandBadge">Veterinaria &amp; Farmacia</span></span>
             <h1 class="brand-logo">PET<span>KO</span></h1>
-            <div class="brand-subtitle">Vet &amp; Agropecuario</div>
+            <div class="brand-subtitle" data-i18n="brandSubtitle">Vet &amp; Agropecuario</div>
         </header>
-        <h2 class="form-title">Iniciar sesión</h2>
+        <h2 class="form-title" data-i18n="loginTitle">Iniciar sesión</h2>
         <div class="notice" id="loginNotice" role="status" aria-live="polite"></div>
         <form id="loginForm" method="post" novalidate>
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
             <div class="form-group">
-                <label for="correo">Correo electrónico</label>
-                <input id="correo" name="correo" type="email" placeholder="usuario@kion.com" autocomplete="email" required>
+                <label for="correo" data-i18n="emailLabel">Correo electrónico</label>
+                <input id="correo" name="correo" type="email" placeholder="usuario@kion.com" data-i18n-placeholder="emailPlaceholder" autocomplete="email" required>
             </div>
             <div class="form-group">
-                <label for="contrasena">Contraseña</label>
+                <label for="contrasena" data-i18n="passwordLabel">Contraseña</label>
                 <div class="input-wrapper">
-                    <input id="contrasena" name="contrasena" type="password" placeholder="Tu contraseña" autocomplete="current-password" required>
-                    <button class="toggle-password" type="button" aria-label="Mostrar contraseña" aria-pressed="false">
+                    <input id="contrasena" name="contrasena" type="password" placeholder="Tu contraseña" data-i18n-placeholder="passwordPlaceholder" autocomplete="current-password" required>
+                    <button class="toggle-password" type="button" aria-label="Mostrar contraseña" data-i18n-aria="showPassword" aria-pressed="false">
                         <i class="ph ph-eye" aria-hidden="true"></i><i class="ph ph-eye-slash" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
-            <a class="forgot-link" href="#recuperar-contrasena" id="forgotPassword">¿Olvidaste tu contraseña?</a>
+            <a class="forgot-link" href="#recuperar-contrasena" id="forgotPassword" data-i18n="forgotPassword">¿Olvidaste tu contraseña?</a>
             <div class="check-row">
                 <input id="recordarme" name="recordarme" type="checkbox" value="1">
-                <label for="recordarme">Recordarme</label>
+                <label for="recordarme" data-i18n="rememberMe">Recordarme</label>
             </div>
-            <button class="btn-submit" type="submit">Iniciar sesión</button>
+            <button class="btn-submit" type="submit" data-i18n="loginButton">Iniciar sesión</button>
         </form>
-        <div class="login-divider"><span>o continúa con</span></div>
-        <div class="google-login" id="googleLoginButton" aria-label="Continuar con Google"></div>
+        <div class="login-divider"><span data-i18n="orContinue">o continúa con</span></div>
+        <div id="g_id_onload"
+             data-client_id="<?= htmlspecialchars($googleClientId !== '' ? $googleClientId : 'TU_CLIENT_ID_DE_GOOGLE', ENT_QUOTES, 'UTF-8') ?>"
+             data-callback="procesarRespuestaGoogle"
+             data-auto_prompt="false"></div>
+        <div class="google-login g_id_signin"
+             data-type="standard"
+             data-size="large"
+             data-theme="outline"
+             data-text="signin_with"
+             data-shape="rectangular"
+             data-logo_alignment="left"
+             aria-label="Continuar con Google"
+             data-i18n-aria="googleLogin"></div>
         <div class="form-footer">
-            ¿No tienes cuenta? <a href="registro.php">Regístrate</a>
+            <span data-i18n="noAccount">¿No tienes cuenta?</span> <a href="registro.php" data-i18n="registerLink">Regístrate</a>
             <?php if (DEV_MODE === true): ?>
-                <br><a class="role-demo-link" href="#seleccionar-rol" id="openRolePicker">Seleccionar rol (demostración)</a>
+                <br><a class="role-demo-link" href="#seleccionar-rol" id="openRolePicker" data-i18n="demoRole">Seleccionar rol (demostración)</a>
             <?php endif; ?>
         </div>
     </main>
@@ -600,21 +650,21 @@ if ($metodoPost) {
     <div class="dialog-backdrop" id="recoveryBackdrop">
         <section class="recovery-dialog" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle">
             <div class="dialog-head">
-                <h2 id="recoveryTitle">Recuperar contraseña</h2>
-                <button class="dialog-close" id="closeRecovery" type="button" aria-label="Cerrar">&times;</button>
+                <h2 id="recoveryTitle" data-i18n="recoveryTitle">Recuperar contraseña</h2>
+                <button class="dialog-close" id="closeRecovery" type="button" aria-label="Cerrar" data-i18n-aria="close">×</button>
             </div>
-            <p class="dialog-copy">Escribe el correo asociado a tu cuenta y te indicaremos cómo continuar.</p>
+            <p class="dialog-copy" data-i18n="recoveryCopy">Escribe el correo asociado a tu cuenta y te indicaremos cómo continuar.</p>
             <div class="notice" id="recoveryNotice" role="status" aria-live="polite"></div>
             <form id="recoveryForm" novalidate>
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="action" value="recuperar">
                 <div class="form-group">
-                    <label for="correoRecuperacion">Correo electrónico</label>
-                    <input id="correoRecuperacion" name="correo_recuperacion" type="email" placeholder="usuario@kion.com" autocomplete="email" required>
+                    <label for="correoRecuperacion" data-i18n="emailLabel">Correo electrónico</label>
+                    <input id="correoRecuperacion" name="correo_recuperacion" type="email" placeholder="usuario@kion.com" data-i18n-placeholder="emailPlaceholder" autocomplete="email" required>
                 </div>
                 <div class="dialog-actions">
-                    <button class="btn-secondary" id="cancelRecovery" type="button">Cancelar</button>
-                    <button class="dialog-submit" type="submit">Enviar instrucciones</button>
+                    <button class="btn-secondary" id="cancelRecovery" type="button" data-i18n="cancel">Cancelar</button>
+                    <button class="dialog-submit" type="submit" data-i18n="sendInstructions">Enviar instrucciones</button>
                 </div>
             </form>
         </section>
@@ -624,21 +674,21 @@ if ($metodoPost) {
     <?php if (DEV_MODE === true): ?>
         <div class="role-overlay" id="roleOverlay">
             <section class="role-picker" role="dialog" aria-modal="true" aria-labelledby="rolePickerTitle">
-                <button class="role-picker-close" id="closeRolePicker" type="button" aria-label="Cerrar">&times;</button>
+                <button class="role-picker-close" id="closeRolePicker" type="button" aria-label="Cerrar" data-i18n-aria="close">×</button>
                 
                 <!-- Cabecera de 2 pasos -->
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                    <button id="btnVolverRoles" type="button" style="display: none; background: none; border: none; color: var(--gold-light); cursor: pointer; font-size: 12px; font-weight: bold; padding:0;">← Volver</button>
-                    <h2 id="rolePickerTitle" style="margin: 0; flex: 1; text-align: center;">Seleccionar rol</h2>
+                    <button id="btnVolverRoles" type="button" style="display: none; background: none; border: none; color: var(--gold-light); cursor: pointer; font-size: 12px; font-weight: bold; padding:0;" data-i18n="back">← Volver</button>
+                    <h2 id="rolePickerTitle" style="margin: 0; flex: 1; text-align: center;" data-i18n="selectRole">Seleccionar rol</h2>
                 </div>
-                <p id="rolePickerSub" style="margin: 0 0 14px; color: var(--text-muted); font-size: 11px; text-align: center;">Acceso rápido para la exposición de avances.</p>
+                <p id="rolePickerSub" style="margin: 0 0 14px; color: var(--text-muted); font-size: 11px; text-align: center;" data-i18n="demoAccess">Acceso rápido para la exposición de avances.</p>
 
                 <!-- Paso 1: Elegir el tipo de rol -->
-                <nav class="role-options" id="stepRoles" aria-label="Roles de demostración">
-                    <button type="button" class="role-option btn-rol-categoria" data-rol="admin">Administrador General</button>
-                    <button type="button" class="role-option btn-rol-categoria" data-rol="gerente">Gerente</button>
-                    <button type="button" class="role-option btn-rol-categoria" data-rol="cajero">Cajero</button>
-                    <button type="button" class="role-option btn-rol-categoria" data-rol="usuario">Usuario / Cliente</button>
+                <nav class="role-options" id="stepRoles" aria-label="Roles de demostración" data-i18n-aria="demoRoles">
+                    <button type="button" class="role-option btn-rol-categoria" data-rol="admin" data-i18n="administrator">Administrador General</button>
+                    <button type="button" class="role-option btn-rol-categoria" data-rol="gerente" data-i18n="manager">Gerente</button>
+                    <button type="button" class="role-option btn-rol-categoria" data-rol="cajero" data-i18n="cashier">Cajero</button>
+                    <button type="button" class="role-option btn-rol-categoria" data-rol="usuario" data-i18n="customer">Usuario / Cliente</button>
                 </nav>
 
                 <!-- Paso 2: Elegir el usuario (Llenado con AJAX) -->
@@ -649,15 +699,160 @@ if ($metodoPost) {
     <?php endif; ?>
 
     <script>
+        const I18N = {
+            es: {
+                documentTitle: 'PETKO | Iniciar sesión', brandBadge: 'Veterinaria & Farmacia', brandSubtitle: 'Vet & Agropecuario',
+                loginTitle: 'Iniciar sesión', emailLabel: 'Correo electrónico', emailPlaceholder: 'usuario@kion.com',
+                passwordLabel: 'Contraseña', passwordPlaceholder: 'Tu contraseña', showPassword: 'Mostrar contraseña',
+                hidePassword: 'Ocultar contraseña', forgotPassword: '¿Olvidaste tu contraseña?', rememberMe: 'Recordarme',
+                darkMode: 'Modo Oscuro', lightMode: 'Modo Claro',
+                languageToggle: 'Cambiar idioma',
+                pageControls: 'Controles de página',
+                loginButton: 'Iniciar sesión', orContinue: 'o continúa con', googleLogin: 'Continuar con Google',
+                noAccount: '¿No tienes cuenta?', registerLink: 'Regístrate', demoRole: 'Seleccionar rol (demostración)',
+                homeTitle: 'Volver al inicio', recoveryTitle: 'Recuperar contraseña', close: 'Cerrar',
+                recoveryCopy: 'Escribe el correo asociado a tu cuenta y te indicaremos cómo continuar.',
+                cancel: 'Cancelar', sendInstructions: 'Enviar instrucciones', back: '← Volver',
+                selectRole: 'Seleccionar rol', demoAccess: 'Acceso rápido para la exposición de avances.',
+                roleUsers: 'Usuarios', selectAccount: 'Selecciona la cuenta con la que deseas ingresar.',
+                demoRoles: 'Roles de demostración', administrator: 'Administrador General', manager: 'Gerente',
+                cashier: 'Cajero', customer: 'Usuario / Cliente',
+                invalidEmail: 'Escribe un correo electrónico válido.', enterPassword: 'Escribe tu contraseña.',
+                requestFailed: 'No fue posible completar la solicitud.', requestComplete: 'Solicitud completada.',
+                connectionFailed: 'No fue posible conectar con el servidor. Inténtalo de nuevo.',
+                googleFailed: 'No fue posible iniciar sesión con Google.', loginSuccess: 'Inicio de sesión correcto.',
+                googleConnectionFailed: 'No fue posible conectar con Google.', loadingUsers: 'Cargando usuarios...',
+                noUsers: 'No se encontraron usuarios activos en este rol.', connectionError: 'Error de conexión.',
+                serverConnectionError: 'Error de conexión con el servidor.',
+                messages: {
+                    'La solicitud expiró o no es válida. Recarga la página e inténtalo de nuevo.': 'The request expired or is invalid. Reload the page and try again.',
+                    'No fue posible conectar con la base de datos.': 'Could not connect to the database.',
+                    'El usuario seleccionado no existe en la base de datos.': 'The selected user does not exist in the database.',
+                    'Esta cuenta se encuentra inactiva.': 'This account is inactive.',
+                    'Acceso de prueba correcto.': 'Demo login successful.',
+                    'Error de BD al procesar rol de prueba.': 'Database error while processing the demo role.',
+                    'Demasiados intentos fallidos. Inténtalo en 15 minutos.': 'Too many failed attempts. Try again in 15 minutes.',
+                    'La contraseña o correo electrónico no son correctos.': 'The email or password is incorrect.',
+                    'No fue posible completar el inicio de sesión. Inténtalo de nuevo.': 'Could not complete sign-in. Please try again.',
+                    'Entorno local detectado: Redirigiendo a la pantalla para restablecer contraseña...': 'Local environment detected: redirecting to the password reset page...',
+                    'Si el correo está registrado, recibirás un enlace de recuperación en tu bandeja de entrada.': 'If the email is registered, you will receive a recovery link in your inbox.',
+                    'No fue posible procesar la solicitud. Inténtalo de nuevo.': 'Could not process the request. Please try again.',
+                    'No fue posible procesar la solicitud.': 'Could not process the request.',
+                    'Escribe tu contraseña.': 'Enter your password.',
+                    'Escribe un correo electrónico válido.': 'Enter a valid email address.',
+                    'No fue posible iniciar sesión con Google.': 'Could not sign in with Google.',
+                    'Inicio de sesión correcto.': 'Sign-in successful.',
+                    'No fue posible conectar con Google.': 'Could not connect to Google.',
+                    'Error de conexión con el servidor.': 'Could not connect to the server.'
+                }
+            },
+            en: {
+                documentTitle: 'PETKO | Sign in', brandBadge: 'Veterinary & Pharmacy', brandSubtitle: 'Veterinary & Agriculture',
+                loginTitle: 'Sign in', emailLabel: 'Email address', emailPlaceholder: 'user@kion.com',
+                passwordLabel: 'Password', passwordPlaceholder: 'Your password', showPassword: 'Show password',
+                hidePassword: 'Hide password', forgotPassword: 'Forgot your password?', rememberMe: 'Remember me',
+                darkMode: 'Dark mode', lightMode: 'Light mode',
+                languageToggle: 'Switch language',
+                pageControls: 'Page controls',
+                loginButton: 'Sign in', orContinue: 'or continue with', googleLogin: 'Continue with Google',
+                noAccount: "Don't have an account?", registerLink: 'Sign up', demoRole: 'Select role (demo)',
+                homeTitle: 'Back to home', recoveryTitle: 'Reset password', close: 'Close',
+                recoveryCopy: 'Enter the email associated with your account and we will tell you how to continue.',
+                cancel: 'Cancel', sendInstructions: 'Send instructions', back: '← Back',
+                selectRole: 'Select a role', demoAccess: 'Quick access for the progress presentation.',
+                roleUsers: 'Users', selectAccount: 'Select the account you want to sign in with.',
+                demoRoles: 'Demo roles', administrator: 'General Administrator', manager: 'Manager',
+                cashier: 'Cashier', customer: 'User / Customer',
+                invalidEmail: 'Enter a valid email address.', enterPassword: 'Enter your password.',
+                requestFailed: 'Could not complete the request.', requestComplete: 'Request completed.',
+                connectionFailed: 'Could not connect to the server. Please try again.',
+                googleFailed: 'Could not sign in with Google.', loginSuccess: 'Sign-in successful.',
+                googleConnectionFailed: 'Could not connect to Google.', loadingUsers: 'Loading users...',
+                noUsers: 'No active users were found for this role.', connectionError: 'Connection error.',
+                serverConnectionError: 'Could not connect to the server.',
+                messages: {
+                    'La solicitud expiró o no es válida. Recarga la página e inténtalo de nuevo.': 'The request expired or is invalid. Reload the page and try again.',
+                    'No fue posible conectar con la base de datos.': 'Could not connect to the database.',
+                    'El usuario seleccionado no existe en la base de datos.': 'The selected user does not exist in the database.',
+                    'Esta cuenta se encuentra inactiva.': 'This account is inactive.',
+                    'Acceso de prueba correcto.': 'Demo login successful.',
+                    'Error de BD al procesar rol de prueba.': 'Database error while processing the demo role.',
+                    'Demasiados intentos fallidos. Inténtalo en 15 minutos.': 'Too many failed attempts. Try again in 15 minutes.',
+                    'La contraseña o correo electrónico no son correctos.': 'The email or password is incorrect.',
+                    'No fue posible completar el inicio de sesión. Inténtalo de nuevo.': 'Could not complete sign-in. Please try again.',
+                    'Entorno local detectado: Redirigiendo a la pantalla para restablecer contraseña...': 'Local environment detected: redirecting to the password reset page...',
+                    'Si el correo está registrado, recibirás un enlace de recuperación en tu bandeja de entrada.': 'If the email is registered, you will receive a recovery link in your inbox.',
+                    'No fue posible procesar la solicitud. Inténtalo de nuevo.': 'Could not process the request. Please try again.',
+                    'No fue posible procesar la solicitud.': 'Could not process the request.',
+                    'Escribe tu contraseña.': 'Enter your password.',
+                    'Escribe un correo electrónico válido.': 'Enter a valid email address.',
+                    'No fue posible iniciar sesión con Google.': 'Could not sign in with Google.',
+                    'Inicio de sesión correcto.': 'Sign-in successful.',
+                    'No fue posible conectar con Google.': 'Could not connect to Google.',
+                    'Error de conexión con el servidor.': 'Could not connect to the server.'
+                }
+            }
+        };
+        let currentLang = localStorage.getItem('kion-lang') === 'en' ? 'en' : 'es';
+        const themeButton = document.getElementById('btnTheme');
+        let darkMode = localStorage.getItem('kion-theme') === 'dark';
+        document.body.classList.toggle('dark-mode', darkMode);
+
+        function updateThemeControl() {
+            themeButton.querySelector('i').className = `ph ${darkMode ? 'ph-sun' : 'ph-moon'}`;
+            const label = I18N[currentLang][darkMode ? 'lightMode' : 'darkMode'] || (darkMode ? 'Modo Claro' : 'Modo Oscuro');
+            themeButton.title = label;
+            themeButton.setAttribute('aria-label', label);
+        }
+        function applyTranslations() {
+            const translations = I18N[currentLang];
+            document.documentElement.lang = currentLang;
+            document.querySelectorAll('[data-i18n]').forEach((element) => {
+                const key = element.dataset.i18n;
+                if (translations[key] !== undefined) element.textContent = translations[key];
+            });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => {
+                const key = element.dataset.i18nPlaceholder;
+                if (translations[key] !== undefined) element.setAttribute('placeholder', translations[key]);
+            });
+            document.querySelectorAll('[data-i18n-title]').forEach((element) => {
+                const key = element.dataset.i18nTitle;
+                if (translations[key] !== undefined) element.title = translations[key];
+            });
+            document.querySelectorAll('[data-i18n-aria]').forEach((element) => {
+                const key = element.dataset.i18nAria;
+                if (translations[key] !== undefined) element.setAttribute('aria-label', translations[key]);
+            });
+            document.querySelectorAll('.toggle-password').forEach((button) => {
+                const key = button.getAttribute('aria-pressed') === 'true' ? 'hidePassword' : 'showPassword';
+                button.dataset.i18nAria = key;
+                button.setAttribute('aria-label', translations[key]);
+            });
+            updateThemeControl();
+        }
+        document.getElementById('btnLang').addEventListener('click', () => {
+            currentLang = currentLang === 'es' ? 'en' : 'es';
+            localStorage.setItem('kion-lang', currentLang);
+            applyTranslations();
+        });
+        themeButton.addEventListener('click', () => {
+            darkMode = !darkMode;
+            document.body.classList.toggle('dark-mode', darkMode);
+            localStorage.setItem('kion-theme', darkMode ? 'dark' : 'light');
+            updateThemeControl();
+        });
+        applyTranslations();
+
         const loginForm = document.getElementById('loginForm');
         const loginNotice = document.getElementById('loginNotice');
         const recoveryForm = document.getElementById('recoveryForm');
         const recoveryNotice = document.getElementById('recoveryNotice');
         const recoveryBackdrop = document.getElementById('recoveryBackdrop');
-        const googleClientId = '467947233896-kuvnpl5cdegqkduq4m3e1ste6280feaf.apps.googleusercontent.com';
-
         function showNotice(element, message, type) {
-            element.textContent = message;
+            const translations = I18N[currentLang];
+            element.textContent = currentLang === 'en'
+                ? (translations.messages[message] || translations[message] || message)
+                : message;
             element.className = `notice visible ${type}`;
         }
 
@@ -673,13 +868,13 @@ if ($metodoPost) {
                 });
                 const result = await response.json();
                 if (!result.ok) {
-                    showNotice(notice, result.message || 'No fue posible completar la solicitud.', 'error');
+                    showNotice(notice, result.message || I18N[currentLang].requestFailed, 'error');
                     return;
                 }
-                showNotice(notice, result.message || 'Solicitud completada.', 'success');
+                showNotice(notice, result.message || I18N[currentLang].requestComplete, 'success');
                 if (result.redirect) window.setTimeout(() => { window.location.href = result.redirect; }, successDelay);
             } catch (error) {
-                showNotice(notice, 'No fue posible conectar con el servidor. Inténtalo de nuevo.', 'error');
+                showNotice(notice, I18N[currentLang].connectionFailed, 'error');
             } finally {
                 if (button) button.disabled = false;
             }
@@ -690,7 +885,8 @@ if ($metodoPost) {
                 const input = button.parentElement.querySelector('input');
                 const show = input.type === 'password';
                 input.type = show ? 'text' : 'password';
-                button.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+                button.dataset.i18nAria = show ? 'hidePassword' : 'showPassword';
+                button.setAttribute('aria-label', I18N[currentLang][button.dataset.i18nAria]);
                 button.setAttribute('aria-pressed', String(show));
             });
         });
@@ -700,11 +896,11 @@ if ($metodoPost) {
             const email = loginForm.elements.correo.value.trim();
             const password = loginForm.elements.contrasena.value;
             if (!email || !loginForm.elements.correo.validity.valid) {
-                showNotice(loginNotice, 'Escribe un correo electrónico válido.', 'error');
+                showNotice(loginNotice, I18N[currentLang].invalidEmail, 'error');
                 return;
             }
             if (!password) {
-                showNotice(loginNotice, 'Escribe tu contraseña.', 'error');
+                showNotice(loginNotice, I18N[currentLang].enterPassword, 'error');
                 return;
             }
             sendForm(loginForm, loginNotice);
@@ -730,33 +926,39 @@ if ($metodoPost) {
             event.preventDefault();
             const emailInput = recoveryForm.elements.correo_recuperacion;
             if (!emailInput.value.trim() || !emailInput.validity.valid) {
-                showNotice(recoveryNotice, 'Escribe un correo electrónico válido.', 'error');
+                showNotice(recoveryNotice, I18N[currentLang].invalidEmail, 'error');
                 return;
             }
             sendForm(recoveryForm, recoveryNotice, 0);
         });
 
-        function handleGoogleCredential(response) {
-            const body = new URLSearchParams({ credential: response.credential });
-            fetch('google-callback.php', { method: 'POST', body })
-                .then((response) => response.json())
-                .then((result) => {
-                    if (!result.ok) {
-                        showNotice(loginNotice, result.message || 'No fue posible iniciar sesión con Google.', 'error');
-                        return;
-                    }
-                    showNotice(loginNotice, 'Inicio de sesión correcto.', 'success');
-                    window.setTimeout(() => { window.location.href = result.redirect; }, 1500);
-                })
-                .catch(() => showNotice(loginNotice, 'No fue posible conectar con Google.', 'error'));
-        }
-        window.addEventListener('load', () => {
-            if (!window.google?.accounts?.id) return;
-            google.accounts.id.initialize({ client_id: googleClientId, callback: handleGoogleCredential });
-            google.accounts.id.renderButton(document.getElementById('googleLoginButton'), {
-                theme: 'filled_black', size: 'medium', width: 290, text: 'continue_with', shape: 'rectangular', locale: 'es'
-            });
-        });
+        window.procesarRespuestaGoogle = async function procesarRespuestaGoogle(response) {
+            if (!response || typeof response.credential !== 'string' || response.credential === '') {
+                showNotice(loginNotice, I18N[currentLang].googleFailed, 'error');
+                return;
+            }
+
+            const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            const body = new FormData();
+            body.append('credential', response.credential);
+            body.append('csrf_token', csrfToken);
+
+            try {
+                const serverResponse = await fetch('login-google.php', {
+                    method: 'POST',
+                    body
+                });
+                const result = await serverResponse.json();
+                if (!result.ok) {
+                    showNotice(loginNotice, result.message || I18N[currentLang].googleFailed, 'error');
+                    return;
+                }
+                showNotice(loginNotice, I18N[currentLang].loginSuccess, 'success');
+                window.setTimeout(() => { window.location.href = result.redirect || 'index.php'; }, 800);
+            } catch (error) {
+                showNotice(loginNotice, I18N[currentLang].googleConnectionFailed, 'error');
+            }
+        };
 
         // =====================================================================
         // LÓGICA DE ROLES: 2 PASOS (JS)
@@ -785,8 +987,8 @@ if ($metodoPost) {
             stepRoles.style.display = 'grid';
             stepUsuarios.style.display = 'none';
             btnVolverRoles.style.display = 'none';
-            rolePickerTitle.textContent = 'Seleccionar rol';
-            rolePickerSub.textContent = 'Acceso rápido para la exposición de avances.';
+            rolePickerTitle.textContent = I18N[currentLang].selectRole;
+            rolePickerSub.textContent = I18N[currentLang].demoAccess;
         }
 
         btnVolverRoles.addEventListener('click', mostrarPasoRoles);
@@ -796,19 +998,19 @@ if ($metodoPost) {
                 evento.preventDefault();
                 const rol = btn.dataset.rol;
 
-                stepUsuarios.innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:10px;">Cargando usuarios...</p>';
+                stepUsuarios.innerHTML = `<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:10px;">${I18N[currentLang].loadingUsers}</p>`;
                 stepRoles.style.display = 'none';
                 stepUsuarios.style.display = 'grid';
                 btnVolverRoles.style.display = 'inline-block';
 
-                rolePickerTitle.textContent = `Usuarios: ${btn.textContent}`;
-                rolePickerSub.textContent = 'Selecciona la cuenta con la que deseas ingresar.';
+                rolePickerTitle.textContent = `${I18N[currentLang].roleUsers}: ${btn.textContent}`;
+                rolePickerSub.textContent = I18N[currentLang].selectAccount;
 
                 fetch(`?action=get_usuarios_por_rol&rol=${rol}`)
                     .then(res => res.json())
                     .then(res => {
                         if (!res.ok || !res.data || res.data.length === 0) {
-                            stepUsuarios.innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:10px;">No se encontraron usuarios activos en este rol.</p>';
+                            stepUsuarios.innerHTML = `<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:10px;">${I18N[currentLang].noUsers}</p>`;
                             return;
                         }
 
@@ -822,7 +1024,7 @@ if ($metodoPost) {
                         `).join('');
                     })
                     .catch(() => {
-                        stepUsuarios.innerHTML = '<p style="text-align:center; color:var(--error-red); font-size:12px; padding:10px;">Error de conexión.</p>';
+                        stepUsuarios.innerHTML = `<p style="text-align:center; color:var(--error-red); font-size:12px; padding:10px;">${I18N[currentLang].connectionError}</p>`;
                     });
             });
         });
@@ -859,7 +1061,7 @@ if ($metodoPost) {
                     showNotice(loginNotice, resultado.message, 'error');
                 }
             })
-            .catch(() => showNotice(loginNotice, 'Error de conexión con el servidor.', 'error'));
+            .catch(() => showNotice(loginNotice, I18N[currentLang].serverConnectionError, 'error'));
         });
         <?php endif; ?>
 
@@ -871,6 +1073,6 @@ if ($metodoPost) {
             });
         });
     </script>
-    <script src="https://accounts.google.com/gsi/client?hl=es" async defer></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
 </html>

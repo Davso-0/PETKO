@@ -587,6 +587,23 @@ composer install --no-dev --optimize-autoloader
 
 Esto crea la carpeta `vendor/` (excluida del repositorio por `.gitignore`), necesaria para `google-callback.php`.
 
+### Paso 2.1. Configurar el correo SMTP
+
+El servicio de correo lee las variables del entorno del servidor. Para desarrollo local,
+copia `.env.example` como `.env` en la raíz del proyecto y reemplaza los valores de ejemplo:
+
+```bash
+copy .env.example .env
+```
+
+Configura `KION_SMTP_HOST`, `KION_SMTP_PORT`, `KION_SMTP_ENCRYPTION`,
+`KION_SMTP_USER`, `KION_SMTP_PASSWORD` y `KION_MAIL_FROM`. En Gmail y otros
+proveedores que requieren verificación en dos pasos, `KION_SMTP_PASSWORD` debe
+ser una contraseña de aplicación, no la contraseña habitual de la cuenta.
+También pueden definirse directamente como variables de entorno de Apache/PHP.
+El archivo `.env` está excluido de Git y nunca debe contener credenciales
+publicadas en el repositorio.
+
 ### Paso 3. Crear la base de datos e importar el esquema base
 
 Inicia **Apache** y **MySQL** desde el panel de control de XAMPP y ejecuta:
@@ -718,13 +735,26 @@ Si tu servidor usa otras credenciales, edita **ambos** archivos que definen la c
 ### Paso 6. Configurar Google Sign-In (opcional)
 
 1. En [Google Cloud Console](https://console.cloud.google.com/apis/credentials), crea un **ID de cliente de OAuth 2.0** de tipo *Aplicación web*.
-2. En **Orígenes de JavaScript autorizados** agrega `http://localhost` (y el dominio de producción).
-3. Reemplaza el *Client ID* en los dos lugares donde se usa:
+2. En **Orígenes de JavaScript autorizados** agrega cada origen desde el que se abrirá el login:
 
-| Archivo | Ubicación |
-|---|---|
-| `inicioSesion.php` | `const googleClientId = '…';` |
-| `google-callback.php` | `new Google_Client(['client_id' => '…'])` |
+```text
+http://localhost
+https://petko.site.je
+```
+
+Si el sitio usa `www`, registra también `https://www.petko.site.je`. No agregues
+rutas como `/inicioSesion.php` en esta sección.
+3. Copia `.env.example` como `.env` en la raíz del proyecto y configura:
+
+```env
+GOOGLE_CLIENT_ID=tu-client-id.apps.googleusercontent.com
+```
+
+El mismo valor se utiliza de forma segura en `inicioSesion.php` y
+`google-callback.php`. Este flujo usa Google Identity Services mediante un
+`credential` enviado por `POST`; por ello no necesita `GOOGLE_CLIENT_SECRET` ni
+`GOOGLE_REDIRECT_URI`. La cuenta de servicio o el secreto OAuth no deben
+publicarse ni enviarse al navegador.
 
 ### Paso 7. Crear los usuarios iniciales
 
