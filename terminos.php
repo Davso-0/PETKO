@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+$csrfToken = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
+$_SESSION['csrf_token'] = $csrfToken;
 $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
 $tokenActivacion = isset($_GET['token']) && is_string($_GET['token'])
     && preg_match('/\A[a-f0-9]{64}\z/', $_GET['token']) ? $_GET['token'] : null;
@@ -122,7 +127,6 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
         <?php if ($esActivacion): ?>
             <div class="activation-banner" role="status">
                 Estás en proceso de activación de tu cuenta.
-                <br><a href="activar-cuenta.php?token=<?= rawurlencode($tokenActivacion) ?>">Regresar a la activación</a>
             </div>
         <?php endif; ?>
 
@@ -135,7 +139,7 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
 
             <section>
                 <h3>2. Cuentas de usuario, roles y autenticación</h3>
-                <p>Para registrarse se requiere tener al menos 18 años �?"o la mayoría de edad aplicable en el lugar de residencia�?", proporcionar información completa y verídica y disponer de una dirección de correo electrónico válida. La persona usuaria debe mantener sus datos actualizados.</p>
+                <p>Para registrarse se requiere tener al menos 18 años o la mayoría de edad aplicable en el lugar de residencia, proporcionar información completa y verídica y disponer de una dirección de correo electrónico válida. La persona usuaria debe mantener sus datos actualizados.</p>
                 <p>Las funciones disponibles dependen del rol asignado por PETKO. Los roles pueden incluir Usuario/Cliente, Cajero, Gerente y Administrador General. Los permisos de cada cuenta no deben transferirse ni utilizarse para acceder a funciones ajenas a sus responsabilidades.</p>
                 <p>Si se ofrece inicio de sesión con Google Identity, PETKO recibe de Google los datos de perfil necesarios para identificar y crear la cuenta, que pueden incluir nombre, apellidos y correo electrónico, según los permisos otorgados. La autenticación de Google se rige también por las condiciones y la política de privacidad de Google.</p>
                 <p>La persona usuaria es responsable de mantener confidenciales sus credenciales, cerrar sesión en dispositivos compartidos y notificar al operador de PETKO si sospecha de un acceso no autorizado.</p>
@@ -183,7 +187,15 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
         </div>
 
         <footer class="terms-footer">
-            <?php if ($incrustado): ?>
+            <?php if ($esActivacion): ?>
+                <form method="post" action="activar-cuenta.php">
+                    <input type="hidden" name="token" value="<?= htmlspecialchars($tokenActivacion, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+                    <input type="hidden" name="accion" value="aceptar_terminos">
+                    <input type="hidden" name="acepto_terminos" value="1">
+                    <button class="terms-button" type="submit">Aceptar y continuar</button>
+                </form>
+            <?php elseif ($incrustado): ?>
                 <button class="terms-button" id="closeAndAccept" type="button">Cerrar y aceptar</button>
             <?php else: ?>
                 <a class="terms-button" href="registro.php">Volver al registro</a>
