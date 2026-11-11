@@ -39,7 +39,7 @@
    - 7.4 [Panel de Administración General](#74-panel-de-administración-general)
    - 7.5 [Panel de Gerente y Punto de Venta](#75-panel-de-gerente-y-punto-de-venta)
    - 7.6 [Panel del Cliente](#76-panel-del-cliente-mi-cuenta)
-   - 7.7 [Módulo de Cobranza (prototipo)](#77-módulo-de-cobranza-prototipo)
+   - 7.7 [Módulo de Cobranza](#77-módulo-de-cobranza)
    - 7.8 [Página de inicio pública](#78-página-de-inicio-pública)
    - 7.9 [Internacionalización, temas y persistencia en el cliente](#79-internacionalización-temas-y-persistencia-en-el-cliente)
 8. [Modelo de datos](#8-modelo-de-datos)
@@ -196,16 +196,11 @@ PETKO/ (raíz del repositorio)
 └── src/
     ├── css/
     │   ├── catalogo.css            # Sistema de diseño del catálogo PETKO (temas, grid, modales, ticket)
-    │   ├── cobranza.css            # Estilos del prototipo de cobranza
-    │   ├── dashboard.css           # Sistema de diseño de paneles (reservado; no enlazado actualmente)
-    │   └── style.css               # Hoja global heredada (usada por cobranza.php)
+    │   ├── petko-ui.css            # Identidad visual compartida de los paneles (misma paleta, barra y botones que el home)
     ├── js/
     │   ├── catalogo.js             # Lógica del catálogo: filtros, búsqueda, carrito, apartados, checkout, i18n
-    │   ├── cobranza.js             # Carrito y llamadas AJAX del prototipo de cobranza
-    │   ├── kion-prefs.js           # Módulo KionPrefs (tema/idioma compartidos; reservado)
-    │   └── script.js               # Marcador para JS global
+    │   ├── petko-prefs.js          # Tema e idioma compartidos con el home (claves petko_dark / petko_lang)
     ├── img/                        # Productos ({id}.jpg), logotipos, iconos y mascotas (perrito, gatos)
-    │   └── originales/             # Respaldo de las ilustraciones originales
     ├── videoEJEMPLO/               # Videos de fondo de las pantallas de login y registro
     └── php/
         ├── config/
@@ -213,11 +208,6 @@ PETKO/ (raíz del repositorio)
         │   └── conexion.php        # Alias de compatibilidad (require de conexion_BD.php)
         ├── componentes/
         │   ├── catalogo.php        # Catálogo público PETKO (vista principal de clientes)
-        │   ├── header.php          # Componente reservado (cabecera compartida)
-        │   ├── navbar.php          # Componente reservado (navegación compartida)
-        │   └── footer.php          # Componente reservado (pie de página compartido)
-        ├── cobranza/
-        │   └── cobranza.php        # Prototipo de cobranza (sin base de datos)
         └── modulos/
             └── home/
                 ├── home.php                # Landing page pública
@@ -240,7 +230,6 @@ PETKO/ (raíz del repositorio)
 | `src/php/modulos/home/dashboard.php` | Vista + API | Administrador | Gestión global: sucursales, personal, catálogo, inventario y ventas |
 | `src/php/modulos/home/dashboard_gerente.php` | Vista + API | Gerente | Operación de una sucursal: inventario, productos, cajas, POS y cortes |
 | `src/php/modulos/home/dashboard_usuario.php` | Vista + API | Usuario autenticado | Apartados del cliente y cambio de contraseña |
-| `src/php/cobranza/cobranza.php` | Vista + API | Prototipo | Maqueta de cobro con datos en sesión |
 | `src/php/config/conexion_BD.php` | Configuración | Interno | Crea la instancia `$pdo` compartida |
 
 ---
@@ -357,7 +346,7 @@ Las categorías se leen de la tabla `categorias`, y una consulta secundaria opci
 | Ticket | Comprobante con folio `FOLIO-####`, fecha, método, estado, partidas y total; vacía el carrito al confirmar |
 | Validación de sesión | El servidor publica `window.PETKO_SESION = {autenticado, loginUrl}`; sin sesión, agregar o apartar muestra un aviso y redirige al login |
 | Mascota interactiva | Perrito veterinario con globos de diálogo y expresiones según el contexto (éxito, error, búsqueda vacía) |
-| Accesibilidad | Escala de texto A− / A / A+ (90 % a 130 %) persistente, navegación por teclado, atributos ARIA y respeto de `prefers-reduced-motion` |
+| Accesibilidad | Textos de tamaño legible por defecto, navegación por teclado, atributos ARIA y respeto de `prefers-reduced-motion` |
 | Diseño | Paleta azul marino, verde y blanco; fondo animado con patrón de huellas; menú lateral fijo (`position: sticky`) con desplazamiento interno |
 
 ### 7.4 Panel de Administración General
@@ -415,9 +404,9 @@ Archivo: `src/php/modulos/home/dashboard_usuario.php`. Requiere sesión iniciada
 - **Mis apartados:** listado con producto, sucursal, precio, fecha y estado.
 - **Configuración:** datos de la cuenta y cambio de contraseña (verifica la actual con `password_verify` y guarda la nueva con bcrypt).
 
-### 7.7 Módulo de Cobranza (prototipo)
+### 7.7 Módulo de Cobranza
 
-Archivo: `src/php/cobranza/cobranza.php` con `src/js/cobranza.js`. Es una **maqueta funcional sin base de datos**: punto de venta con escaneo de código, historial de pagos y corte de caja. Las ventas se guardan en `$_SESSION['ventas']` y los productos son de demostración. La funcionalidad productiva del POS vive en el Panel de Gerente (7.5).
+El prototipo sin base de datos se retiró del proyecto; la funcionalidad productiva del POS vive en el Panel de Gerente (7.5).
 
 ### 7.8 Página de inicio pública
 
@@ -431,13 +420,8 @@ Todas las vistas principales ofrecen **español / inglés** y **modo claro / osc
 |---|---|---|
 | `kion-cart` | Catálogo | Carrito de compras |
 | `kion-apartados` | Catálogo | Apartados vigentes (folio y caducidad) |
-| `kion-catalog-theme` / `kion-catalog-lang` | Catálogo | Tema e idioma |
-| `kion-font-scale` | Catálogo | Escala de texto (0.9–1.3) |
-| `kion-admin-theme` / `kion-admin-lang` | Administración | Tema e idioma |
-| `kion-gerente-theme` / `kion-gerente-lang` | Gerente | Tema e idioma |
 | `kion-gerente-turno` | Gerente (POS) | Turno de caja en curso |
-| `kion-user-theme` | Mi Cuenta | Tema |
-| `kion_dark` / `kion_lang` | Home | Tema e idioma |
+| `petko_dark` / `petko_lang` | Home, login, catálogo y paneles | Tema (`1`/`0`) e idioma (`es`/`en`) compartidos: se cambian en un sitio y valen en todos |
 
 | Cookie | Propósito |
 |---|---|
@@ -826,7 +810,6 @@ El proyecto es un **prototipo académico en desarrollo activo**. Se documentan c
 | Cierre de sesión | No revoca la cookie `kion_remember` | Limpiar el token en BD y la cookie al cerrar sesión |
 | Concurrencia en ventas | No se usa `SELECT … FOR UPDATE` al descontar inventario | Bloqueo de filas dentro de la transacción |
 | Configuración | Credenciales duplicadas en dos archivos | Centralizar en `conexion_BD.php` o en variables de entorno (`.env`, ya excluido en `.gitignore`) |
-| Componentes compartidos | `header.php`, `navbar.php`, `footer.php`, `script.js`, `kion-prefs.js` y `dashboard.css` están reservados y aún no se incluyen | Extraer la cabecera, la navegación y las preferencias comunes de las vistas |
 | Pruebas | No hay pruebas automatizadas | Pruebas unitarias con PHPUnit para las reglas de negocio (ventas, cortes) |
 
 ---

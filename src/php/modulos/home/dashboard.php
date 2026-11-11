@@ -386,9 +386,8 @@ try {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>KION · Panel de Administración</title>
+    <title>PETKO · Panel de Administración</title>
 
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -657,17 +656,18 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
     .sidebar-collapse-btn { display: none; }
     .hamburger-btn { display: inline-flex; }
 }
-    </style>
+    
+
+</style>
+    <link rel="stylesheet" href="../../../css/petko-ui.css?v=<?= (int) @filemtime(__DIR__ . '/../../../css/petko-ui.css') ?>">
 </head>
 <body>
+<script src="../../../js/petko-prefs.js"></script>
 
 <div class="app-layout" id="appLayout">
     <aside class="sidebar">
         <button class="sidebar-collapse-btn" id="btnCollapse" title="Colapsar menú"><i class="ph ph-caret-left"></i></button>
-        <div class="brand">
-            <i class="ph-fill ph-paw-print"></i>
-            <div class="brand-text"><div>KION</div><div class="brand-sub" data-i18n="brand_sub">Administración General</div></div>
-        </div>
+        <a class="brand" href="home.php" aria-label="PETKO · Inicio"><img src="../../../img/petko/logo_amarillo.png" alt="PETKO Veterinaria y Ganadería" width="520" height="161"></a>
         <nav class="nav-menu">
             <div class="nav-section-title" data-i18n="nav_section_panel">Panel</div>
             <button class="nav-btn active" data-target="view-general"><i class="ph ph-squares-four"></i><span class="nav-label" data-i18n="nav_general">Resumen General</span></button>
@@ -694,8 +694,8 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
                 </div>
             </div>
             <div class="topbar-actions">
-                <button class="icon-btn" id="btnLang" title="Switch language / Cambiar idioma"><i class="ph ph-translate"></i></button>
-                <button class="icon-btn" id="btnTheme" title="Modo Oscuro"><i class="ph ph-moon"></i></button>
+                <button class="icon-btn" id="btnLang" data-petko-lang type="button">EN</button>
+                <button class="icon-btn" id="btnTheme" data-petko-theme type="button">🌙</button>
                 <div class="user-profile">
                     <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--green)"></i>
                     <span><?= htmlspecialchars($nombreAdmin) ?></span>
@@ -709,7 +709,7 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
             <!-- RESUMEN GENERAL -->
             <section id="view-general" class="view-section active">
                 <div class="header-row">
-                    <div><h1 class="title"><span data-i18n="greeting">Hola, administración</span> <span class="wave">👋</span></h1><p class="subtitle" data-i18n="greeting_sub">Este es el pulso operativo de KION al día de hoy.</p></div>
+                    <div><h1 class="title"><span data-i18n="greeting">Hola, administración</span> <span class="wave">👋</span></h1><p class="subtitle" data-i18n="greeting_sub">Este es el pulso operativo de PETKO al día de hoy.</p></div>
                     <button class="btn-ghost" id="refreshDashboard"><i class="ph ph-arrows-clockwise"></i> <span data-i18n="btn_actualizar">Actualizar</span></button>
                 </div>
                 <div class="kpi-grid">
@@ -809,15 +809,8 @@ async function request(actionStr, options = {}) {
 const statusBadge = s => `<span class="badge ${String(s).toUpperCase().includes('INACT') ? 'b-red' : 'b-green'}">${escapeHtml(s)}</span>`;
 const empty = (cols, text=null) => `<tr><td colspan="${cols}" style="text-align:center;color:var(--ink-faint);padding:40px">${text || t('sin_registros')}</td></tr>`;
 
-// -------- TEMA --------
-const body = document.body, btnTheme = $('#btnTheme');
-btnTheme.addEventListener('click', () => {
-    body.classList.toggle('dark-mode');
-    const icon = btnTheme.querySelector('i');
-    icon.classList.toggle('ph-moon'); icon.classList.toggle('ph-sun');
-    localStorage.setItem('kion-admin-theme', body.classList.contains('dark-mode') ? 'dark' : 'light');
-});
-if (localStorage.getItem('kion-admin-theme') === 'dark') { body.classList.add('dark-mode'); btnTheme.querySelector('i').classList.replace('ph-moon','ph-sun'); }
+// -------- TEMA (compartido con el home: petko_dark) --------
+const body = document.body;
 
 // -------- IDIOMA (ES / EN) --------
 const I18N = {
@@ -826,7 +819,7 @@ const I18N = {
         nav_section_panel: 'Panel', nav_section_gestion: 'Gestión', nav_section_nav: 'Navegación',
         nav_general: 'Resumen General', nav_sucursales: 'Sucursales', nav_personal: 'Personal', 
         nav_gestion_productos: 'Gestión de Productos', nav_productos_old: 'Productos', nav_ventas: 'Ventas', nav_catalogo: 'Ir al Catálogo', nav_home: 'Volver a Home', nav_logout: 'Cerrar sesión',
-        greeting: 'Hola, administración', greeting_sub: 'Este es el pulso operativo de KION al día de hoy.', btn_actualizar: 'Actualizar',
+        greeting: 'Hola, administración', greeting_sub: 'Este es el pulso operativo de PETKO al día de hoy.', btn_actualizar: 'Actualizar',
         kpi_tag_red: 'Red', kpi_tag_equipo: 'Equipo', kpi_tag_catalogo: 'Catálogo', kpi_tag_hoy: 'Hoy', ventas_realizadas: 'ventas realizadas', ventas_lbl: 'ventas',
         th_sucursales: 'Sucursales', chart_ventas: 'Ventas (7 días)', chart_ventas_sub: 'Ingresos consolidados de toda la red',
         chart_pagos: 'Métodos de pago', chart_pagos_sub: 'Distribución histórica',
@@ -856,7 +849,7 @@ const I18N = {
         nav_section_panel: 'Overview', nav_section_gestion: 'Management', nav_section_nav: 'Navigation',
         nav_general: 'Dashboard', nav_sucursales: 'Branches', nav_personal: 'Staff', 
         nav_gestion_productos: 'Product Management', nav_productos_old: 'Products', nav_ventas: 'Sales', nav_catalogo: 'Go to Catalog', nav_home: 'Back to Home', nav_logout: 'Log out',
-        greeting: 'Hello, admin', greeting_sub: "Here's KION's operating pulse for today.", btn_actualizar: 'Refresh',
+        greeting: 'Hello, admin', greeting_sub: "Here's PETKO's operating pulse for today.", btn_actualizar: 'Refresh',
         kpi_tag_red: 'Network', kpi_tag_equipo: 'Team', kpi_tag_catalogo: 'Catalog', kpi_tag_hoy: 'Today', ventas_realizadas: 'sales made', ventas_lbl: 'sales',
         th_sucursales: 'Branches', chart_ventas: 'Sales (7 days)', chart_ventas_sub: 'Consolidated revenue across the network',
         chart_pagos: 'Payment methods', chart_pagos_sub: 'Historical distribution',
@@ -882,16 +875,15 @@ const I18N = {
         mov_entrada: 'Inbound (Add)', mov_salida: 'Outbound (Subtract)', mov_reemplazo: 'Fixed Adjustment (Replace)', aplicar_ajuste: 'Apply Adjustment'
     }
 };
-let currentLang = localStorage.getItem('kion-admin-lang') || 'es';
+let currentLang = PetkoPrefs.lang();
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || I18N.es[key] || key; }
 function applyLanguage() {
     document.documentElement.lang = currentLang;
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
 }
-$('#btnLang').addEventListener('click', () => {
-    currentLang = currentLang === 'es' ? 'en' : 'es';
-    localStorage.setItem('kion-admin-lang', currentLang);
+PetkoPrefs.onLang(function (l) {
+    currentLang = l;
     applyLanguage();
     const activeView = document.querySelector('.view-section.active');
     if (activeView) switchView(activeView.id);
