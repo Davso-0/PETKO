@@ -413,9 +413,8 @@ try {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>KION · Panel de Administración</title>
+    <title>PETKO · Panel de Administración</title>
 
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -426,61 +425,64 @@ try {
 
 :root {
     /*[cite: 2] */
-    --bg-app: #f3f8ff; 
+    --bg-app: #f4f8fd; 
     --bg-surface: #ffffff; 
-    --bg-panel: #f4f9ff;
+    --bg-panel: #eef5fc;
     
-    --ink: #0d2548; 
-    --ink-soft: #5b7396; 
-    --ink-faint: #a9bfdc;
-    --border-soft: #d9e6f7;
+    --ink: #0a1f3d; 
+    --ink-soft: #385377; 
+    --ink-faint: #567296;
+    --border-soft: #c8daf0;
     
-    --accent: #2f80ed; 
-    --accent-light: #5cc8ff; 
-    --accent-glow: rgba(47, 128, 237, 0.35);
+    --accent: #1a6fd8; 
+    --accent-light: #4bb4f8; 
+    --accent-glow: rgba(26, 111, 216, 0.28);
     
-    --success: #1f9a73; 
-    --success-bg: #dcecff;
-    --danger: #d8584a; 
-    --danger-bg: #ffe4e6;
-    --warning: #F59E0B; 
-    --warning-bg: #FFFBEB;
+    --success: #0d734c; 
+    --success-bg: #dcf5eb;
+    --danger: #c42b1c; 
+    --danger-bg: #fde8e6;
+    --warning: #b45309; 
+    --warning-bg: #fef3c7;
 
     --font-display: 'Playfair Display', Georgia, serif;
-    --font-body: 'Inter', 'Segoe UI', sans-serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-    --shadow-sm: 0 8px 20px rgba(30, 80, 160, 0.1);
-    --shadow-md: 0 15px 40px rgba(30, 90, 200, 0.1);
-    --shadow-lux: 0 22px 48px rgba(30, 90, 200, 0.14);
+    --shadow-sm: 0 4px 14px rgba(10, 31, 61, 0.06);
+    --shadow-md: 0 10px 28px rgba(10, 31, 61, 0.08);
+    --shadow-lux: 0 18px 40px rgba(10, 31, 61, 0.12);
     
-    --radius: 22px; 
+    --radius: 20px; 
     --radius-pill: 999px;
-    --sidebar-w: 264px; 
-    --sidebar-w-collapsed: 84px;
+    --sidebar-w: 260px; 
+    --sidebar-w-collapsed: 78px;
     --ease-lux: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body.dark-mode {
-    /*[cite: 2] */
-    --bg-app: #071225; 
-    --bg-surface: #040b18; 
-    --bg-panel: #0b1d3a;
+    --bg-app: #060e1d; 
+    --bg-surface: #0a1528; 
+    --bg-panel: #0f1e38;
     
-    --ink: #eaf3ff; 
-    --ink-soft: #a3b8d6; 
-    --ink-faint: #7f9bc0;
-    --border-soft: #16305a;
+    --ink: #f0f6ff; 
+    --ink-soft: #a8bfde; 
+    --ink-faint: #7f9ec7;
+    --border-soft: #182e52;
     
     --accent: #5cc8ff; 
     --accent-light: #8fd6ff; 
     --accent-glow: rgba(92, 200, 255, 0.35);
     
-    --shadow-sm: 0 8px 20px rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 15px 40px rgba(0, 0, 0, 0.5);
-    --shadow-lux: 0 30px 60px rgba(0, 0, 0, 0.55);
+    --shadow-sm: 0 6px 18px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.45);
+    --shadow-lux: 0 24px 50px rgba(0, 0, 0, 0.55);
     
-    --success-bg: rgba(31, 154, 115, 0.15);
-    --danger-bg: rgba(216, 88, 74, 0.15);
+    --success: #34d399;
+    --success-bg: rgba(16, 185, 129, 0.18);
+    --danger: #f87171;
+    --danger-bg: rgba(239, 68, 68, 0.18);
+    --warning: #fbbf24;
+    --warning-bg: rgba(245, 158, 11, 0.18);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -508,7 +510,13 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 
 .view-section { display: none; animation: fadeIn .45s var(--ease-lux) forwards; }
 .view-section.active { display: block; }
-.wave { display: inline-block; transform-origin: 70% 70%; animation: wave 2.2s ease-in-out .3s infinite; } /*[cite: 1] */
+.wave { 
+    display: inline-block; 
+    transform-origin: 70% 70%; 
+}
+.wave.is-animating {
+    animation: wave 2.2s ease-in-out 3; 
+}
 
 .app-layout { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; transition: grid-template-columns .35s var(--ease-lux); }
 .app-layout.is-collapsed { grid-template-columns: var(--sidebar-w-collapsed) 1fr; }
@@ -645,7 +653,10 @@ body.dark-mode .search-input:focus, body.dark-mode .select-input:focus { box-sha
 .swal2-title { font-family: var(--font-display) !important; color: var(--ink) !important; }
 .swal2-input, .swal2-select, .swal2-textarea, .swal2-file { background: var(--bg-surface) !important; color: var(--ink) !important; border: 1.5px solid var(--border-soft) !important; border-radius: 16px !important; font-family: var(--font-body) !important; }
 .swal2-input:focus, .swal2-select:focus, .swal2-textarea:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 4px var(--accent-glow) !important; }
-
+.swal2-confirm {
+    background-color: #1f9a73 !important; /* Verde, o usa #2f80ed para azul PETKO */
+    color: #ffffff !important;
+}
 /*[cite: 1, 2] */
 .prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 32px 28px; }
 .prod-card { background: var(--bg-surface); border: 1.5px solid var(--border-soft); border-radius: 26px; overflow: hidden; display: flex; flex-direction: column; padding: 12px; box-shadow: var(--shadow-sm); transition: .3s var(--ease-lux); position: relative; }
@@ -675,26 +686,43 @@ body.dark-mode .prod-card-img-wrap { background: linear-gradient(135deg, #17315e
 .btn-card-full:hover { background: linear-gradient(135deg, #5cc8ff, #1f6bd6); color: #fff; box-shadow: 0 12px 30px rgba(47,128,237,.5); }
 body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f80ed); }
 
-@media (max-width: 1180px) { .grid-2col { grid-template-columns: 1fr; } }
+main { min-width: 0; width: 100%; overflow-x: hidden; }
+.app-layout { width: 100%; max-width: 100%; overflow-x: hidden; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+.app-layout.is-collapsed { grid-template-columns: var(--sidebar-w-collapsed) minmax(0, 1fr); }
+.content { padding: clamp(16px, 2.6vw, 36px); max-width: 1440px; margin: 0 auto; width: 100%; }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: clamp(14px, 1.8vw, 24px); }
+.prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: clamp(16px, 2vw, 26px); }
+
+@media (max-width: 1240px) { 
+    :root { --sidebar-w: 236px; }
+    .grid-2col { grid-template-columns: 1fr; gap: 20px; } 
+}
 @media (max-width: 980px) {
     .app-layout { grid-template-columns: 1fr; }
-    .sidebar { position: fixed; left: 0; top: 0; width: 280px; height: 100vh; transform: translateX(-100%); transition: transform .4s var(--ease-lux); box-shadow: 0 10px 40px rgba(7, 26, 50, 0.45); border-right: none; }
+    .sidebar { position: fixed; left: 0; top: 0; width: min(84vw, 290px); height: 100vh; transform: translateX(-100%); transition: transform .4s var(--ease-lux); box-shadow: 0 10px 40px rgba(7, 26, 50, 0.45); border-right: none; }
     .app-layout.mobile-open .sidebar { transform: translateX(0); }
     .app-layout.mobile-open .sidebar-scrim { display: block; opacity: 1; pointer-events: auto; }
     .sidebar-collapse-btn { display: none; }
     .hamburger-btn { display: inline-flex; }
 }
-    </style>
+@media (max-width: 768px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+}
+@media (max-width: 420px) {
+    .kpi-grid, .prod-grid { grid-template-columns: 1fr; }
+}
+    
+
+</style>
+    <link rel="stylesheet" href="../../../css/petko-ui.css?v=<?= (int) @filemtime(__DIR__ . '/../../../css/petko-ui.css') ?>">
 </head>
 <body>
+<script src="../../../js/petko-prefs.js"></script>
 
 <div class="app-layout" id="appLayout">
     <aside class="sidebar">
         <button class="sidebar-collapse-btn" id="btnCollapse" title="Colapsar menú"><i class="ph ph-caret-left"></i></button>
-        <div class="brand">
-            <i class="ph-fill ph-paw-print"></i>
-            <div class="brand-text"><div>KION</div><div class="brand-sub" data-i18n="brand_sub">Administración General</div></div>
-        </div>
+        <a class="brand" href="home.php" aria-label="PETKO · Inicio"><img src="../../../img/petko/logo_amarillo.png" alt="PETKO Veterinaria y Ganadería" width="520" height="161"></a>
         <nav class="nav-menu">
             <div class="nav-section-title" data-i18n="nav_section_panel">Panel</div>
             <button class="nav-btn active" data-target="view-general"><i class="ph ph-squares-four"></i><span class="nav-label" data-i18n="nav_general">Resumen General</span></button>
@@ -721,8 +749,8 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
                 </div>
             </div>
             <div class="topbar-actions">
-                <button class="icon-btn" id="btnLang" title="Switch language / Cambiar idioma"><i class="ph ph-translate"></i></button>
-                <button class="icon-btn" id="btnTheme" title="Modo Oscuro"><i class="ph ph-moon"></i></button>
+                <button class="icon-btn" id="btnLang" data-petko-lang type="button">EN</button>
+                <button class="icon-btn" id="btnTheme" data-petko-theme type="button">🌙</button>
                 <div class="user-profile">
                     <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--green)"></i>
                     <span><?= htmlspecialchars($nombreAdmin) ?></span>
@@ -736,7 +764,7 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
             <!-- RESUMEN GENERAL -->
             <section id="view-general" class="view-section active">
                 <div class="header-row">
-                    <div><h1 class="title"><span data-i18n="greeting">Hola, administración</span> <span class="wave">👋</span></h1><p class="subtitle" data-i18n="greeting_sub">Este es el pulso operativo de KION al día de hoy.</p></div>
+                    <div><h1 class="title"><span data-i18n="greeting">Hola, administración</span> <span class="wave">👋</span></h1><p class="subtitle" data-i18n="greeting_sub">Este es el pulso operativo de PETKO al día de hoy.</p></div>
                     <button class="btn-ghost" id="refreshDashboard"><i class="ph ph-arrows-clockwise"></i> <span data-i18n="btn_actualizar">Actualizar</span></button>
                 </div>
                 <div class="kpi-grid">
@@ -836,15 +864,8 @@ async function request(actionStr, options = {}) {
 const statusBadge = s => `<span class="badge ${String(s).toUpperCase().includes('INACT') ? 'b-red' : 'b-green'}">${escapeHtml(s)}</span>`;
 const empty = (cols, text=null) => `<tr><td colspan="${cols}" style="text-align:center;color:var(--ink-faint);padding:40px">${text || t('sin_registros')}</td></tr>`;
 
-// -------- TEMA --------
-const body = document.body, btnTheme = $('#btnTheme');
-btnTheme.addEventListener('click', () => {
-    body.classList.toggle('dark-mode');
-    const icon = btnTheme.querySelector('i');
-    icon.classList.toggle('ph-moon'); icon.classList.toggle('ph-sun');
-    localStorage.setItem('kion-admin-theme', body.classList.contains('dark-mode') ? 'dark' : 'light');
-});
-if (localStorage.getItem('kion-admin-theme') === 'dark') { body.classList.add('dark-mode'); btnTheme.querySelector('i').classList.replace('ph-moon','ph-sun'); }
+// -------- TEMA (compartido con el home: petko_dark) --------
+const body = document.body;
 
 // -------- IDIOMA (ES / EN) --------
 const I18N = {
@@ -853,7 +874,7 @@ const I18N = {
         nav_section_panel: 'Panel', nav_section_gestion: 'Gestión', nav_section_nav: 'Navegación',
         nav_general: 'Resumen General', nav_sucursales: 'Sucursales', nav_personal: 'Personal', 
         nav_gestion_productos: 'Gestión de Productos', nav_productos_old: 'Productos', nav_ventas: 'Ventas', nav_catalogo: 'Ir al Catálogo', nav_home: 'Volver a Home', nav_logout: 'Cerrar sesión',
-        greeting: 'Hola, administración', greeting_sub: 'Este es el pulso operativo de KION al día de hoy.', btn_actualizar: 'Actualizar',
+        greeting: 'Hola, administración', greeting_sub: 'Este es el pulso operativo de PETKO al día de hoy.', btn_actualizar: 'Actualizar',
         kpi_tag_red: 'Red', kpi_tag_equipo: 'Equipo', kpi_tag_catalogo: 'Catálogo', kpi_tag_hoy: 'Hoy', ventas_realizadas: 'ventas realizadas', ventas_lbl: 'ventas',
         th_sucursales: 'Sucursales', chart_ventas: 'Ventas (7 días)', chart_ventas_sub: 'Ingresos consolidados de toda la red',
         chart_pagos: 'Métodos de pago', chart_pagos_sub: 'Distribución histórica',
@@ -867,7 +888,7 @@ const I18N = {
         todas_sucursales: 'Todas las sucursales', todas_categorias: 'Todas las categorías', cualquier_stock: 'Cualquier nivel de stock',
         stock_bajo: 'Stock Bajo', stock_agotado: 'Agotados',
         gestion_prod_sub: 'Catálogo técnico e inventario unificado. Controla existencias y catálogo en un solo lugar.', btn_add_producto: 'Nuevo Producto',
-        th_codigo: 'Código', th_categoria: 'Categoría',
+        th_codigo: 'Código', th_producto: 'Nombre', th_categoria: 'Categoría',th_precio: 'Precio', th_stock: 'Stock', th_estado: 'Estado',
         ven_title: 'Historial de Ventas', ven_sub: 'Supervisa las ventas de toda la red.',
         th_folio: 'Folio', th_fecha: 'Fecha', th_pago: 'Pago', th_total: 'Total',
         editar: 'Editar', ver_stock: 'Ver stock', ver: 'Ver', guardar: 'Guardar', cancelar: 'Cancelar', si_eliminar: 'Sí, eliminar',
@@ -883,7 +904,7 @@ const I18N = {
         nav_section_panel: 'Overview', nav_section_gestion: 'Management', nav_section_nav: 'Navigation',
         nav_general: 'Dashboard', nav_sucursales: 'Branches', nav_personal: 'Staff', 
         nav_gestion_productos: 'Product Management', nav_productos_old: 'Products', nav_ventas: 'Sales', nav_catalogo: 'Go to Catalog', nav_home: 'Back to Home', nav_logout: 'Log out',
-        greeting: 'Hello, admin', greeting_sub: "Here's KION's operating pulse for today.", btn_actualizar: 'Refresh',
+        greeting: 'Hello, admin', greeting_sub: "Here's PETKO's operating pulse for today.", btn_actualizar: 'Refresh',
         kpi_tag_red: 'Network', kpi_tag_equipo: 'Team', kpi_tag_catalogo: 'Catalog', kpi_tag_hoy: 'Today', ventas_realizadas: 'sales made', ventas_lbl: 'sales',
         th_sucursales: 'Branches', chart_ventas: 'Sales (7 days)', chart_ventas_sub: 'Consolidated revenue across the network',
         chart_pagos: 'Payment methods', chart_pagos_sub: 'Historical distribution',
@@ -897,7 +918,7 @@ const I18N = {
         todas_sucursales: 'All branches', todas_categorias: 'All categories', cualquier_stock: 'Any stock level',
         stock_bajo: 'Low Stock', stock_agotado: 'Out of stock',
         gestion_prod_sub: 'Technical catalog and unified inventory. Control stock and catalog in one place.', btn_add_producto: 'New Product',
-        th_codigo: 'Code', th_categoria: 'Category',
+        th_codigo: 'Code', th_producto: 'Product', th_categoria: 'Category',th_precio: 'Price', th_stock: 'Stock', th_estado: 'Status',
         ven_title: 'Sales History', ven_sub: 'Monitor sales across the whole network.',
         th_folio: 'ID', th_fecha: 'Date', th_pago: 'Payment', th_total: 'Total',
         editar: 'Edit', ver_stock: 'View stock', ver: 'View', guardar: 'Save', cancelar: 'Cancel', si_eliminar: 'Yes, delete',
@@ -909,16 +930,15 @@ const I18N = {
         mov_entrada: 'Inbound (Add)', mov_salida: 'Outbound (Subtract)', mov_reemplazo: 'Fixed Adjustment (Replace)', aplicar_ajuste: 'Apply Adjustment'
     }
 };
-let currentLang = localStorage.getItem('kion-admin-lang') || 'es';
+let currentLang = PetkoPrefs.lang();
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || I18N.es[key] || key; }
 function applyLanguage() {
     document.documentElement.lang = currentLang;
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
 }
-$('#btnLang').addEventListener('click', () => {
-    currentLang = currentLang === 'es' ? 'en' : 'es';
-    localStorage.setItem('kion-admin-lang', currentLang);
+PetkoPrefs.onLang(function (l) {
+    currentLang = l;
     applyLanguage();
     const activeView = document.querySelector('.view-section.active');
     if (activeView) switchView(activeView.id);
@@ -1102,8 +1122,8 @@ async function loadFiltrosGP() {
         const [cats, sucs] = await Promise.all([request('get_categorias'), request('get_sucursales_simple')]);
         const catLabel = t('todas_categorias');
         const sucLabel = t('todas_sucursales');
-        $('#gpCategory').innerHTML = `<option value="">${catLabel}</option>` + cats.data.map(c => `<option value="${c.id_categoria}">${escapeHtml(c.nombre)}</option>`).join('');
-        $('#gpBranch').innerHTML = `<option value="">${sucLabel}</option>` + sucs.data.map(s => `<option value="${s.id_sucursal}">${escapeHtml(s.nombre)}</option>`).join('');
+        $('#gpCategory').innerHTML = `<option value="" data-i18n="todas_categorias">${catLabel}</option>` + cats.data.map(c => `<option value="${c.id_categoria}">${escapeHtml(c.nombre)}</option>`).join('');
+        $('#gpBranch').innerHTML = `<option value="" data-i18n="todas_sucursales">${sucLabel}</option>` + sucs.data.map(s => `<option value="${s.id_sucursal}">${escapeHtml(s.nombre)}</option>`).join('');
     } catch(e) {}
 }
 
@@ -1374,6 +1394,7 @@ window.addEventListener('DOMContentLoaded', () => {
             data: { labels: (initial.payments || []).map(x => x.metodo), datasets: [{ data: (initial.payments || []).map(x => x.total_ventas), backgroundColor: palette, borderWidth: 0 }] },
             options: { responsive: true, maintainAspectRatio: false, cutout: '76%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } } } }
         });
+        
     }
     loadBranchSelects();
     loadDashboard();

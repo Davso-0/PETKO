@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             responderRegistro(false, 'No fue posible completar el registro en este momento.');
         }
 
-        $insertar = $pdo->prepare("INSERT INTO usuarios (nombre, apellido, correo, password_hash, id_rol, estado) VALUES (?, ?, ?, ?, ?, 'activo')");
+        $insertar = $pdo->prepare("INSERT INTO usuarios (nombre, apellido, correo, password_hash, id_rol, estado) VALUES (?, ?, ?, ?, ?, 'ACTIVO')");
         $insertar->execute([
             $nombre,
             $apellido,
@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="documentTitle">PETKO | Crear cuenta</title>
+    <title>PETKO | Crear cuenta</title>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
@@ -118,8 +118,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
             --font-brand: 'Fredoka', sans-serif;
             --bg-main: #f8fafc;
-            --bg-surface: var(--field-bg);
-            --ink: var(--text-main);
             --gold: var(--green-primary);
             --gold-light: var(--green-hover);
             --bg-card: var(--card-bg);
@@ -173,14 +171,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size: 13px;
         }
         input:focus { border-color: var(--gold-light); box-shadow: 0 0 0 2px rgba(201, 164, 68, .22); }
-        input:-webkit-autofill,
-        input:-webkit-autofill:hover,
-        input:-webkit-autofill:focus,
-        input:-webkit-autofill:active {
-            -webkit-box-shadow: 0 0 0 30px var(--bg-surface) inset !important;
-            -webkit-text-fill-color: var(--ink) !important;
-            caret-color: var(--ink) !important;
-            transition: background-color 5000s ease-in-out 0s;
+        input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+            -webkit-text-fill-color: var(--text-main);
+            box-shadow: 0 0 0 1000px #191815 inset;
+            transition: background-color 9999s ease-out;
         }
         .input-wrapper { position: relative; }
         .input-wrapper input { padding-right: 44px; }
@@ -197,7 +191,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .field-error { display: none; margin: -4px 0 7px; color: var(--error-red); font-size: 10px; }
         .field-error.visible { display: block; }
         .check-row { display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 10px; color: var(--text-muted); font-size: 10px; line-height: 1.35; }
-        .check-row[hidden] { display: none; }
         .check-row input { width: 14px; height: 14px; flex: 0 0 auto; margin: 0; accent-color: var(--gold); }
         .check-row label { display: inline; margin: 0; color: inherit; font-size: inherit; }
         .check-row > div { min-width: 0; }
@@ -321,37 +314,133 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .notice.success { border-color: rgba(74, 222, 128, .35); background: var(--success-bg); color: var(--success-green); }
         .terms-modal { background: rgba(2, 12, 24, .72); }
         .terms-dialog { border-color: rgba(34, 197, 94, .3); border-radius: 18px; background: rgba(11, 34, 56, .96); box-shadow: 0 25px 60px rgba(0, 0, 0, .5), 0 0 30px rgba(34, 197, 94, .08); }
-        .top-controls { position: absolute; top: 20px; right: 24px; z-index: 100; display: flex; gap: 10px; }
-        .icon-btn { display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid var(--border-soft, var(--card-border)); border-radius: 50%; background: var(--bg-surface); color: var(--ink); cursor: pointer; font-size: 19px; text-decoration: none; transition: background .2s, transform .15s; }
-        .icon-btn:hover { background: var(--field-bg); color: var(--green-primary); transform: translateY(-1px); }
-        body.dark-mode {
-            --bg-gradient: linear-gradient(135deg, #0b1220 0%, #10251d 50%, #0c2030 100%);
-            --card-bg: rgba(15, 23, 42, .92);
-            --card-border: rgba(148, 163, 184, .25);
-            --field-bg: rgba(15, 23, 42, .82);
-            --field-border: #475569;
-            --text-main: #e2e8f0;
-            --text-muted: #a8b5c7;
-            --bg-main: #0b1220;
-            --bg-surface: #102033;
-            --ink: #e2e8f0;
-            --error-bg: #3b171b;
-            --success-bg: #12301f;
-        }
-        body.dark-mode .brand-logo { color: var(--text-main); }
-        body.dark-mode input[type="email"], body.dark-mode input[type="password"], body.dark-mode input[type="text"] { color: var(--text-main); }
-        body.dark-mode .password-rules li { border-color: rgba(148, 163, 184, .25); background: rgba(15, 23, 42, .6); color: #cbd5e1; }
-        body.dark-mode .password-rules li.valid { border-color: rgba(34, 197, 94, .4); background: rgba(34, 197, 94, .15); color: #86efac; }
-        body.dark-mode .terms-dialog { background: rgba(11, 34, 56, .97); }
-        @media (max-width: 540px) { .top-controls { top: 12px; right: 12px; gap: 7px; } .icon-btn { width: 36px; height: 36px; } }
-    </style>
+    
+/* ===== PETKO · TEMA AZUL DE MARCA (solo estilos) ===== */
+:root{--green-primary:#3966B3;--green-hover:#294980;--green-glow:rgba(82,146,255,.35);--bg-gradient:linear-gradient(135deg,#EEF4FF 0%,#BAD3FF 55%,#86B3FF 100%);--bg-main:#EEF4FF;--field-border:#BAD3FF;--text-main:#14284a;--text-muted:#4f678c}
+.bg-viewport::before{background:radial-gradient(circle,#BAD3FF 0%,rgba(186,211,255,.6) 35%,transparent 70%)}
+.bg-viewport::after{background:radial-gradient(circle,#86B3FF 0%,rgba(134,179,255,.5) 35%,transparent 70%)}
+.bg-orb{background:radial-gradient(circle,rgba(82,146,255,.45),rgba(186,211,255,.15) 55%,transparent 72%)}
+.floating-paw{fill:#3966B3}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background:url(src/img/petko/patron.png) center/560px;opacity:.06}
+.auth-card{border:1px solid rgba(82,146,255,.28);box-shadow:0 24px 60px rgba(41,73,128,.22);transition:transform .35s cubic-bezier(.22,1,.36,1),box-shadow .35s}
+.auth-card:hover{transform:translateY(-4px);box-shadow:0 30px 70px rgba(41,73,128,.28)}
+.brand-badge{background:rgba(82,146,255,.12);border-color:rgba(82,146,255,.4);color:#294980}
+.brand-logo{color:#294980}.brand-logo span{color:#5292FF}
+.form-title,.dialog-head h2,.role-picker h2{color:#294980}
+input:focus{border-color:#5292FF;box-shadow:0 0 0 4px rgba(82,146,255,.22)}
+input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus{box-shadow:0 0 0 1000px #EEF4FF inset}
+.forgot-link,.form-footer a,.toggle-password:hover,.dialog-close:hover,.role-picker-close:hover{color:#3966B3}
+.forgot-link:hover,.form-footer a:hover{color:#294980}
+.check-row input{accent-color:#3966B3}
+.btn-submit,.dialog-submit{background:linear-gradient(135deg,#5292FF 0%,#3966B3 100%);color:#fff}
+.btn-submit:hover{box-shadow:0 8px 24px rgba(82,146,255,.4)}
+.btn-secondary:hover,.role-option:hover{border-color:#5292FF;color:#294980;background:rgba(82,146,255,.1)}
+.recovery-dialog,.role-picker{border:1px solid rgba(82,146,255,.3);background:rgba(255,255,255,.97);box-shadow:0 25px 60px rgba(41,73,128,.25)}
+.dialog-backdrop,.role-overlay{background:rgba(12,26,53,.6)}
+@media(max-width:480px){.auth-card{border-radius:20px}input[type="email"],input[type="password"],input[type="text"]{font-size:16px}}
+
+
+/* ===== PETKO · BARRA SUPERIOR (volver + modo + idioma) ===== */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;padding-top:max(14px,env(safe-area-inset-top));pointer-events:none}
+.topbar>*{pointer-events:auto}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.back-btn,.dark-mode-btn,.language-btn{height:42px;border:1px solid rgba(57,102,179,.35);background:rgba(255,255,255,.72);color:#294980;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:background .25s,color .25s,border-color .25s,transform .25s,box-shadow .25s}
+.back-btn{gap:8px;padding:0 18px 0 14px;border-radius:21px;font-size:13px}
+.back-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform .25s}
+.back-btn:hover svg{transform:translateX(-3px)}
+.dark-mode-btn{width:42px;border-radius:50%;font-size:18px;line-height:1;padding:0}
+.language-btn{min-width:42px;padding:0 12px;border-radius:21px;font-size:13px}
+.back-btn:hover,.dark-mode-btn:hover,.language-btn:hover{background:#5292FF;border-color:#5292FF;color:#fff;box-shadow:0 8px 22px rgba(82,146,255,.35);transform:translateY(-1px)}
+.back-btn:focus-visible,.dark-mode-btn:focus-visible,.language-btn:focus-visible{outline:3px solid rgba(82,146,255,.55);outline-offset:2px}
+
+/* ===== PETKO · LOGO IMAGEN ===== */
+.brand-logo{margin:0 0 4px;line-height:0}
+.brand-logo img{display:block;height:52px;width:auto;max-width:100%;margin:0 auto;filter:drop-shadow(0 6px 14px rgba(41,73,128,.25));transition:transform .3s}
+.auth-card:hover .brand-logo img{transform:scale(1.04) rotate(-1.5deg)}
+.brand-header{margin-bottom:8px}
+
+/* ===== PETKO · MODO OSCURO (body.dark-mode, igual que el home) ===== */
+body{transition:background .3s,color .3s}
+.auth-card,.recovery-dialog,.role-picker,input,.btn-secondary,.role-option{transition:background .3s,border-color .3s,color .3s,box-shadow .3s,transform .35s cubic-bezier(.22,1,.36,1)}
+body.dark-mode{--bg-gradient:linear-gradient(135deg,#030710 0%,#071225 55%,#0b1d3a 100%);--bg-main:#071225;--card-bg:rgba(11,29,58,.88);--card-border:rgba(92,200,255,.18);--field-bg:rgba(255,255,255,.06);--field-border:#1f3f73;--text-main:#eaf3ff;--text-muted:#a3b8d6;--error-red:#ff9a8d;--error-bg:rgba(255,120,100,.12);--success-green:#7ee0a8;--success-bg:rgba(60,200,130,.12);--green-primary:#5cc8ff;--green-hover:#8fd6ff;--green-glow:rgba(92,200,255,.35);color-scheme:dark}
+body.dark-mode,html:has(body.dark-mode){background:#071225}
+body.dark-mode .bg-viewport::before{background:radial-gradient(circle,rgba(47,128,237,.55) 0%,rgba(23,71,154,.35) 35%,transparent 70%)}
+body.dark-mode .bg-viewport::after{background:radial-gradient(circle,rgba(92,200,255,.28) 0%,rgba(23,71,154,.25) 35%,transparent 70%)}
+body.dark-mode .bg-orb{background:radial-gradient(circle,rgba(47,128,237,.35),rgba(23,71,154,.12) 55%,transparent 72%)}
+body.dark-mode .floating-paw{fill:#5cc8ff}
+body.dark-mode::before{opacity:.05;filter:invert(1)}
+body.dark-mode .auth-card{border-color:rgba(92,200,255,.2);box-shadow:0 24px 60px rgba(0,0,0,.6)}
+body.dark-mode .auth-card:hover{box-shadow:0 30px 70px rgba(0,0,0,.7)}
+body.dark-mode .brand-logo img{filter:drop-shadow(0 6px 16px rgba(0,0,0,.55))}
+body.dark-mode .brand-badge{background:rgba(92,200,255,.12);border-color:rgba(92,200,255,.4);color:#8fd6ff}
+body.dark-mode .form-title,body.dark-mode .dialog-head h2,body.dark-mode .role-picker h2{color:#eaf3ff}
+body.dark-mode label,body.dark-mode .dialog-copy,body.dark-mode .form-footer,body.dark-mode .login-divider,body.dark-mode .brand-subtitle{color:#a3b8d6}
+body.dark-mode input[type="email"],body.dark-mode input[type="password"],body.dark-mode input[type="text"]{background:rgba(255,255,255,.06);border-color:#1f3f73;color:#eaf3ff}
+body.dark-mode input::placeholder{color:#6f87ab}
+body.dark-mode input:focus{border-color:#5cc8ff;box-shadow:0 0 0 4px rgba(92,200,255,.2)}
+body.dark-mode input:-webkit-autofill,body.dark-mode input:-webkit-autofill:hover,body.dark-mode input:-webkit-autofill:focus{-webkit-text-fill-color:#eaf3ff;box-shadow:0 0 0 1000px #0d2145 inset}
+body.dark-mode .forgot-link,body.dark-mode .form-footer a,body.dark-mode .toggle-password:hover,body.dark-mode .dialog-close:hover,body.dark-mode .role-picker-close:hover{color:#5cc8ff}
+body.dark-mode .forgot-link:hover,body.dark-mode .form-footer a:hover{color:#8fd6ff}
+body.dark-mode .check-row input{accent-color:#5cc8ff}
+body.dark-mode .btn-submit,body.dark-mode .dialog-submit{background:linear-gradient(135deg,#5cc8ff 0%,#2f80ed 100%);color:#04142e}
+body.dark-mode .btn-submit:hover{box-shadow:0 8px 24px rgba(92,200,255,.4)}
+body.dark-mode .btn-secondary{border-color:#1f3f73;color:#a3b8d6}
+body.dark-mode .btn-secondary:hover,body.dark-mode .role-option:hover{border-color:#5cc8ff;color:#eaf3ff;background:rgba(92,200,255,.12)}
+body.dark-mode .role-option{border-color:#1f3f73;color:#eaf3ff}
+body.dark-mode .recovery-dialog,body.dark-mode .role-picker{border-color:rgba(92,200,255,.3);background:rgba(11,29,58,.98);box-shadow:0 25px 60px rgba(0,0,0,.65)}
+body.dark-mode .dialog-backdrop,body.dark-mode .role-overlay{background:rgba(2,6,14,.75)}
+body.dark-mode .notice.error{border-color:rgba(255,154,141,.35)}
+body.dark-mode .notice.success{border-color:rgba(126,224,168,.35)}
+body.dark-mode .back-btn,body.dark-mode .dark-mode-btn,body.dark-mode .language-btn{background:rgba(2,6,14,.6);border-color:rgba(200,225,255,.3);color:#f2f8ff}
+body.dark-mode .back-btn:hover,body.dark-mode .dark-mode-btn:hover,body.dark-mode .language-btn:hover{background:#5cc8ff;border-color:#5cc8ff;color:#04142e;box-shadow:0 8px 22px rgba(92,200,255,.35)}
+
+/* ===== PETKO · TELÉFONO ===== */
+body{padding-top:calc(68px + env(safe-area-inset-top))}
+.auth-card{max-height:calc(100svh - 84px - env(safe-area-inset-top))}
+@media(max-width:480px){
+  .topbar{padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top))}
+  .back-btn{height:38px;padding:0 14px 0 11px;font-size:12px}
+  .dark-mode-btn{width:38px;height:38px;font-size:16px}
+  .language-btn{height:38px;min-width:38px;font-size:12px}
+  body{padding-left:12px;padding-right:12px;padding-top:calc(60px + env(safe-area-inset-top))}
+  .auth-card{max-height:calc(100svh - 72px - env(safe-area-inset-top))}
+  .brand-logo img{height:46px}
+}
+@media(max-width:340px){.back-btn .back-text{display:none}.back-btn{padding:0 12px}}
+@media(max-height:650px){.brand-logo img{height:38px}.brand-badge{margin-bottom:4px}}
+
+/* registro: reglas de contraseña, errores, términos */
+body.dark-mode .password-rules li{border-color:rgba(200,225,255,.16);background:rgba(255,255,255,.04);color:#a3b8d6}
+body.dark-mode .password-rules li::before{color:#6f87ab}
+body.dark-mode .password-rules li.valid{border-color:rgba(126,224,168,.4);background:rgba(126,224,168,.1);color:#7ee0a8}
+body.dark-mode .password-rules li.valid::before{color:#7ee0a8}
+body.dark-mode .password-help p,body.dark-mode .check-row{color:#a3b8d6}
+body.dark-mode .check-row a{color:#5cc8ff}
+body.dark-mode .check-row a:hover{color:#8fd6ff}
+body.dark-mode .terms-dialog{border-color:rgba(92,200,255,.3);background:#071225}
+body.dark-mode .terms-modal{background:rgba(2,6,14,.75)}
+body.dark-mode .btn-submit:disabled{opacity:.55}
+</style>
 </head>
 <body>
-    <nav class="top-controls" aria-label="Controles de página" data-i18n-aria="pageControls">
-        <a href="index.php" class="icon-btn" title="Volver al inicio" aria-label="Volver al inicio" data-i18n-title="homeTitle" data-i18n-aria="homeTitle"><i class="ph ph-house" aria-hidden="true"></i></a>
-        <button type="button" class="icon-btn" id="btnLang" title="Cambiar idioma" aria-label="Cambiar idioma" data-i18n-title="languageToggle" data-i18n-aria="languageToggle"><i class="ph ph-translate" aria-hidden="true"></i></button>
-        <button type="button" class="icon-btn" id="btnTheme" title="Modo Oscuro" aria-label="Modo Oscuro"><i class="ph ph-moon" aria-hidden="true"></i></button>
-    </nav>
+    <script>
+        try {
+            var d = localStorage.getItem('petko_dark');
+            if (d === null && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) d = '1';
+            if (d === '1') document.body.classList.add('dark-mode');
+        } catch (err) {}
+    </script>
+
+    <div class="topbar">
+        <a class="back-btn" id="backHome" href="src/php/modulos/home/home.php" aria-label="Volver al inicio">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m11 18-6-6 6-6"/></svg>
+            <span class="back-text">Inicio</span>
+        </a>
+        <div class="topbar-right">
+            <button id="darkModeBtn" class="dark-mode-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro" aria-pressed="false" data-no-i18n>🌙</button>
+            <button id="languageToggle" class="language-btn" type="button" title="Switch to English" aria-label="Switch to English" data-no-i18n>EN</button>
+        </div>
+    </div>
     <div class="bg-viewport" aria-hidden="true">
         <span class="bg-orb"></span>
         <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
@@ -363,436 +452,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <main class="auth-card">
         <header class="brand-header">
-            <span class="brand-badge"><i class="ph-fill ph-paw-print" aria-hidden="true"></i> <span data-i18n="brandBadge">Veterinaria &amp; Farmacia</span></span>
-            <h1 class="brand-logo">PET<span>KO</span></h1>
-            <div class="brand-subtitle" data-i18n="brandSubtitle">Vet &amp; Agropecuario</div>
+            <span class="brand-badge"><i class="ph-fill ph-paw-print" aria-hidden="true"></i> Veterinaria &amp; Farmacia</span>
+            <h1 class="brand-logo"><img src="src/img/petko/logo_amarillo.png" alt="PETKO" width="168" height="52"></h1>
+            <div class="brand-subtitle">Vet &amp; Agropecuario</div>
         </header>
-        <h2 class="form-title" data-i18n="registerTitle">Crear una cuenta</h2>
-        <div class="notice" id="registerNotice" role="status" aria-live="polite"></div>
+        <h2 class="form-title">Crear una cuenta</h2>
+        <div class="notice" id="registerNotice" data-no-i18n role="status" aria-live="polite"></div>
         <form id="registerForm" method="post" novalidate>
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
             <div class="name-row">
                 <div class="form-group">
-                    <label for="nombre" data-i18n="firstName">Nombres</label>
-                    <input id="nombre" name="nombre" type="text" placeholder="Ej. Ana" data-i18n-placeholder="firstNamePlaceholder" autocomplete="given-name" required>
+                    <label for="nombre">Nombres</label>
+                    <input id="nombre" name="nombre" type="text" placeholder="Ej. Ana" autocomplete="given-name" required>
                 </div>
                 <div class="form-group">
-                    <label for="apellido" data-i18n="lastName">Apellidos</label>
-                    <input id="apellido" name="apellido" type="text" placeholder="Ej. Martínez" data-i18n-placeholder="lastNamePlaceholder" autocomplete="family-name" required>
+                    <label for="apellido">Apellidos</label>
+                    <input id="apellido" name="apellido" type="text" placeholder="Ej. Martínez" autocomplete="family-name" required>
                 </div>
             </div>
             <div class="form-group">
-                <label for="email" data-i18n="emailLabel">Correo electrónico</label>
-                <input id="email" name="email" type="email" placeholder="usuario@kion.com" data-i18n-placeholder="emailPlaceholder" autocomplete="email" required>
+                <label for="email">Correo electrónico</label>
+                <input id="email" name="email" type="email" placeholder="usuario@kion.com" autocomplete="email" required>
             </div>
             <div class="form-group">
-                <label for="password" data-i18n="passwordLabel">Contraseña</label>
+                <label for="password">Contraseña</label>
                 <div class="input-wrapper">
                     <input id="password" name="password" type="password" autocomplete="new-password" required>
-                    <button class="toggle-password" type="button" aria-label="Mostrar contraseña" data-i18n-aria="showPassword" aria-pressed="false">
+                    <button class="toggle-password" type="button" aria-label="Mostrar contraseña" aria-pressed="false">
                         <i class="ph ph-eye" aria-hidden="true"></i><i class="ph ph-eye-slash" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
             <div class="password-help">
-                <p data-i18n="passwordRequirements">La contraseña debe cumplir:</p>
-                <ul class="password-rules" aria-label="Requisitos de la contraseña" data-i18n-aria="passwordRequirementsLabel">
-                    <li data-rule="length"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i><span data-i18n="minimumEight">Mínimo 8</span></li>
-                    <li data-rule="uppercase"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i><span data-i18n="oneUppercase">1 mayúscula</span></li>
-                    <li data-rule="number"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i><span data-i18n="oneNumber">1 número</span></li>
+                <p>La contraseña debe cumplir:</p>
+                <ul class="password-rules" aria-label="Requisitos de la contraseña">
+                    <li data-rule="length"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i>Mínimo 8</li>
+                    <li data-rule="uppercase"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i>1 mayúscula</li>
+                    <li data-rule="number"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i>1 número</li>
                 </ul>
             </div>
             <div class="form-group">
-                <label for="confirm_password" data-i18n="confirmPassword">Confirmar contraseña</label>
+                <label for="confirm_password">Confirmar contraseña</label>
                 <div class="input-wrapper">
                     <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required>
-                    <button class="toggle-password" type="button" aria-label="Mostrar contraseña" data-i18n-aria="showPassword" aria-pressed="false">
+                    <button class="toggle-password" type="button" aria-label="Mostrar contraseña" aria-pressed="false">
                         <i class="ph ph-eye" aria-hidden="true"></i><i class="ph ph-eye-slash" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
-            <small class="field-error" id="confirmPasswordError" aria-live="polite" data-i18n="passwordMismatch">Las contraseñas no coinciden.</small>
-            <div class="check-row" id="termsConsent" hidden>
+            <small class="field-error" id="confirmPasswordError" aria-live="polite">Las contraseñas no coinciden.</small>
+            <div class="check-row">
                 <input id="aceptoTerminos" name="acepto_terminos" type="checkbox" value="1" required>
-                <label for="aceptoTerminos"><span data-i18n="acceptPrefix">Acepto los</span> <a href="#" id="abrirModalTerminos" data-i18n="termsLink">Términos y Condiciones y la Política de Privacidad</a><span data-i18n="acceptSuffix">.</span></label>
+                <label for="aceptoTerminos">Acepto los <a href="#" id="abrirModalTerminos">Términos y Condiciones y la Política de Privacidad</a>.</label>
             </div>
-            <button class="btn-submit" type="submit" id="btnRegistro" disabled data-i18n="createAccount">Crear cuenta</button>
+            <button class="btn-submit" type="submit" id="btnRegistro" disabled>Crear cuenta</button>
         </form>
-        <div class="form-footer"><span data-i18n="alreadyHaveAccount">¿Ya tienes cuenta?</span> <a href="inicioSesion.php" data-i18n="loginLink">Inicia sesión</a></div>
+        <div class="form-footer">¿Ya tienes cuenta? <a href="inicioSesion.php">Inicia sesión</a></div>
     </main>
 
     <div class="terms-modal" id="termsModal" aria-hidden="true">
-    <section class="terms-dialog" role="dialog" aria-modal="true" aria-label="Términos, condiciones y política de privacidad" data-i18n-aria="termsDialog">
-        <iframe class="terms-frame" id="termsFrame" title="Términos, condiciones y política de privacidad" data-i18n-title="termsDialog" src="about:blank"></iframe>
+    <section class="terms-dialog" role="dialog" aria-modal="true" aria-label="Términos, condiciones y política de privacidad">
+        <iframe class="terms-frame" id="termsFrame" title="Términos, condiciones y política de privacidad" src="about:blank"></iframe>
     </section>
     </div>
 
     <script>
-        const I18N = {
-            es: {
-                documentTitle: 'PETKO | Crear cuenta', brandBadge: 'Veterinaria & Farmacia',
-                brandSubtitle: 'Vet & Agropecuario', registerTitle: 'Crear una cuenta',
-                firstName: 'Nombres', firstNamePlaceholder: 'Ej. Ana', lastName: 'Apellidos',
-                lastNamePlaceholder: 'Ej. Martínez', emailLabel: 'Correo electrónico',
-                emailPlaceholder: 'usuario@kion.com', passwordLabel: 'Contraseña',
-                showPassword: 'Mostrar contraseña', hidePassword: 'Ocultar contraseña',
-                passwordRequirements: 'La contraseña debe cumplir:', passwordRequirementsLabel: 'Requisitos de la contraseña',
-                minimumEight: 'Mínimo 8', oneUppercase: '1 mayúscula', oneNumber: '1 número',
-                confirmPassword: 'Confirmar contraseña', passwordMismatch: 'Las contraseñas no coinciden.',
-                acceptPrefix: 'Acepto los', termsLink: 'Términos y Condiciones y la Política de Privacidad',
-                acceptSuffix: '.', createAccount: 'Crear cuenta', alreadyHaveAccount: '¿Ya tienes cuenta?',
-                loginLink: 'Inicia sesión', homeTitle: 'Volver al inicio', languageToggle: 'Cambiar idioma',
-                pageControls: 'Controles de página',
-                termsDialog: 'Términos, condiciones y política de privacidad',
-                nameError: 'Escribe tus nombres y apellidos.', invalidEmail: 'Escribe un correo electrónico válido.',
-                passwordError: 'La contraseña necesita al menos 8 caracteres, una mayúscula y un número.',
-                confirmError: 'Confirma la contraseña correctamente.',
-                acceptError: 'Debes aceptar los Términos y Condiciones y la Política de Privacidad.',
-                requiredTermsError: 'Completa todos los campos obligatorios y acepta los Términos y Condiciones para continuar.',
-                createError: 'No fue posible crear la cuenta.', createSuccess: 'Cuenta creada correctamente.',
-                connectionError: 'No fue posible conectar con el servidor. Inténtalo de nuevo.',
-                messages: {
-                    'La solicitud expiró o no es válida. Recarga la página e inténtalo de nuevo.': 'The request expired or is invalid. Reload the page and try again.',
-                    'Debes aceptar los Términos y Condiciones para poder registrarte.': 'You must accept the Terms and Conditions to register.',
-                    'Completa todos los campos requeridos.': 'Complete all required fields.',
-                    'Escribe un correo electrónico válido.': 'Enter a valid email address.',
-                    'La contraseña debe tener al menos 8 caracteres, una letra mayúscula y un número.': 'The password must be at least 8 characters long and include an uppercase letter and a number.',
-                    'Las contraseñas no coinciden.': 'The passwords do not match.',
-                    'No fue posible conectar con la base de datos.': 'Could not connect to the database.',
-                    'Este correo electrónico ya se encuentra registrado.': 'This email address is already registered.',
-                    'No fue posible completar el registro en este momento.': 'Could not complete registration at this time.',
-                    'No fue posible completar el registro. Inténtalo de nuevo.': 'Could not complete registration. Please try again.',
-                    '¡Cuenta creada exitosamente! Redirigiendo al inicio de sesión...': 'Account created successfully! Redirecting to sign in...'
-                },
-                terms: {
-                    heading: 'Terms, Conditions and Privacy Policy',
-                    aria: 'Terms, conditions and privacy policy',
-                    accept: 'Accept Terms',
-                    sections: [
-                        {
-                            heading: '1. Acceptance and scope of services',
-                            paragraphs: [
-                                'PETKO is a management and commerce platform for veterinary and agricultural activities. Its features may include a digital product catalog, information lookup, and management tools for users, cashiers, managers, and administrators.',
-                                'By creating an account, checking the acceptance box, or using PETKO features, the user declares that they have read and accept these Terms and the Privacy Policy. Anyone who disagrees must refrain from registering or using the platform.'
-                            ]
-                        },
-                        {
-                            heading: '2. User accounts, roles and authentication',
-                            paragraphs: [
-                                'Registration requires being at least 18 years old—or the legal age of majority where the user resides—providing complete and truthful information, and having a valid email address. Users must keep their information up to date.',
-                                'Available features depend on the role assigned by PETKO. Roles may include User/Customer, Cashier, Manager, and General Administrator. Account permissions must not be transferred or used to access features outside the user’s responsibilities.',
-                                'If Google Identity sign-in is offered, PETKO receives the profile data needed from Google to identify and create the account, which may include first name, last name, and email address, depending on the permissions granted. Google sign-in is also subject to Google’s terms and privacy policy.',
-                                'Users are responsible for keeping their credentials confidential, signing out of shared devices, and notifying the PETKO operator if they suspect unauthorized access.'
-                            ]
-                        },
-                        {
-                            heading: '3. Catalog and agricultural and veterinary products',
-                            paragraphs: [
-                                'The catalog may list veterinary medicines, food, agricultural products, and supplies. Published information is for informational and commercial purposes; it does not replace a professional assessment, diagnosis, prescription, or recommendation.',
-                                'The purchase and use of prescription products, specialized products, or products requiring technical judgment must be supervised by a qualified veterinary professional and follow the manufacturer’s instructions and applicable regulations. Users are responsible for how they use veterinary products or agricultural supplies. PETKO does not replace professional advice or accept responsibility for uses contrary to instructions or law.',
-                                'Catalog availability, prices, descriptions, and inventory may change and are subject to confirmation at the time of purchase. Listing a product does not guarantee its availability or constitute an irrevocable offer.'
-                            ]
-                        },
-                        {
-                            heading: '4. Privacy policy and personal data',
-                            paragraphs: [
-                                'To operate the platform, PETKO may process data that users provide or generate while using it, for example:',
-                                'This data is used to create and manage accounts, authenticate users, protect the platform, provide its features, and respond to requests. PETKO does not sell personal data. It does not share it with third parties for their own purposes without consent, except when needed to provide a requested feature (for example, Google authentication), when legally required, or when necessary to protect the platform and its users. Where applicable, those providers process data under their own policies.',
-                                'PETKO applies reasonable measures to protect information and limit access to people who need it to operate the service. No system can guarantee absolute security. Data will be retained for as long as necessary for the purposes described or to meet legal obligations.',
-                                'Users may request access, correction, cancellation, or deletion and object to processing, subject to applicable law, retention obligations, and identity verification. These rights may be exercised by contacting the PETKO controller through the official support channel provided by the operating entity.'
-                            ],
-                            items: [
-                                'First name, last name, and email address.',
-                                'Credentials stored as a password hash; PETKO does not need to store passwords in readable form.',
-                                'Assigned role and account data needed to enable features.',
-                                'Technical data and activity or access logs, to the extent collected by system features and configuration.'
-                            ]
-                        },
-                        {
-                            heading: '5. Cookies and persistent sessions (“Remember me”)',
-                            paragraphs: [
-                                'PETKO uses essential cookies to maintain sessions and support security measures, including protection of requests using CSRF tokens. These cookies are necessary for certain authentication features to work correctly.',
-                                'If “Remember me” is selected, PETKO may store the kion_remember cookie in the browser to keep the user signed in for up to 30 days. The cookie contains a random access token; the database stores its SHA-256 fingerprint for validation, not the password. The cookie is configured as HttpOnly and SameSite=Lax, and as Secure when an HTTPS connection is detected. Users can delete cookies in their browser and revoke access by signing out; deleting the cookie may prevent that device from being recognized automatically.'
-                            ]
-                        },
-                        {
-                            heading: '6. Security, suspension and user conduct',
-                            paragraphs: [
-                                'Interfering with PETKO’s operation, attempting to access other people’s accounts or data, bypassing access controls, automating abusive authentication attempts, or exploiting vulnerabilities—including brute force, SQL injection, or request forgery (CSRF)—is prohibited.',
-                                'The PETKO operator may restrict, suspend, or disable accounts that are inactive, fraudulent, compromised, used to undermine security, violate these terms, or break the law. When reasonably possible, the affected person will be notified and allowed to request a review.'
-                            ]
-                        },
-                        {
-                            heading: '7. Intellectual property and contact',
-                            paragraphs: [
-                                'The PETKO brand, its logos, source code, visual design, and original platform content are protected by applicable intellectual property rights. Reproduction or use is not authorized except as permitted by law or expressly authorized by their owners.',
-                                'For questions, support, or personal-data requests, including ARCO rights where applicable, use the official contact channel published on the PETKO platform by its operating entity. Reasonable information proving the requester’s identity may be required.',
-                                'These terms must be interpreted under the laws applicable to the operator and the user. Mandatory consumer-protection and personal-data provisions take precedence where applicable.'
-                            ]
-                        }
-                    ]
-                }
-            },
-            en: {
-                documentTitle: 'PETKO | Create account', brandBadge: 'Veterinary & Pharmacy',
-                brandSubtitle: 'Veterinary & Agriculture', registerTitle: 'Create an account',
-                firstName: 'First name', firstNamePlaceholder: 'e.g. Ana', lastName: 'Last name',
-                lastNamePlaceholder: 'e.g. Smith', emailLabel: 'Email address',
-                emailPlaceholder: 'user@kion.com', passwordLabel: 'Password',
-                showPassword: 'Show password', hidePassword: 'Hide password',
-                passwordRequirements: 'Your password must include:', passwordRequirementsLabel: 'Password requirements',
-                minimumEight: 'At least 8', oneUppercase: '1 uppercase', oneNumber: '1 number',
-                confirmPassword: 'Confirm password', passwordMismatch: 'Passwords do not match.',
-                acceptPrefix: 'I accept the', termsLink: 'Terms and Conditions and Privacy Policy',
-                acceptSuffix: '.', createAccount: 'Create account', alreadyHaveAccount: 'Already have an account?',
-                loginLink: 'Sign in', homeTitle: 'Back to home', languageToggle: 'Switch language',
-                pageControls: 'Page controls',
-                termsDialog: 'Terms, conditions and privacy policy',
-                nameError: 'Enter your first and last name.', invalidEmail: 'Enter a valid email address.',
-                passwordError: 'The password must be at least 8 characters long and include an uppercase letter and a number.',
-                confirmError: 'Please confirm your password correctly.',
-                acceptError: 'You must accept the Terms and Conditions and Privacy Policy.',
-                requiredTermsError: 'Complete all required fields and accept the Terms and Conditions to continue.',
-                createError: 'Could not create the account.', createSuccess: 'Account created successfully.',
-                connectionError: 'Could not connect to the server. Please try again.',
-                messages: {
-                    'La solicitud expiró o no es válida. Recarga la página e inténtalo de nuevo.': 'The request expired or is invalid. Reload the page and try again.',
-                    'Debes aceptar los Términos y Condiciones para poder registrarte.': 'You must accept the Terms and Conditions to register.',
-                    'Completa todos los campos requeridos.': 'Complete all required fields.',
-                    'Escribe un correo electrónico válido.': 'Enter a valid email address.',
-                    'La contraseña debe tener al menos 8 caracteres, una letra mayúscula y un número.': 'The password must be at least 8 characters long and include an uppercase letter and a number.',
-                    'Las contraseñas no coinciden.': 'The passwords do not match.',
-                    'No fue posible conectar con la base de datos.': 'Could not connect to the database.',
-                    'Este correo electrónico ya se encuentra registrado.': 'This email address is already registered.',
-                    'No fue posible completar el registro en este momento.': 'Could not complete registration at this time.',
-                    '¡Cuenta creada exitosamente! Redirigiendo al inicio de sesión...': 'Account created successfully! Redirecting to sign in...'
-                },
-                terms: {
-                    heading: 'Terms, Conditions and Privacy Policy',
-                    aria: 'Terms, conditions and privacy policy',
-                    accept: 'I have read and accept the terms',
-                    sections: [
-                        {
-                            heading: '1. Acceptance and scope of services',
-                            paragraphs: [
-                                'PETKO is a management and commerce platform for veterinary and agricultural activities. Its features may include a digital product catalog, information lookup, and management tools for users, cashiers, managers, and administrators.',
-                                'By creating an account, checking the acceptance box, or using PETKO features, the user declares that they have read and accept these Terms and the Privacy Policy. Anyone who disagrees must refrain from registering or using the platform.'
-                            ]
-                        },
-                        {
-                            heading: '2. User accounts, roles and authentication',
-                            paragraphs: [
-                                'Registration requires being at least 18 years old—or the legal age of majority where the user resides—providing complete and truthful information, and having a valid email address. Users must keep their information up to date.',
-                                'Available features depend on the role assigned by PETKO. Roles may include User/Customer, Cashier, Manager, and General Administrator. Account permissions must not be transferred or used to access features outside the user’s responsibilities.',
-                                'If Google Identity sign-in is offered, PETKO receives the profile data needed from Google to identify and create the account, which may include first name, last name, and email address, depending on the permissions granted. Google sign-in is also subject to Google’s terms and privacy policy.',
-                                'Users are responsible for keeping their credentials confidential, signing out of shared devices, and notifying the PETKO operator if they suspect unauthorized access.'
-                            ]
-                        },
-                        {
-                            heading: '3. Catalog and agricultural and veterinary products',
-                            paragraphs: [
-                                'The catalog may list veterinary medicines, food, agricultural products, and supplies. Published information is for informational and commercial purposes; it does not replace a professional assessment, diagnosis, prescription, or recommendation.',
-                                'The purchase and use of prescription products, specialized products, or products requiring technical judgment must be supervised by a qualified veterinary professional and follow the manufacturer’s instructions and applicable regulations. Users are responsible for how they use veterinary products or agricultural supplies. PETKO does not replace professional advice or accept responsibility for uses contrary to instructions or law.',
-                                'Catalog availability, prices, descriptions, and inventory may change and are subject to confirmation at the time of purchase. Listing a product does not guarantee its availability or constitute an irrevocable offer.'
-                            ]
-                        },
-                        {
-                            heading: '4. Privacy policy and personal data',
-                            paragraphs: [
-                                'To operate the platform, PETKO may process data that users provide or generate while using it, for example:',
-                                'This data is used to create and manage accounts, authenticate users, protect the platform, provide its features, and respond to requests. PETKO does not sell personal data. It does not share it with third parties for their own purposes without consent, except when needed to provide a requested feature (for example, Google authentication), when legally required, or when necessary to protect the platform and its users. Where applicable, those providers process data under their own policies.',
-                                'PETKO applies reasonable measures to protect information and limit access to people who need it to operate the service. No system can guarantee absolute security. Data will be retained for as long as necessary for the purposes described or to meet legal obligations.',
-                                'Users may request access, correction, cancellation, or deletion and object to processing, subject to applicable law, retention obligations, and identity verification. These rights may be exercised by contacting the PETKO controller through the official support channel provided by the operating entity.'
-                            ],
-                            items: [
-                                'First name, last name, and email address.',
-                                'Credentials stored as a password hash; PETKO does not need to store passwords in readable form.',
-                                'Assigned role and account data needed to enable features.',
-                                'Technical data and activity or access logs, to the extent collected by system features and configuration.'
-                            ]
-                        },
-                        {
-                            heading: '5. Cookies and persistent sessions (“Remember me”)',
-                            paragraphs: [
-                                'PETKO uses essential cookies to maintain sessions and support security measures, including protection of requests using CSRF tokens. These cookies are necessary for certain authentication features to work correctly.',
-                                'If “Remember me” is selected, PETKO may store the kion_remember cookie in the browser to keep the user signed in for up to 30 days. The cookie contains a random access token; the database stores its SHA-256 fingerprint for validation, not the password. The cookie is configured as HttpOnly and SameSite=Lax, and as Secure when an HTTPS connection is detected. Users can delete cookies in their browser and revoke access by signing out; deleting the cookie may prevent that device from being recognized automatically.'
-                            ]
-                        },
-                        {
-                            heading: '6. Security, suspension and user conduct',
-                            paragraphs: [
-                                'Interfering with PETKO’s operation, attempting to access other people’s accounts or data, bypassing access controls, automating abusive authentication attempts, or exploiting vulnerabilities—including brute force, SQL injection, or request forgery (CSRF)—is prohibited.',
-                                'The PETKO operator may restrict, suspend, or disable accounts that are inactive, fraudulent, compromised, used to undermine security, violate these terms, or break the law. When reasonably possible, the affected person will be notified and allowed to request a review.'
-                            ]
-                        },
-                        {
-                            heading: '7. Intellectual property and contact',
-                            paragraphs: [
-                                'The PETKO brand, its logos, source code, visual design, and original platform content are protected by applicable intellectual property rights. Reproduction or use is not authorized except as permitted by law or expressly authorized by their owners.',
-                                'For questions, support, or personal-data requests, including ARCO rights where applicable, use the official contact channel published on the PETKO platform by its operating entity. Reasonable information proving the requester’s identity may be required.',
-                                'These terms must be interpreted under the laws applicable to the operator and the user. Mandatory consumer-protection and personal-data provisions take precedence where applicable.'
-                            ]
-                        }
-                    ]
-                }
-            }
-        };
-        I18N.es.terms = null;
-        let currentLang = localStorage.getItem('kion-lang') === 'en' ? 'en' : 'es';
-        let darkMode = localStorage.getItem('kion-theme') === 'dark';
-        let originalTermsSnapshot = null;
-        const themeButton = document.getElementById('btnTheme');
-        document.body.classList.toggle('dark-mode', darkMode);
-
-        function updateThemeControl() {
-            themeButton.querySelector('i').className = `ph ${darkMode ? 'ph-sun' : 'ph-moon'}`;
-            const label = darkMode
-                ? (currentLang === 'en' ? 'Light mode' : 'Modo Claro')
-                : (currentLang === 'en' ? 'Dark mode' : 'Modo Oscuro');
-            themeButton.title = label;
-            themeButton.setAttribute('aria-label', label);
-        }
-        function applyTermsTranslations() {
-            if (!termsFrame.contentDocument || !termsFrame.contentDocument.querySelector('.terms-content')) return;
-            const frameDocument = termsFrame.contentDocument;
-            const sections = [...frameDocument.querySelectorAll('.terms-content section')];
-            if (!originalTermsSnapshot) {
-                originalTermsSnapshot = {
-                    lang: frameDocument.documentElement.lang,
-                    title: frameDocument.title,
-                    heading: frameDocument.querySelector('.terms-card h2')?.textContent || '',
-                    subtitle: frameDocument.querySelector('.terms-card .brand-subtitle')?.textContent || '',
-                    aria: frameDocument.querySelector('.terms-content')?.getAttribute('aria-label') || '',
-                    accept: frameDocument.getElementById('closeAndAccept')?.textContent || '',
-                    sections: sections.map((section) => ({
-                        heading: section.querySelector('h3')?.textContent || '',
-                        paragraphs: [...section.querySelectorAll('p')].map((paragraph) => paragraph.innerHTML),
-                        paragraphTexts: [...section.querySelectorAll('p')].map((paragraph) => paragraph.textContent || ''),
-                        items: [...section.querySelectorAll('li')].map((item) => item.innerHTML),
-                        itemTexts: [...section.querySelectorAll('li')].map((item) => item.textContent || '')
-                    }))
-                };
-                I18N.es.terms = {
-                    heading: originalTermsSnapshot.heading,
-                    aria: originalTermsSnapshot.aria,
-                    accept: 'Aceptar Términos',
-                    sections: originalTermsSnapshot.sections.map((section) => ({
-                        heading: section.heading,
-                        paragraphs: section.paragraphTexts,
-                        items: section.itemTexts
-                    }))
-                };
-            }
-            if (currentLang === 'es') {
-                frameDocument.documentElement.lang = originalTermsSnapshot.lang;
-                frameDocument.title = originalTermsSnapshot.title;
-                const heading = frameDocument.querySelector('.terms-card h2');
-                if (heading) heading.textContent = originalTermsSnapshot.heading;
-                const subtitle = frameDocument.querySelector('.terms-card .brand-subtitle');
-                if (subtitle) subtitle.textContent = originalTermsSnapshot.subtitle;
-                const content = frameDocument.querySelector('.terms-content');
-                if (content) content.setAttribute('aria-label', originalTermsSnapshot.aria);
-                sections.forEach((section, index) => {
-                    const original = originalTermsSnapshot.sections[index];
-                    if (!original) return;
-                    const sectionHeading = section.querySelector('h3');
-                    if (sectionHeading) sectionHeading.textContent = original.heading;
-                    section.querySelectorAll('p').forEach((paragraph, paragraphIndex) => {
-                        if (original.paragraphs[paragraphIndex] !== undefined) paragraph.innerHTML = original.paragraphs[paragraphIndex];
-                    });
-                    section.querySelectorAll('li').forEach((item, itemIndex) => {
-                        if (original.items[itemIndex] !== undefined) item.innerHTML = original.items[itemIndex];
-                    });
-                });
-                const footerButton = frameDocument.getElementById('closeAndAccept');
-                if (footerButton) footerButton.textContent = I18N.es.terms.accept;
-                return;
-            }
-            const translations = I18N.en.terms;
-            frameDocument.documentElement.lang = currentLang;
-            frameDocument.title = `PETKO | ${translations.heading}`;
-            const heading = frameDocument.querySelector('.terms-card h2');
-            if (heading) heading.textContent = translations.heading;
-            const subtitle = frameDocument.querySelector('.terms-card .brand-subtitle');
-            if (subtitle) subtitle.textContent = 'Veterinary & Agriculture';
-            const contentSections = frameDocument.querySelectorAll('.terms-content section');
-            translations.sections.forEach((section, index) => {
-                const element = contentSections[index];
-                if (!element) return;
-                const sectionHeading = element.querySelector('h3');
-                if (sectionHeading) sectionHeading.textContent = section.heading;
-                element.querySelectorAll('p').forEach((paragraph, paragraphIndex) => {
-                    if (section.paragraphs[paragraphIndex] !== undefined) {
-                        paragraph.textContent = section.paragraphs[paragraphIndex];
-                    }
-                });
-                element.querySelectorAll('li').forEach((item, itemIndex) => {
-                    if (section.items && section.items[itemIndex] !== undefined) item.textContent = section.items[itemIndex];
-                });
-            });
-            const content = frameDocument.querySelector('.terms-content');
-            if (content) content.setAttribute('aria-label', translations.aria);
-            const footerButton = frameDocument.getElementById('closeAndAccept');
-            if (footerButton) footerButton.textContent = translations.accept;
-        }
-        function applyTermsTheme() {
-            if (!termsFrame.contentDocument || !termsFrame.contentDocument.querySelector('.terms-card')) return;
-            const frameDocument = termsFrame.contentDocument;
-            const dark = document.body.classList.contains('dark-mode');
-            const card = frameDocument.querySelector('.terms-card');
-            const content = frameDocument.querySelector('.terms-content');
-            const brand = frameDocument.querySelector('.brand-logo');
-            frameDocument.body.style.background = dark ? '#0b1220' : '';
-            frameDocument.body.style.color = dark ? '#e2e8f0' : '';
-            card.style.background = dark ? 'rgba(15, 23, 42, .97)' : '';
-            card.style.borderColor = dark ? 'rgba(148, 163, 184, .28)' : '';
-            card.style.color = dark ? '#e2e8f0' : '';
-            if (content) content.style.color = dark ? '#e2e8f0' : '';
-            if (brand) brand.style.color = dark ? '#e2e8f0' : '';
-            frameDocument.querySelectorAll('.terms-content h3, .terms-card h2').forEach((element) => {
-                element.style.color = dark ? '#4ade80' : '';
-            });
-        }
-        function applyTranslations() {
-            const translations = I18N[currentLang];
-            document.documentElement.lang = currentLang;
-            document.querySelectorAll('[data-i18n]').forEach((element) => {
-                const key = element.dataset.i18n;
-                if (translations[key] !== undefined) element.textContent = translations[key];
-            });
-            document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => {
-                const key = element.dataset.i18nPlaceholder;
-                if (translations[key] !== undefined) element.setAttribute('placeholder', translations[key]);
-            });
-            document.querySelectorAll('[data-i18n-title]').forEach((element) => {
-                const key = element.dataset.i18nTitle;
-                if (translations[key] !== undefined) element.title = translations[key];
-            });
-            document.querySelectorAll('[data-i18n-aria]').forEach((element) => {
-                const key = element.dataset.i18nAria;
-                if (translations[key] !== undefined) element.setAttribute('aria-label', translations[key]);
-            });
-            document.querySelectorAll('.toggle-password').forEach((button) => {
-                const key = button.getAttribute('aria-pressed') === 'true' ? 'hidePassword' : 'showPassword';
-                button.dataset.i18nAria = key;
-                button.setAttribute('aria-label', translations[key]);
-            });
-            updateThemeControl();
-            applyTermsTranslations();
-            applyTermsTheme();
-        }
-        document.getElementById('btnLang').addEventListener('click', () => {
-            currentLang = currentLang === 'es' ? 'en' : 'es';
-            localStorage.setItem('kion-lang', currentLang);
-            applyTranslations();
-        });
-        themeButton.addEventListener('click', () => {
-            darkMode = !darkMode;
-            document.body.classList.toggle('dark-mode', darkMode);
-            localStorage.setItem('kion-theme', darkMode ? 'dark' : 'light');
-            updateThemeControl();
-            applyTermsTheme();
-        });
         const registerForm = document.getElementById('registerForm');
         const passwordInput = document.getElementById('password');
         const confirmPasswordInput = document.getElementById('confirm_password');
@@ -800,25 +524,134 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         const registerNotice = document.getElementById('registerNotice');
         const registerButton = document.getElementById('btnRegistro');
         const termsCheckbox = document.getElementById('aceptoTerminos');
-        const termsConsent = document.getElementById('termsConsent');
         const termsModal = document.getElementById('termsModal');
         const termsFrame = document.getElementById('termsFrame');
         const openTermsLink = document.getElementById('abrirModalTerminos');
+
+        // =====================================================================
+        // PETKO · MODO OSCURO + IDIOMA (comparte petko_dark / petko_lang con el home)
+        // =====================================================================
+        const petkoGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+        const petkoSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+
+        const registerI18n = {
+            'Inicio': 'Home',
+            'Volver al inicio': 'Back to home',
+            'Veterinaria & Farmacia': 'Veterinary & Pharmacy',
+            'Vet & Agropecuario': 'Vet & Livestock',
+            'Crear una cuenta': 'Create an account',
+            'Nombres': 'First name',
+            'Apellidos': 'Last name',
+            'Ej. Ana': 'e.g. Anna',
+            'Ej. Martínez': 'e.g. Martinez',
+            'Correo electrónico': 'Email',
+            'Contraseña': 'Password',
+            'Confirmar contraseña': 'Confirm password',
+            'La contraseña debe cumplir:': 'Your password must have:',
+            'Mínimo 8': 'At least 8',
+            '1 mayúscula': '1 uppercase',
+            '1 número': '1 number',
+            'Requisitos de la contraseña': 'Password requirements',
+            'Las contraseñas no coinciden.': 'Passwords do not match.',
+            'Acepto los': 'I accept the',
+            'Términos y Condiciones y la Política de Privacidad': 'Terms and Conditions and Privacy Policy',
+            'Términos, condiciones y política de privacidad': 'Terms, conditions and privacy policy',
+            'Crear cuenta': 'Create account',
+            '¿Ya tienes cuenta?': 'Already have an account?',
+            'Inicia sesión': 'Sign in',
+            'Mostrar contraseña': 'Show password',
+            'Ocultar contraseña': 'Hide password',
+            'Cambiar a modo claro': 'Switch to light mode',
+            'Cambiar a modo oscuro': 'Switch to dark mode',
+            'Cambiar a español': 'Switch to Spanish',
+            'Switch to English': 'Switch to English',
+            'PETKO | Crear cuenta': 'PETKO | Create account',
+            // Mensajes
+            'Escribe tus nombres y apellidos.': 'Enter your first and last name.',
+            'Escribe un correo electrónico válido.': 'Enter a valid email address.',
+            'La contraseña necesita al menos 8 caracteres, una mayúscula y un número.': 'Your password needs at least 8 characters, one uppercase letter and one number.',
+            'Confirma la contraseña correctamente.': 'Confirm your password correctly.',
+            'Debes aceptar los Términos y Condiciones y la Política de Privacidad.': 'You must accept the Terms and Conditions and the Privacy Policy.',
+            'No fue posible crear la cuenta.': 'We could not create the account.',
+            'Cuenta creada correctamente.': 'Account created successfully.',
+            'No fue posible conectar con el servidor. Inténtalo de nuevo.': 'Could not connect to the server. Please try again.',
+            'No fue posible conectar con la base de datos.': 'Could not connect to the database.',
+            'Completa todos los campos requeridos.': 'Fill in all required fields.',
+            'Debes aceptar los Términos y Condiciones para poder registrarte.': 'You must accept the Terms and Conditions to sign up.',
+            'Este correo electrónico ya se encuentra registrado.': 'This email address is already registered.',
+            'La contraseña debe tener al menos 8 caracteres, una letra mayúscula y un número.': 'The password must have at least 8 characters, one uppercase letter and one number.',
+            'La solicitud expiró o no es válida. Recarga la página e inténtalo de nuevo.': 'The request expired or is not valid. Reload the page and try again.',
+            'No fue posible completar el registro en este momento.': 'We could not complete the registration right now.',
+            'No fue posible completar el registro. Inténtalo de nuevo.': 'Could not complete the registration. Please try again.',
+            '¡Cuenta creada exitosamente! Redirigiendo al inicio de sesión...': 'Account created successfully! Redirecting to sign in...'
+        };
+        let registerEN = petkoGet('petko_lang') === 'en';
+        const t = (es) => (registerEN && Object.prototype.hasOwnProperty.call(registerI18n, es)) ? registerI18n[es] : es;
+        const origTexts = new Map();
+
+        function applyRegisterLanguage() {
+            document.querySelectorAll('body *:not(script):not(style)').forEach((el) => {
+                if (el.closest('[data-no-i18n]')) return;
+                el.childNodes.forEach((node) => {
+                    if (node.nodeType !== Node.TEXT_NODE) return;
+                    if (!origTexts.has(node)) origTexts.set(node, node.textContent);
+                    const original = origTexts.get(node);
+                    const key = original.trim().replace(/\s+/g, ' ');
+                    if (!key) return;
+                    const lead = original.match(/^\s*/)[0], trail = original.match(/\s*$/)[0];
+                    node.textContent = lead + t(key) + trail;
+                });
+            });
+            [['placeholder', 'esPh'], ['aria-label', 'esAria'], ['title', 'esTitle']].forEach(([attr, key]) => {
+                document.querySelectorAll('[' + attr + ']').forEach((el) => {
+                    if (el.hasAttribute('data-no-i18n')) return;
+                    if (el.dataset[key] === undefined) el.dataset[key] = el.getAttribute(attr);
+                    el.setAttribute(attr, t(el.dataset[key]));
+                });
+            });
+            document.querySelectorAll('.notice[data-es]').forEach((n) => { n.textContent = t(n.dataset.es); });
+            document.documentElement.lang = registerEN ? 'en' : 'es';
+            document.title = t('PETKO | Crear cuenta');
+            const langBtn = document.getElementById('languageToggle');
+            const lt = registerEN ? 'Cambiar a español' : 'Switch to English';
+            langBtn.textContent = registerEN ? 'ES' : 'EN';
+            langBtn.title = lt; langBtn.setAttribute('aria-label', lt);
+            updateDarkLabels();
+        }
+
+        function updateDarkLabels() {
+            const btn = document.getElementById('darkModeBtn');
+            const dark = document.body.classList.contains('dark-mode');
+            const label = t(dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+            btn.textContent = dark ? '☀️' : '🌙';
+            btn.title = label; btn.setAttribute('aria-label', label);
+            btn.setAttribute('aria-pressed', String(dark));
+        }
+
+        document.getElementById('darkModeBtn').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            petkoSet('petko_dark', document.body.classList.contains('dark-mode') ? '1' : '0');
+            updateDarkLabels();
+            // El iframe de términos (si está abierto) también cambia de tema
+            try { const d = termsFrame.contentDocument; if (d && d.body) d.body.classList.toggle('dark-mode', document.body.classList.contains('dark-mode')); } catch (e) {}
+        });
+        document.getElementById('languageToggle').addEventListener('click', () => {
+            registerEN = !registerEN;
+            petkoSet('petko_lang', registerEN ? 'en' : 'es');
+            applyRegisterLanguage();
+        });
+
+
         let previousFocus = null;
-        let termsPromptShown = false;
-        let termsAccepted = false;
-        let registrationSubmitting = false;
         const passwordRules = {
             length: (value) => value.length >= 8,
             uppercase: (value) => /[A-Z]/.test(value),
             number: (value) => /[0-9]/.test(value)
         };
 
-        applyTranslations();
         function showNotice(message, type) {
-            registerNotice.textContent = currentLang === 'en'
-                ? (I18N.en.messages[message] || message)
-                : message;
+            registerNotice.dataset.es = message;
+            registerNotice.textContent = t(message);
             registerNotice.className = `notice visible ${type}`;
         }
         function updatePasswordRules() {
@@ -832,59 +665,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             confirmPasswordInput.setAttribute('aria-invalid', String(mismatch));
         }
         function updateRegisterButton() {
-            registerButton.disabled = registrationSubmitting || !termsAccepted || !termsCheckbox.checked;
-        }
-        function areRequiredFieldsComplete() {
-            const requiredFields = [...registerForm.querySelectorAll('input[required]:not([type="checkbox"])')];
-            return requiredFields.every((input) => input.value.trim() !== '' && input.checkValidity())
-                && Object.values(passwordRules).every((check) => check(passwordInput.value))
-                && passwordInput.value === confirmPasswordInput.value;
-        }
-        function updateRequiredFieldsState() {
-            const complete = areRequiredFieldsComplete();
-            termsConsent.hidden = !complete;
-            if (!complete) {
-                termsPromptShown = false;
-                termsAccepted = false;
-                termsCheckbox.checked = false;
-                updateRegisterButton();
-                return;
-            }
-            if (!termsAccepted && !termsPromptShown) {
-                termsPromptShown = true;
-                openTermsModal();
-            }
+            registerButton.disabled = !termsCheckbox.checked;
         }
 
         updateRegisterButton();
-        termsCheckbox.addEventListener('click', (event) => {
-            if (!termsAccepted) {
-                event.preventDefault();
-                if (areRequiredFieldsComplete()) openTermsModal();
-            }
-        });
-        termsCheckbox.addEventListener('change', () => {
-            if (!termsCheckbox.checked) termsAccepted = false;
-            updateRegisterButton();
-        });
-        registerForm.querySelectorAll('input[required]:not([type="checkbox"])').forEach((input) => {
-            input.addEventListener('input', updateRequiredFieldsState);
-            input.addEventListener('change', updateRequiredFieldsState);
-            input.addEventListener('blur', updateRequiredFieldsState);
-        });
-        registerForm.addEventListener('focusout', (event) => {
-            if (event.target instanceof HTMLInputElement
-                && event.target.matches('input[required]:not([type="checkbox"])')) {
-                updateRequiredFieldsState();
-            }
-        });
+        termsCheckbox.addEventListener('change', updateRegisterButton);
         document.querySelectorAll('.toggle-password').forEach((button) => {
             button.addEventListener('click', () => {
                 const input = button.parentElement.querySelector('input');
                 const show = input.type === 'password';
                 input.type = show ? 'text' : 'password';
-                button.dataset.i18nAria = show ? 'hidePassword' : 'showPassword';
-                button.setAttribute('aria-label', I18N[currentLang][button.dataset.i18nAria]);
+                button.dataset.esAria = show ? 'Ocultar contraseña' : 'Mostrar contraseña';
+                button.setAttribute('aria-label', t(button.dataset.esAria));
                 button.setAttribute('aria-pressed', String(show));
             });
         });
@@ -894,30 +686,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         });
         confirmPasswordInput.addEventListener('input', updatePasswordMatch);
 
-        function closeTermsModal() {
+        function closeTermsModal(accepted = false) {
             if (!termsModal.classList.contains('visible')) return;
             termsModal.classList.remove('visible');
             termsModal.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
+            if (accepted) {
+                termsCheckbox.checked = true;
+                termsCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
             if (previousFocus instanceof HTMLElement) previousFocus.focus();
-        }
-        function openTermsModal() {
-            if (areRequiredFieldsComplete()) termsPromptShown = true;
-            previousFocus = document.activeElement;
-            if (termsFrame.getAttribute('src') === 'about:blank') termsFrame.src = 'terminos.php?embed=1';
-            applyTermsTranslations();
-            applyTermsTheme();
-            termsModal.classList.add('visible');
-            termsModal.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
         }
         openTermsLink.addEventListener('click', (event) => {
             event.preventDefault();
-            openTermsModal();
-        });
-        termsFrame.addEventListener('load', () => {
-            applyTermsTranslations();
-            applyTermsTheme();
+            previousFocus = document.activeElement;
+            termsFrame.src = 'terminos.php?embed=1';
+            termsModal.classList.add('visible');
+            termsModal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
         });
         termsModal.addEventListener('click', (event) => {
             if (event.target === termsModal) closeTermsModal();
@@ -932,17 +718,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 || !['kion-terms-accepted', 'kion-terms-dismissed'].includes(event.data.type)) {
                 return;
             }
-            if (event.data.type === 'kion-terms-accepted') {
-                if (areRequiredFieldsComplete()) {
-                    termsAccepted = true;
-                    termsCheckbox.checked = true;
-                    termsCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            }
-            closeTermsModal();
+            closeTermsModal(event.data.type === 'kion-terms-accepted');
         });
 
-        registerForm.addEventListener('submit', (event) => {
+        registerForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             registerNotice.className = 'notice';
             updatePasswordRules();
@@ -950,44 +729,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const nombre = registerForm.elements.nombre.value.trim();
             const apellido = registerForm.elements.apellido.value.trim();
             const emailInput = registerForm.elements.email;
-            const missingRequiredField = !areRequiredFieldsComplete();
-            if (missingRequiredField || !termsAccepted || !termsCheckbox.checked) {
-                showNotice(I18N[currentLang].requiredTermsError, 'error');
-                if (missingRequiredField) {
-                    registerForm.querySelector(':invalid')?.focus();
-                } else if (!termsAccepted) {
-                    openTermsModal();
-                } else {
-                    termsCheckbox.focus();
-                }
-                return;
-            }
             if (!nombre || !apellido) {
-                showNotice(I18N[currentLang].nameError, 'error');
+                showNotice('Escribe tus nombres y apellidos.', 'error');
                 return;
             }
             if (!emailInput.value.trim() || !emailInput.validity.valid) {
-                showNotice(I18N[currentLang].invalidEmail, 'error');
+                showNotice('Escribe un correo electrónico válido.', 'error');
                 emailInput.focus();
                 return;
             }
             if (!Object.values(passwordRules).every((check) => check(passwordInput.value))) {
-                showNotice(I18N[currentLang].passwordError, 'error');
+                showNotice('La contraseña necesita al menos 8 caracteres, una mayúscula y un número.', 'error');
                 passwordInput.focus();
                 return;
             }
             if (!confirmPasswordInput.value || passwordInput.value !== confirmPasswordInput.value) {
                 confirmPasswordError.classList.add('visible');
-                showNotice(I18N[currentLang].confirmError, 'error');
+                showNotice('Confirma la contraseña correctamente.', 'error');
                 confirmPasswordInput.focus();
                 return;
             }
-            submitRegistration();
-        });
+            if (!termsCheckbox.checked) {
+                showNotice('Debes aceptar los Términos y Condiciones y la Política de Privacidad.', 'error');
+                return;
+            }
 
-        async function submitRegistration() {
-            if (registrationSubmitting) return;
-            registrationSubmitting = true;
             registerButton.disabled = true;
             try {
                 const response = await fetch(window.location.href, {
@@ -997,18 +763,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 });
                 const result = await response.json();
                 if (!result.ok) {
-                    showNotice(result.message || I18N[currentLang].createError, 'error');
+                    showNotice(result.message || 'No fue posible crear la cuenta.', 'error');
                     return;
                 }
-                showNotice(result.message || I18N[currentLang].createSuccess, 'success');
+                showNotice(result.message || 'Cuenta creada correctamente.', 'success');
                 window.setTimeout(() => { window.location.href = result.redirect; }, 1500);
             } catch (error) {
-                showNotice(I18N[currentLang].connectionError, 'error');
+                showNotice('No fue posible conectar con el servidor. Inténtalo de nuevo.', 'error');
             } finally {
-                registrationSubmitting = false;
                 updateRegisterButton();
             }
-        }
+        });
+
+        applyRegisterLanguage();
 
         document.querySelectorAll('a[href="inicioSesion.php"]').forEach((link) => {
             link.addEventListener('click', (event) => {
