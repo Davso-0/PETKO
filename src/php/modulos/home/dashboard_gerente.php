@@ -629,7 +629,7 @@ $fInicio = $stFI->fetchColumn();
 // --------------------------------------------------------------
 if ($id_sucursal <= 0) {
     ob_end_clean();
-    echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>PETKO · Sin Sucursal</title><style>
+    echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>KION · Sin Sucursal</title><style>
     body { font-family: "Segoe UI", system-ui, sans-serif; background: #fffaf6; color: #38281f; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
     .card { background: #fff; padding: 40px; border-radius: 16px; border: 1px solid #eeddd1; text-align: center; max-width: 440px; box-shadow: 0 10px 30px rgba(80,50,30,0.08); }
     h2 { font-size: 22px; color: #2f80ed; margin-bottom: 10px; }
@@ -638,7 +638,6 @@ if ($id_sucursal <= 0) {
     .btn-main { background: #2f80ed; color: #fff; }
     .btn-sub { background: #f4ece4; color: #2f80ed; }
     </style></head><body>
-<script src="../../../js/petko-prefs.js"></script>
     <div class="card">
         <h2>Tu usuario no tiene una sucursal asignada</h2>
         <p>Para ingresar al panel de gerencia debes tener una sucursal vinculada. Contacta al administrador general.</p>
@@ -658,8 +657,9 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>PETKO · Panel de Gerente</title>
+    <title>KION · Panel de Gerente</title>
 
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -929,17 +929,17 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
     .sidebar-collapse-btn { display: none; }
     .hamburger-btn { display: inline-flex; }
 }
-    
-
-</style>
-    <link rel="stylesheet" href="../../../css/petko-ui.css?v=<?= (int) @filemtime(__DIR__ . '/../../../css/petko-ui.css') ?>">
+    </style>
 </head>
 <body>
 
 <div class="app-layout" id="appLayout">
     <aside class="sidebar">
         <button class="sidebar-collapse-btn" id="btnCollapse" title="Colapsar menú"><i class="ph ph-caret-left"></i></button>
-        <a class="brand" href="home.php" aria-label="PETKO · Inicio"><img src="../../../img/petko/logo_amarillo.png" alt="PETKO Veterinaria y Ganadería" width="520" height="161"></a>
+        <div class="brand">
+            <i class="ph-fill ph-paw-print"></i>
+            <div class="brand-text"><div>KION</div><div class="brand-sub" data-i18n="brand_sub">Gerencia de Sucursal</div></div>
+        </div>
         <nav class="nav-menu">
             <div class="nav-section-title" data-i18n="nav_section_panel">Panel</div>
             <button class="nav-btn active" data-target="view-dash"><i class="ph ph-squares-four"></i><span class="nav-label" data-i18n="nav_dash">Panel Principal</span></button>
@@ -968,8 +968,8 @@ body.dark-mode .btn-card-full { background: linear-gradient(135deg, #5cc8ff, #2f
                 </div>
             </div>
             <div class="topbar-actions">
-                <button class="icon-btn" id="btnLang" data-petko-lang type="button">EN</button>
-                <button class="icon-btn" id="btnTheme" data-petko-theme type="button">🌙</button>
+                <button class="icon-btn" id="btnLang" title="Switch language / Cambiar idioma"><i class="ph ph-translate"></i></button>
+                <button class="icon-btn" id="btnTheme" title="Modo Oscuro"><i class="ph ph-moon"></i></button>
                 <div class="user-profile">
                     <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--accent)"></i>
                     <span><?= htmlspecialchars($nombreGerente) ?></span>
@@ -1164,8 +1164,15 @@ async function request(actionStr, options = {}) {
     return data;
 }
 
-// -------- TEMA (compartido con el home: petko_dark) --------
-const body = document.body;
+// -------- TEMA --------
+const body = document.body, btnTheme = $('#btnTheme');
+btnTheme.addEventListener('click', () => {
+    body.classList.toggle('dark-mode');
+    const icon = btnTheme.querySelector('i');
+    icon.classList.toggle('ph-moon'); icon.classList.toggle('ph-sun');
+    localStorage.setItem('kion-gerente-theme', body.classList.contains('dark-mode') ? 'dark' : 'light');
+});
+if (localStorage.getItem('kion-gerente-theme') === 'dark') { body.classList.add('dark-mode'); btnTheme.querySelector('i').classList.replace('ph-moon','ph-sun'); }
 
 // -------- SIDEBAR: colapsar / móvil --------
 const appLayout = $('#appLayout');
@@ -1244,15 +1251,17 @@ const I18N = {
         title_eliminar_prod: 'Delete product?', desc_eliminar_prod: 'Will only proceed if global stock is 0.'
     }
 };
-let currentLang = PetkoPrefs.lang();
+let currentLang = localStorage.getItem('kion-gerente-lang') || 'es';
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || I18N.es[key] || key; }
 function applyLanguage() {
     document.documentElement.lang = currentLang;
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
 }
-PetkoPrefs.onLang(function (l) {
-    currentLang = l;
+const btnLang = $('#btnLang');
+btnLang.addEventListener('click', () => {
+    currentLang = currentLang === 'es' ? 'en' : 'es';
+    localStorage.setItem('kion-gerente-lang', currentLang);
     applyLanguage();
     const activeView = document.querySelector('.view-section.active');
     if (activeView) switchView(activeView.id);

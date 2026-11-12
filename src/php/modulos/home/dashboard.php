@@ -480,7 +480,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 
 .view-section { display: none; animation: fadeIn .45s var(--ease-lux) forwards; }
 .view-section.active { display: block; }
-.wave { display: inline-block; transform-origin: 70% 70%; animation: wave 2.2s ease-in-out .3s infinite; } /*[cite: 1] */
+.wave { display: inline-block; transform-origin: 70% 70%; animation: wave 2.2s ease-in-out .3s infinite; }
 
 .app-layout { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; transition: grid-template-columns .35s var(--ease-lux); }
 .app-layout.is-collapsed { grid-template-columns: var(--sidebar-w-collapsed) 1fr; }
