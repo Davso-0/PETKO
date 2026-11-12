@@ -2236,10 +2236,6 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
 </section>
 
         </div>
-        <footer class="app-footer">
-            <a class="logo" href="home.php" aria-label="PETKO"><img src="../../../img/petko/logo_amarillo.png" alt="PETKO Veterinaria y Ganadería"></a>
-            <p>© 2026 PETKO · Punto de Venta e Inventario para Veterinarias</p>
-        </footer>
     </main>
 </div>
 
