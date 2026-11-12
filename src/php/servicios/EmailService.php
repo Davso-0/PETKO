@@ -23,14 +23,21 @@ final class EmailService
         $correoSeguro = self::escape($destinatario);
         $sucursalSeguro = self::escape($sucursal);
         $urlSeguro = self::escape($urlActivacion);
+        $urlTerminos = self::urlTerminosDesdeActivacion($urlActivacion);
+        $urlTerminosSeguro = self::escape($urlTerminos);
         $html = self::plantilla(
             '<p style="margin:0 0 16px;">Hola <strong>' . $nombreSeguro . '</strong>, tu cuenta como <strong>' . $rolSeguro . '</strong> está lista para activarse.</p>'
             . '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:20px 0;background-color:#F3F6F8;border:1px solid #D9E2EA;">'
             . '<tr><td style="padding:10px;font-weight:bold;color:#5A6B7D;">Correo</td><td style="padding:10px;">' . $correoSeguro . '</td></tr>'
             . '<tr><td style="padding:10px;font-weight:bold;color:#5A6B7D;">Rol</td><td style="padding:10px;">' . $rolSeguro . '</td></tr>'
             . '<tr><td style="padding:10px;font-weight:bold;color:#5A6B7D;">Sucursal</td><td style="padding:10px;">' . $sucursalSeguro . '</td></tr></table>'
+            . '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:22px 0;background-color:#ECFDF5;border:1px solid #BBF7D0;border-left:4px solid #22C55E;">'
+            . '<tr><td style="padding:16px 18px;color:#14532D;font-size:14px;line-height:1.5;"><strong style="display:block;margin-bottom:6px;font-size:16px;">Antes de establecer tu contraseña</strong>Revisa y acepta los Términos, Condiciones y Política de Privacidad para completar la activación de tu cuenta.</td></tr>'
+            . '<tr><td style="padding:0 18px 16px;"><a href="' . $urlTerminosSeguro . '" style="display:inline-block;background-color:#FFFFFF;border:1px solid #16A34A;color:#166534;text-decoration:none;padding:11px 16px;border-radius:6px;font-weight:bold;font-size:14px;">Leer Términos y Condiciones</a></td></tr></table>'
             . '<p style="margin:0 0 20px;">Establece tu propia contraseña para activar la cuenta. Este enlace es personal y expira en 24 horas.</p>'
-            . '<p style="text-align:center;margin:26px 0;"><a href="' . $urlSeguro . '" style="display:inline-block;background-color:#22C55E;color:#FFFFFF;text-decoration:none;padding:14px 22px;border-radius:6px;font-weight:bold;">Establecer mi contraseña y activar cuenta</a></p>'
+            . '<p style="text-align:center;margin:26px 0;"><a href="' . $urlSeguro . '" style="display:inline-block;background-color:#22C55E;color:#FFFFFF;text-decoration:none;padding:14px 22px;border-radius:6px;font-weight:bold;">Establecer mi contraseña y activar cuenta</a></p>',
+            $urlTerminos,
+            false
         );
         return self::enviar($destinatario, $nombre, $asunto, $html);
     }
@@ -154,14 +161,15 @@ final class EmailService
         return $puerto;
     }
 
-    private static function plantilla(string $contenido): string
+    private static function plantilla(string $contenido, ?string $urlTerminos = null, bool $mostrarEnlaceTerminos = true): string
     {
+        $urlTerminos = $urlTerminos ?? self::baseUrl() . '/terminos.php';
         return '<!doctype html><html lang="es"><body style="margin:0;background-color:#F3F6F8;color:#142033;font-family:Arial,sans-serif;">'
             . '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;background-color:#F3F6F8;padding:24px 0;"><tr><td align="center">'
             . '<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="border-collapse:collapse;max-width:600px;background-color:#FFFFFF;border-radius:8px;box-shadow:0 2px 10px rgba(7,26,50,.12);overflow:hidden;">'
             . '<tr><td style="padding:22px;background-color:#0B2545;color:#FFFFFF;font-size:26px;font-weight:bold;">PET<span style="color:#22C55E;">KO</span></td></tr>'
             . '<tr><td style="padding:28px 26px;font-size:15px;line-height:1.55;">' . $contenido . '</td></tr>'
-            . '<tr><td style="padding:18px 26px;background-color:#071A32;color:#FFFFFF;font-size:12px;line-height:1.5;">Soporte: soporte@vetko.com<br>&copy; ' . date('Y') . ' PETKO. Todos los derechos reservados.<br><a href="' . self::escape(self::baseUrl() . '/terminos.php') . '" style="color:#22C55E;">Consulta nuestros Términos y Condiciones</a></td></tr>'
+            . '<tr><td style="padding:18px 26px;background-color:#071A32;color:#FFFFFF;font-size:12px;line-height:1.5;">Soporte: soporte@vetko.com<br>&copy; ' . date('Y') . ' PETKO. Todos los derechos reservados.' . ($mostrarEnlaceTerminos ? '<br><a href="' . self::escape($urlTerminos) . '" style="color:#22C55E;">Consulta nuestros Términos y Condiciones</a>' : '') . '</td></tr>'
             . '</table></td></tr></table></body></html>';
     }
 
@@ -169,6 +177,31 @@ final class EmailService
     {
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         return $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    }
+
+    private static function urlTerminosDesdeActivacion(string $urlActivacion): string
+    {
+        $partes = parse_url($urlActivacion);
+        if (is_array($partes) && isset($partes['scheme'], $partes['host'], $partes['path'])) {
+            $rutaTerminos = preg_replace(
+                '~\/activar-cuenta\.php$~',
+                '/terminos.php',
+                (string)$partes['path']
+            );
+            if (is_string($rutaTerminos)) {
+                $puerto = isset($partes['port']) ? ':' . $partes['port'] : '';
+                $parametros = ['origen' => 'activacion'];
+                if (isset($partes['query'])) {
+                    parse_str($partes['query'], $consulta);
+                    if (isset($consulta['token']) && is_string($consulta['token']) && preg_match('/\A[a-f0-9]{64}\z/', $consulta['token'])) {
+                        $parametros['token'] = $consulta['token'];
+                    }
+                }
+                return $partes['scheme'] . '://' . $partes['host'] . $puerto . $rutaTerminos . '?' . http_build_query($parametros);
+            }
+        }
+
+        return self::baseUrl() . '/terminos.php';
     }
 
     private static function escape(string $value): string
