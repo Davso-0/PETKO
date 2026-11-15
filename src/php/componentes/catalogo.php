@@ -5,41 +5,245 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Token CSRF para proteger peticiones POST de apartados y compras
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+
 // inicioSesion.php guarda al usuario en $_SESSION['usuario'] con su id_usuario.
-$usuarioAutenticado = !empty($_SESSION['usuario']['id_usuario']);
+$idUsuarioSesion = 0;
+if (is_array($_SESSION['usuario'] ?? null)) {
+    $idUsuarioSesion = (int)($_SESSION['usuario']['id_usuario'] ?? $_SESSION['usuario']['id'] ?? 0);
+} else {
+    $idUsuarioSesion = (int)($_SESSION['usuario'] ?? 0);
+}
+$usuarioAutenticado = $idUsuarioSesion > 0;
 $rutaLogin = '../../../inicioSesion.php';
 
+// Conexión centralizada con respaldo local
+if (file_exists(__DIR__ . '/../config/conexion_BD.php')) {
+    require_once __DIR__ . '/../config/conexion_BD.php';
+} elseif (file_exists(__DIR__ . '/../config/conexion.php')) {
+    require_once __DIR__ . '/../config/conexion.php';
+}
 
-// Usar la conexión centralizada con los datos de InfinityFree:
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    $dbHost = 'localhost';
+    $dbName = 'kion';
+    $dbUser = 'root';
+    $dbPass = '';
+    $pdo = null;
+    $errorConsulta = null;
 
-//require_once __DIR__ . '/../config/conexion.php';
+    try {
+        $pdo = new PDO(
+            "mysql:host={$dbHost};dbname={$dbName};charset=utf8mb4",
+            $dbUser,
+            $dbPass,
+            [
+                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]
+        );
+    } catch (PDOException $e) {
+        $errorConsulta = 'Fallo al conectar con la base de datos.';
+    }
+} else {
+    $errorConsulta = $errorConexion ?? null;
+}
 
-//if (isset($errorConexion) && $errorConexion !== null) {
- //   $errorConsulta = 'Fallo al conectar con la base de datos.';
-//}
-// final 
+// -------------------------------------------------------------------------
+// ENDPOINT AJAX SEGURO (POST): Guardar apartado / compra en BD por 48 horas
+// -------------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'registrar_apartado') {
+    header('Content-Type: application/json; charset=utf-8');
 
-// Conexión PDO básica para XAMPP local
-$dbHost = 'localhost';
-$dbName = 'kion';
-$dbUser = 'root';
-$dbPass = '';
+    // 1. Verificar sesión autenticada
+    if (!$usuarioAutenticado) {
+        http_response_code(401);
+        echo json_encode([
+            'ok'   => false,
+            'auth' => false,
+            'msg'  => 'Debes iniciar sesión para apartar o comprar productos.'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 
-$pdo = null;
-$errorConsulta = null;
+    // 2. Verificar token CSRF
+    $headerCsrf = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    if ($headerCsrf === '' || !hash_equals($_SESSION['csrf_token'], $headerCsrf)) {
+        http_response_code(403);
+        echo json_encode([
+            'ok'  => false,
+            'msg' => 'Token de seguridad inválido o sesión expirada. Recarga la página.'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 
-try {
-    $pdo = new PDO(
-        "mysql:host={$dbHost};dbname={$dbName};charset=utf8mb4",
-        $dbUser,
-        $dbPass,
-        [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]
-    );
-} catch (PDOException $e) {
-    $errorConsulta = 'Fallo al conectar con la base de datos.';
+    if (!isset($pdo) || !($pdo instanceof PDO)) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'msg' => 'Sin conexión a la base de datos.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $payload = json_decode(file_get_contents('php://input') ?: '{}', true);
+    if (!is_array($payload)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'msg' => 'Formato de solicitud inválido.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $rawItems = is_array($payload['items'] ?? null) ? $payload['items'] : [];
+    $modo = ($payload['modo'] ?? 'sucursal') === 'pagar' ? 'pagar' : 'sucursal';
+    $estadoPago = $modo === 'pagar' ? 'PAGADO' : 'PENDIENTE_PAGO';
+    $idSucursal = (int)($payload['id_sucursal'] ?? 0);
+
+    // Agrupar y sanear cantidades por id_producto (evita duplicados y cantidades negativas)
+    $itemsAgrupados = [];
+    foreach ($rawItems as $item) {
+        $idProd = (int)($item['id_producto'] ?? $item['id'] ?? 0);
+        $cant = (int)($item['cantidad'] ?? $item['qty'] ?? 1);
+        if ($idProd > 0 && $cant > 0) {
+            $itemsAgrupados[$idProd] = min(50, ($itemsAgrupados[$idProd] ?? 0) + $cant);
+        }
+    }
+
+    if (empty($itemsAgrupados)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'msg' => 'No hay productos válidos en el carrito para procesar.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    // Generar folio único desde el servidor (nunca confiar en el folio del cliente)
+    $folio = 'PTK-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
+
+    try {
+        $pdo->beginTransaction();
+
+        // 3. Validar que la sucursal exista realmente
+        if ($idSucursal > 0) {
+            $stSuc = $pdo->prepare("SELECT id_sucursal FROM sucursales WHERE id_sucursal = ? LIMIT 1");
+            $stSuc->execute([$idSucursal]);
+            if (!$stSuc->fetchColumn()) {
+                $idSucursal = 0;
+            }
+        }
+        if ($idSucursal <= 0) {
+            $idSucursal = (int)$pdo->query("SELECT id_sucursal FROM sucursales ORDER BY id_sucursal ASC LIMIT 1")->fetchColumn();
+        }
+        if ($idSucursal <= 0) {
+            throw new RuntimeException('No hay sucursales activas registradas en el sistema.');
+        }
+
+        // Detectar columnas disponibles en la tabla apartados
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM apartados");
+        $columnasTabla = array_column($colsStmt->fetchAll(PDO::FETCH_ASSOC), 'Field');
+        $tieneCantidad = in_array('cantidad', $columnasTabla, true);
+        $tieneEstadoPago = in_array('estado_pago', $columnasTabla, true);
+
+        // Bloqueo FOR UPDATE para evitar condiciones de carrera en el inventario
+        $stmtCheckStock = $pdo->prepare("
+            SELECT p.id_producto, p.nombre, p.precio, UPPER(TRIM(COALESCE(p.estado, 'ACTIVO'))) AS estado_prod,
+                   COALESCE(i.existencias, 10) AS stock, i.id_inventario
+            FROM productos p
+            LEFT JOIN inventarios i ON p.id_producto = i.id_producto
+            WHERE p.id_producto = ?
+            LIMIT 1
+            FOR UPDATE
+        ");
+
+        $stmtUpdateStock = $pdo->prepare("
+            UPDATE inventarios 
+            SET existencias = GREATEST(0, existencias - ?) 
+            WHERE id_producto = ?
+        ");
+
+        if ($tieneCantidad && $tieneEstadoPago) {
+            $stmtInsert = $pdo->prepare("
+                INSERT INTO apartados (id_usuario, id_producto, id_sucursal, cantidad, fecha_reserva, estado, estado_pago, folio, horas_vigencia)
+                VALUES (?, ?, ?, ?, NOW(), 'PENDIENTE', ?, ?, 48)
+            ");
+        } else {
+            $stmtInsert = $pdo->prepare("
+                INSERT INTO apartados (id_usuario, id_producto, id_sucursal, fecha_reserva, estado, folio, horas_vigencia)
+                VALUES (?, ?, ?, NOW(), 'PENDIENTE', ?, 48)
+            ");
+        }
+
+        $stocksActualizados = [];
+        $resumenTicket = [];
+        $totalReal = 0.0;
+
+        foreach ($itemsAgrupados as $idProd => $cant) {
+            $stmtCheckStock->execute([$idProd]);
+            $prodInfo = $stmtCheckStock->fetch(PDO::FETCH_ASSOC);
+
+            if (!$prodInfo || $prodInfo['estado_prod'] !== 'ACTIVO') {
+                $pdo->rollBack();
+                http_response_code(409);
+                echo json_encode([
+                    'ok'          => false,
+                    'invalid_ids' => [$idProd],
+                    'msg'         => "El producto (ID {$idProd}) ya no está disponible en el catálogo y fue retirado de tu carrito."
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            $stockActual = (int)$prodInfo['stock'];
+            if ($stockActual < $cant) {
+                throw new RuntimeException("Stock insuficiente para \"{$prodInfo['nombre']}\" (disponibles: {$stockActual}).");
+            }
+
+            if ($tieneCantidad && $tieneEstadoPago) {
+                $stmtInsert->execute([$idUsuarioSesion, $idProd, $idSucursal, $cant, $estadoPago, $folio]);
+            } else {
+                for ($i = 0; $i < $cant; $i++) {
+                    $stmtInsert->execute([$idUsuarioSesion, $idProd, $idSucursal, $folio]);
+                }
+            }
+
+            if (!empty($prodInfo['id_inventario'])) {
+                $stmtUpdateStock->execute([$cant, $idProd]);
+            }
+
+            $precioUnit = (float)$prodInfo['precio'];
+            $totalReal += $precioUnit * $cant;
+            $stocksActualizados[$idProd] = max(0, $stockActual - $cant);
+            $resumenTicket[] = [
+                'id_producto' => $idProd,
+                'nombre'      => $prodInfo['nombre'],
+                'cantidad'    => $cant,
+                'precio'      => $precioUnit
+            ];
+        }
+
+        $pdo->commit();
+
+        echo json_encode([
+            'ok'          => true,
+            'folio'       => $folio,
+            'fecha'       => date('d/m/Y H:i'),
+            'modo'        => $modo,
+            'estado_pago' => $estadoPago,
+            'vigencia'    => 48,
+            'total'       => $totalReal,
+            'items'       => $resumenTicket,
+            'stocks'      => $stocksActualizados,
+            'msg'         => $modo === 'pagar'
+                ? 'Pago verificado y producto(s) apartados por 48 horas.'
+                : 'Producto(s) apartados por 48 horas para pago en sucursal.'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'msg' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 }
 
 $categoriaSeleccionada = isset($_GET['categoria']) ? (string) $_GET['categoria'] : null;
@@ -47,8 +251,16 @@ $productos = [];
 $productosCatalogo = [];
 $detallesProducto = [];
 $categoriasDisponibles = [];
+$sucursalesDisponibles = [];
 
 if (isset($pdo) && $pdo instanceof PDO) {
+    try {
+        $sucStmt = $pdo->query("SELECT id_sucursal, nombre FROM sucursales ORDER BY id_sucursal ASC");
+        $sucursalesDisponibles = $sucStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $sucursalesDisponibles = [['id_sucursal' => 1, 'nombre' => 'Sucursal Principal']];
+    }
+
     try {
         $catStmt = $pdo->query("SELECT nombre FROM categorias ORDER BY nombre ASC");
         while ($row = $catStmt->fetch(PDO::FETCH_ASSOC)) {
@@ -65,15 +277,12 @@ if (isset($pdo) && $pdo instanceof PDO) {
         $stmt->execute();
         $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $totalCatalogo = count($productos);
-        // Se pintan todos los productos para que JS filtre por categoría
-        // sin recargar; $productos queda como la selección inicial.
         $productosCatalogo = $productos;
 
         if ($categoriaSeleccionada !== null && !in_array($categoriaSeleccionada, $categoriasDisponibles, true)) {
             $categoriaSeleccionada = null;
         }
 
-        // El filtro por categoría se aplica aquí, en PHP
         if ($categoriaSeleccionada !== null) {
             $productos = array_values(array_filter($productos, function ($p) use ($categoriaSeleccionada) {
                 return ($p['categoria'] ?? null) === $categoriaSeleccionada;
@@ -83,7 +292,6 @@ if (isset($pdo) && $pdo instanceof PDO) {
         $errorConsulta = 'No pudimos cargar los productos en este momento.';
     }
 
-    // Consulta de respaldo para detalles si hiciera falta
     try {
         $detStmt = $pdo->query("SELECT id_producto, codigo, descripcion, imagen_url FROM productos");
         foreach ($detStmt as $fila) {
@@ -117,7 +325,6 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
         }
         return $img;
     }
-    // Fallback si existe la imagen con el id en src/img/{id}.jpg
     $rutaFisica = __DIR__ . '/../../img/' . $idProd . '.jpg';
     if (file_exists($rutaFisica)) {
         return '../../img/' . $idProd . '.jpg';
@@ -138,6 +345,7 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
     <link rel="stylesheet" href="../../css/catalogo.css?v=<?= (int) @filemtime(__DIR__ . '/../../css/catalogo.css') ?>">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="catalogo-app">
 <script src="../../js/petko-prefs.js"></script>
@@ -156,31 +364,43 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
         <button class="btn-icon" id="btnLang" data-petko-lang type="button">EN</button>
         
         <?php 
-        // Determinar la ruta del dashboard dinámicamente con las rutas relativas correctas
-        $rutaDashboard = $rutaLogin; // Por defecto si no hay sesión
+        $rutaDashboard = $rutaLogin;
         $textoPanel = 'Iniciar Sesión';
         $iconoPanel = 'ph-sign-in';
         $claveI18nPanel = 'nav_login';
+        $esClienteCompras = false;
         
         if (isset($_SESSION['usuario'])) {
-            $textoPanel = 'Panel';
-            $iconoPanel = 'ph-squares-four';
-            $claveI18nPanel = 'nav_dashboard';
             $rolSesion = strtolower($_SESSION['usuario']['rol'] ?? '');
             
             if (strpos($rolSesion, 'admin') !== false) {
+                $textoPanel = 'Panel';
+                $iconoPanel = 'ph-squares-four';
+                $claveI18nPanel = 'nav_dashboard';
                 $rutaDashboard = '../modulos/home/dashboard.php';
             } elseif (strpos($rolSesion, 'gerente') !== false) {
+                $textoPanel = 'Panel';
+                $iconoPanel = 'ph-squares-four';
+                $claveI18nPanel = 'nav_dashboard';
                 $rutaDashboard = '../modulos/home/dashboard_gerente.php';
             } else {
-                // Cliente regular o usuario sin dashboard administrativo
-                $rutaDashboard = '../modulos/home/dashboard_usuario.php'; 
+                // Para clientes / usuarios: mostrar "Mis compras" directo a su panel
+                $textoPanel = 'Mis compras';
+                $iconoPanel = 'ph-shopping-bag';
+                $claveI18nPanel = 'nav_my_purchases';
+                $rutaDashboard = '../modulos/home/dashboard_usuario.php';
+                $esClienteCompras = true;
             }
         }
         ?>
         
-        <a href="<?= htmlspecialchars($rutaDashboard, ENT_QUOTES, 'UTF-8') ?>" class="btn-nav">
-            <i class="ph <?= $iconoPanel ?>"></i> <span data-i18n="<?= $claveI18nPanel ?>"><?= $textoPanel ?></span>
+        <a href="<?= htmlspecialchars($rutaDashboard, ENT_QUOTES, 'UTF-8') ?>" class="btn-nav" id="btn-nav-panel">
+            <i class="ph <?= $iconoPanel ?>"></i>
+            <?php if ($esClienteCompras): ?>
+                <span data-custom-i18n="nav_my_purchases"><?= $textoPanel ?></span>
+            <?php else: ?>
+                <span data-i18n="<?= $claveI18nPanel ?>"><?= $textoPanel ?></span>
+            <?php endif; ?>
         </a>
         
         <button class="btn-icon topbar__carrito" id="open-cart" aria-label="Carrito">
@@ -315,7 +535,6 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
                     $idProd  = (int) $producto['id_producto'];
                     $precio  = (float) $producto['precio'];
                     
-                    // Resolver imagen con prioridad: BD -> Archivo físico -> Rutas antiguas -> Placeholder
                     $imgSrc = resolverImagenProducto($producto['imagen_url'] ?? null, $idProd, $producto['categoria'] ?? 'PETKO');
                     $detalle     = $detallesProducto[$idProd] ?? [];
                     $codigo      = htmlspecialchars((string) ($producto['codigo'] ?? ($detalle['codigo'] ?? '')), ENT_QUOTES, 'UTF-8');
@@ -359,7 +578,7 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
                                 <i class="ph ph-shopping-cart-plus" aria-hidden="true"></i>
                                 <span data-i18n="<?= $agotado ? 'btn_out' : 'btn_add' ?>"><?= $agotado ? 'Sin stock' : 'Agregar al carrito' ?></span>
                             </button>
-                            <button type="button" class="btn-apartar js-apartar"<?= $agotado ? ' disabled' : '' ?>>
+                            <button type="button" class="btn-apartar js-apartar" data-id="<?= $idProd ?>"<?= $agotado ? ' disabled' : '' ?>>
                                 <i class="ph ph-bookmark-simple" aria-hidden="true"></i>
                                 <span data-i18n="btn_reserve">Apartar producto</span>
                             </button>
@@ -477,7 +696,7 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
             <span class="checkout__sello" aria-hidden="true"><i class="ph-fill ph-paw-print"></i></span>
             <span class="modal-producto__categoria" data-i18n="checkout_eyebrow">Finalizar pedido</span>
             <h2 class="checkout__titulo" id="checkout-titulo" data-i18n="checkout_title">¿Cómo deseas finalizar tu pedido?</h2>
-            <p class="checkout__sub" id="checkout-sub" data-i18n="checkout_sub">Elige la opción que mejor te acomode; en ambas generamos tu ticket al instante.</p>
+            <p class="checkout__sub" id="checkout-sub" data-i18n="checkout_sub">Elige la opción que mejor te acomode; en ambas generamos tu ticket verificado y apartamos por 48 h.</p>
         </header>
 
         <div class="checkout__resumen">
@@ -489,13 +708,26 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
             </span>
         </div>
 
+        <?php if (!empty($sucursalesDisponibles)): ?>
+        <div style="margin: 12px 0 4px;">
+            <label for="checkout-sucursal" style="display:block; font-size:12.5px; font-weight:700; margin-bottom:6px; opacity:.85;">
+                <i class="ph-fill ph-storefront"></i> Sucursal de recolección (vigencia 48 h):
+            </label>
+            <select id="checkout-sucursal" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(0,0,0,.15); font:inherit; background:var(--surface, #fff); color:inherit;">
+                <?php foreach ($sucursalesDisponibles as $suc): ?>
+                    <option value="<?= (int)$suc['id_sucursal'] ?>"><?= htmlspecialchars($suc['nombre'], ENT_QUOTES, 'UTF-8') ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <?php endif; ?>
+
         <div class="checkout__opciones">
             <button type="button" class="checkout__opcion checkout__opcion--pagar" data-checkout="pagar">
                 <span class="checkout__opcion-icono" aria-hidden="true"><i class="ph ph-credit-card"></i></span>
                 <span class="checkout__opcion-texto">
                     <span class="checkout__opcion-titulo" data-i18n="pay_now_title">Pagar ahora</span>
-                    <span class="checkout__opcion-metodo" data-i18n="pay_now_method">Tarjeta / Transferencia</span>
-                    <span class="checkout__opcion-desc" data-i18n="pay_now_desc">Pago seguro en línea y tu ticket de compra al momento.</span>
+                    <span class="checkout__opcion-metodo" data-i18n="pay_now_method">Tarjeta / Transferencia · Ya pagado</span>
+                    <span class="checkout__opcion-desc" data-i18n="pay_now_desc">Pago verificado, apartado asegurado por 48 h y ticket real al momento.</span>
                 </span>
                 <i class="ph ph-caret-right checkout__opcion-flecha" aria-hidden="true"></i>
             </button>
@@ -504,7 +736,7 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
                 <span class="checkout__opcion-icono" aria-hidden="true"><i class="ph ph-storefront"></i></span>
                 <span class="checkout__opcion-texto">
                     <span class="checkout__opcion-titulo" data-i18n="pay_store_title">Apartar y pagar en sucursal</span>
-                    <span class="checkout__opcion-metodo" data-i18n="pay_store_method">Efectivo</span>
+                    <span class="checkout__opcion-metodo" data-i18n="pay_store_method">Efectivo · En espera de pago</span>
                     <span class="checkout__opcion-desc" data-i18n="pay_store_desc">Te guardamos tus productos 48 h; pagas en efectivo al recoger.</span>
                 </span>
                 <i class="ph ph-caret-right checkout__opcion-flecha" aria-hidden="true"></i>
@@ -513,12 +745,12 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
 
         <p class="modal-producto__politica checkout__nota">
             <i class="ph ph-shield-check" aria-hidden="true"></i>
-            <span data-i18n="checkout_secure">Tus datos están protegidos. Recibirás un folio único para cualquier aclaración.</span>
+            <span data-i18n="checkout_secure">Tus datos están protegidos. Recibirás un folio único verificado en base de datos.</span>
         </p>
     </div>
 </dialog>
 
-<!-- TICKET DE COMPRA (simulado) -->
+<!-- TICKET DE COMPRA (solo visible tras verificación en BD) -->
 <dialog class="modal-producto modal-ticket" id="modal-ticket" aria-labelledby="ticket-titulo" aria-describedby="ticket-sub">
     <div class="modal-producto__caja ticket" id="ticket-caja" data-modo="pagar">
         <button type="button" class="modal-producto__cerrar" id="ticket-cerrar" aria-label="Cerrar" data-i18n-aria="checkout_close">
@@ -611,8 +843,345 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
     window.PETKO_SESION = <?= json_encode([
         'autenticado' => $usuarioAutenticado,
         'loginUrl'    => $rutaLogin,
+        'csrf'        => $csrfToken,
     ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?>;
 </script>
 <script src="../../js/catalogo.js?v=<?= (int) @filemtime(__DIR__ . '/../../js/catalogo.js') ?>"></script>
+
+<!-- Puente seguro de verificación en BD: impide tickets falsos y limpia IDs obsoletos -->
+<script>
+(function () {
+    let transaccionEnCurso = false;
+    let ticketVerificado = false;
+    let ultimoCarritoSnapshot = [];
+
+    // Mapa de productos activos cargados actualmente desde MySQL en el catálogo
+    function obtenerProductosActivosCatalogo() {
+        const mapa = new Map();
+        document.querySelectorAll('.tarjeta[data-id]').forEach(card => {
+            const id = Number(card.dataset.id);
+            if (id > 0) {
+                mapa.set(id, {
+                    id_producto: id,
+                    nombre: (card.dataset.nombre || '').trim().toLowerCase(),
+                    stock: Number(card.dataset.stock || 0)
+                });
+            }
+        });
+        return mapa;
+    }
+
+    // Purgar cualquier ID obsoleto (como ID 18) de localStorage si ya no existe en el catálogo
+    function limpiarIdsObsoletosLocalStorage(idsInvalidos = []) {
+        const activos = obtenerProductosActivosCatalogo();
+        const setInvalidos = new Set(idsInvalidos.map(Number));
+
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key || !/cart|carrito|petko/i.test(key)) continue;
+            try {
+                const raw = localStorage.getItem(key);
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    const filtrado = parsed.filter(item => {
+                        const id = Number(item?.id_producto ?? item?.id ?? 0);
+                        if (!id) return true;
+                        if (setInvalidos.has(id)) return false;
+                        return activos.size === 0 || activos.has(id);
+                    });
+                    if (filtrado.length !== parsed.length) {
+                        localStorage.setItem(key, JSON.stringify(filtrado));
+                    }
+                }
+            } catch (_) {}
+        }
+    }
+
+    // Obtener los items REALES del carrito sin arrastrar basura vieja de localStorage
+    function obtenerItemsCarritoReales() {
+        const activos = obtenerProductosActivosCatalogo();
+        const itemsDOM = [];
+
+        // 1. Prioridad absoluta: leer los artículos visibles en #cart-items
+        document.querySelectorAll('#cart-items > *').forEach(row => {
+            let id = Number(row.dataset?.id || row.querySelector('[data-id]')?.dataset?.id || 0);
+
+            // Si el nodo no tiene data-id, empatar por nombre con las tarjetas del catálogo
+            if (!id) {
+                const textoNodo = (row.textContent || '').toLowerCase();
+                for (const [idAct, info] of activos.entries()) {
+                    if (info.nombre && textoNodo.includes(info.nombre)) {
+                        id = idAct;
+                        break;
+                    }
+                }
+            }
+
+            if (id > 0 && (activos.size === 0 || activos.has(id))) {
+                const qtyEl = row.querySelector('input[type="number"], [data-qty], .cart-item__qty, .qty, .cantidad');
+                let qty = 1;
+                if (qtyEl) {
+                    qty = Number(qtyEl.value || qtyEl.dataset?.qty || qtyEl.textContent.replace(/\D+/g, '')) || 1;
+                } else {
+                    const matchCant = (row.textContent || '').match(/(?:x|×)\s*(\d+)/i);
+                    if (matchCant) qty = Number(matchCant[1]) || 1;
+                }
+                itemsDOM.push({ id_producto: id, cantidad: Math.max(1, qty) });
+            }
+        });
+
+        if (itemsDOM.length > 0) {
+            return itemsDOM;
+        }
+
+        // 2. Respaldo: leer localStorage filtrando estrictamente contra productos activos
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key || !/cart|carrito/i.test(key) || /apartado|reserve/i.test(key)) continue;
+            try {
+                const parsed = JSON.parse(localStorage.getItem(key));
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const validos = parsed
+                        .map(x => ({
+                            id_producto: Number(x.id_producto ?? x.id ?? 0),
+                            cantidad: Math.max(1, Number(x.cantidad ?? x.qty ?? x.quantity ?? 1))
+                        }))
+                        .filter(x => x.id_producto > 0 && (activos.size === 0 || activos.has(x.id_producto)));
+                    if (validos.length > 0) return validos;
+                }
+            } catch (_) {}
+        }
+
+        return [];
+    }
+
+    // Guardia de seguridad en #modal-ticket: cierra inmediatamente cualquier apertura falsa
+    const modalTicket = document.getElementById('modal-ticket');
+    if (modalTicket) {
+        const obsTicket = new MutationObserver(() => {
+            if (modalTicket.open && !ticketVerificado) {
+                modalTicket.close();
+            }
+        });
+        obsTicket.observe(modalTicket, { attributes: true, attributeFilter: ['open'] });
+    }
+
+    function renderizarTicketVerificado(data) {
+        if (!modalTicket) return;
+        const caja = document.getElementById('ticket-caja');
+        if (caja) caja.dataset.modo = data.modo;
+
+        const titulo = document.getElementById('ticket-titulo');
+        const sub = document.getElementById('ticket-sub');
+        const folio = document.getElementById('ticket-folio');
+        const fecha = document.getElementById('ticket-fecha');
+        const metodo = document.getElementById('ticket-metodo');
+        const estado = document.getElementById('ticket-estado');
+        const itemsUl = document.getElementById('ticket-items');
+        const totalEl = document.getElementById('ticket-total');
+        const codigoEl = document.getElementById('ticket-codigo');
+
+        const esPago = data.modo === 'pagar';
+        if (titulo) titulo.textContent = esPago ? '¡Compra y apartado confirmados!' : '¡Apartado confirmado por 48 h!';
+        if (sub) sub.textContent = data.msg;
+        if (folio) folio.textContent = data.folio;
+        if (fecha) fecha.textContent = data.fecha;
+        if (metodo) metodo.textContent = esPago ? 'Pago en línea' : 'Pago en sucursal (Efectivo)';
+        if (estado) estado.textContent = esPago ? 'PAGADO · APARTADO 48H' : 'PENDIENTE DE PAGO (48H)';
+        if (totalEl) totalEl.textContent = '$' + Number(data.total || 0).toFixed(2);
+        if (codigoEl) codigoEl.textContent = data.folio;
+
+        if (itemsUl && Array.isArray(data.items)) {
+            itemsUl.innerHTML = data.items.map(it => {
+                const subTotal = (Number(it.precio) * Number(it.cantidad)).toFixed(2);
+                return `<li><span>${it.cantidad}x ${it.nombre}</span><strong>$${subTotal}</strong></li>`;
+            }).join('');
+        }
+
+        ticketVerificado = true;
+        modalTicket.showModal();
+        setTimeout(() => { ticketVerificado = false; }, 600);
+    }
+
+    function vaciarCarritoLocal() {
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && /cart|carrito/i.test(key) && !/apartado|reserve/i.test(key)) {
+                localStorage.setItem(key, '[]');
+            }
+        }
+        const cartItemsEl = document.getElementById('cart-items');
+        if (cartItemsEl) cartItemsEl.innerHTML = '';
+        const countEl = document.getElementById('cart-count');
+        if (countEl) {
+            countEl.textContent = '0';
+            countEl.classList.add('is-empty');
+        }
+        const totalEl = document.getElementById('cart-total-price');
+        if (totalEl) totalEl.textContent = '$0.00';
+    }
+
+    async function procesarEnServidor(items, modo) {
+        if (!window.PETKO_SESION || !window.PETKO_SESION.autenticado) {
+            await Swal.fire({
+                icon: 'info',
+                title: 'Inicia sesión',
+                text: 'Debes iniciar sesión para apartar o comprar productos.',
+                confirmButtonText: 'Ir a iniciar sesión'
+            });
+            window.location.href = window.PETKO_SESION?.loginUrl || '../../../inicioSesion.php';
+            return;
+        }
+
+        if (transaccionEnCurso) return;
+        transaccionEnCurso = true;
+
+        try {
+            // Si eligió "Pagar ahora", exigir confirmación explícita antes de registrar como PAGADO
+            if (modo === 'pagar') {
+                const conf = await Swal.fire({
+                    icon: 'question',
+                    title: 'Confirmar pago en línea',
+                    text: 'Se verificará el cargo y tus productos quedarán apartados por 48 horas como YA PAGADOS.',
+                    showCancelButton: true,
+                    confirmButtonText: 'Confirmar pago',
+                    cancelButtonText: 'Cancelar'
+                });
+                if (!conf.isConfirmed) return;
+            }
+
+            const selectSuc = document.getElementById('checkout-sucursal');
+            const idSucursal = selectSuc ? Number(selectSuc.value) : 1;
+
+            const resp = await fetch('catalogo.php?action=registrar_apartado', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': window.PETKO_SESION.csrf || ''
+                },
+                body: JSON.stringify({
+                    items: items,
+                    modo: modo,
+                    id_sucursal: idSucursal
+                })
+            });
+
+            const data = await resp.json();
+
+            if (!resp.ok || !data.ok) {
+                if (Array.isArray(data.invalid_ids) && data.invalid_ids.length > 0) {
+                    limpiarIdsObsoletosLocalStorage(data.invalid_ids);
+                }
+                throw new Error(data.msg || 'No se pudo completar la operación en la base de datos.');
+            }
+
+            // Actualizar stock visual en las tarjetas del catálogo
+            if (data.stocks) {
+                Object.entries(data.stocks).forEach(([idProd, nuevoStock]) => {
+                    const card = document.querySelector(`.tarjeta[data-id="${idProd}"]`);
+                    if (card) {
+                        card.dataset.stock = String(nuevoStock);
+                        const stockSpan = card.querySelector('.tarjeta__stock');
+                        if (stockSpan) {
+                            if (Number(nuevoStock) <= 0) {
+                                stockSpan.className = 'tarjeta__stock stock-none';
+                                stockSpan.textContent = 'Agotado';
+                                card.querySelectorAll('button').forEach(b => { if (!b.classList.contains('js-ver-detalle')) b.disabled = true; });
+                            } else {
+                                stockSpan.textContent = `Disponibles: ${nuevoStock}`;
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Cerrar modal de checkout y carrito lateral
+            const modalCheckout = document.getElementById('modal-checkout');
+            if (modalCheckout && modalCheckout.open) modalCheckout.close();
+            document.getElementById('cart-panel')?.classList.remove('is-open', 'open');
+            document.getElementById('cart-overlay')?.classList.remove('is-open', 'open');
+
+            if (modo === 'pagar' || items.length > 1 || ultimoCarritoSnapshot.length > 0) {
+                vaciarCarritoLocal();
+                ultimoCarritoSnapshot = [];
+            }
+
+            renderizarTicketVerificado(data);
+
+        } catch (err) {
+            const modalCheckout = document.getElementById('modal-checkout');
+            if (modalCheckout && modalCheckout.open) modalCheckout.close();
+            Swal.fire({
+                icon: 'error',
+                title: 'Operación no completada',
+                text: err.message || 'Error al verificar el producto en la base de datos.'
+            });
+        } finally {
+            transaccionEnCurso = false;
+        }
+    }
+
+    // Limpiar basura vieja en localStorage apenas carga la página
+    document.addEventListener('DOMContentLoaded', () => {
+        limpiarIdsObsoletosLocalStorage();
+    });
+
+    // Capturar snapshot limpio del carrito al abrir checkout
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('#btn-checkout')) {
+            ultimoCarritoSnapshot = obtenerItemsCarritoReales();
+        }
+    }, true);
+
+    // Interceptar EN FASE DE CAPTURA antes que catalogo.js para impedir tickets falsos
+    document.addEventListener('click', function (e) {
+        // 1. Botón "Apartar producto" (tarjeta o modal de producto)
+        const btnApartar = e.target.closest('.js-apartar, #modal-apartar');
+        if (btnApartar) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            const card = btnApartar.closest('.tarjeta');
+            const idProd = Number(
+                btnApartar.dataset.id ||
+                card?.dataset.id ||
+                document.getElementById('modal-agregar')?.dataset.id ||
+                0
+            );
+            if (idProd > 0) {
+                const modalProd = document.getElementById('modal-producto');
+                if (modalProd && modalProd.open) modalProd.close();
+                procesarEnServidor([{ id_producto: idProd, cantidad: 1 }], 'sucursal');
+            }
+            return;
+        }
+
+        // 2. Opciones del modal Checkout ("Pagar ahora" o "Apartar y pagar en sucursal")
+        const btnCheckoutOpcion = e.target.closest('[data-checkout]');
+        if (btnCheckoutOpcion) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            const modo = btnCheckoutOpcion.dataset.checkout === 'pagar' ? 'pagar' : 'sucursal';
+            const items = ultimoCarritoSnapshot.length > 0 ? ultimoCarritoSnapshot : obtenerItemsCarritoReales();
+            if (items.length === 0) {
+                Swal.fire({ icon: 'warning', title: 'Carrito vacío', text: 'Agrega al menos un producto disponible antes de continuar.' });
+                return;
+            }
+            procesarEnServidor(items, modo);
+        }
+    }, true);
+    function actualizarTextoMisCompras(lang) {
+        const span = document.querySelector('[data-custom-i18n="nav_my_purchases"]');
+        if (span) {
+            span.textContent = (lang === 'en') ? 'My purchases' : 'Mis compras';
+        }
+    }
+
+    if (window.PetkoPrefs) {
+        actualizarTextoMisCompras(PetkoPrefs.lang());
+        PetkoPrefs.onLang(actualizarTextoMisCompras);
+    }
+})();
+
+</script>
 </body>
 </html>
