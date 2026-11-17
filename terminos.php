@@ -7,6 +7,9 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 $csrfToken = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 $_SESSION['csrf_token'] = $csrfToken;
 $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
+if ($incrustado) {
+    $_SESSION['registro_terminos_abiertos'] = true;
+}
 $tokenActivacion = isset($_GET['token']) && is_string($_GET['token'])
     && preg_match('/\A[a-f0-9]{64}\z/', $_GET['token']) ? $_GET['token'] : null;
 $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !== null;
@@ -247,6 +250,7 @@ body.dark-mode .terms-button{background:linear-gradient(135deg,#5cc8ff 0%,#2f80e
     </main>
     <?php if ($incrustado): ?>
         <script>
+            window.parent.postMessage({ type: 'kion-terms-opened' }, window.location.origin);
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Escape') {
                     window.parent.postMessage({ type: 'kion-terms-dismissed' }, window.location.origin);
