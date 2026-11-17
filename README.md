@@ -1,10 +1,8 @@
 <div align="center">
 
+<img src="https://github.com/user-attachments/assets/a2b3d1e7-dcd4-488e-a685-9bc627ef51a6" alt="Logotipo de PETKO" width="260" />
+
 # PETKO — Sistema de Punto de Venta e Inventario Multisede
-
-*(anteriormente **KION**)*
-
-<img width="851" height="315" alt="PETKO Preview" src="https://github.com/user-attachments/assets/dcced36d-0a03-4866-ab3f-0c236e9bc4f0" />
 
 **PETKO** es una aplicación web centralizada de punto de venta e inventario multisede, diseñada para optimizar la administración operativa, el control de existencias y el registro de ventas en establecimientos del sector veterinario y agropecuario del estado de Colima.
 
@@ -39,7 +37,7 @@
    - 7.4 [Panel de Administración General](#74-panel-de-administración-general)
    - 7.5 [Panel de Gerente y Punto de Venta](#75-panel-de-gerente-y-punto-de-venta)
    - 7.6 [Panel del Cliente](#76-panel-del-cliente-mi-cuenta)
-   - 7.7 [Módulo de Cobranza](#77-módulo-de-cobranza)
+   - 7.7 [Módulo de Cobranza (prototipo)](#77-módulo-de-cobranza-prototipo)
    - 7.8 [Página de inicio pública](#78-página-de-inicio-pública)
    - 7.9 [Internacionalización, temas y persistencia en el cliente](#79-internacionalización-temas-y-persistencia-en-el-cliente)
 8. [Modelo de datos](#8-modelo-de-datos)
@@ -48,6 +46,7 @@
 11. [Puesta en producción](#11-puesta-en-producción)
 12. [Seguridad implementada](#12-seguridad-implementada)
 13. [Limitaciones conocidas y trabajo futuro](#13-limitaciones-conocidas-y-trabajo-futuro)
+14. [Cronograma de desarrollo](#14-cronograma-de-desarrollo)
 
 ---
 
@@ -81,7 +80,7 @@ En el sector veterinario y agropecuario, los negocios combinan la comercializaci
 
 ### Objetivo general
 
-Desarrollar e implementar una aplicación web centralizada de punto de venta e inventario multisede, denominada **PETKO** (anteriormente KION), para optimizar la administración operativa de establecimientos comerciales del sector veterinario y agropecuario en el estado de Colima, durante el periodo comprendido entre agosto y noviembre de 2026.
+Desarrollar e implementar una aplicación web centralizada de punto de venta e inventario multisede, denominada **PETKO**, para optimizar la administración operativa de establecimientos comerciales del sector veterinario y agropecuario en el estado de Colima, durante el periodo comprendido entre agosto y noviembre de 2026.
 
 ### Objetivos específicos
 
@@ -113,7 +112,7 @@ flowchart LR
     end
 
     subgraph Datos["Capa de datos"]
-        DB[("MariaDB / MySQL<br/>BD: kion")]
+        DB[("MariaDB / MySQL<br/>BD: petko")]
     end
 
     HTML --> Paginas
@@ -186,9 +185,9 @@ PETKO/ (raíz del repositorio)
 │
 ├── docs/
 │   ├── anteproyecto/
-│   │   └── Anteproyecto KION.pdf   # Documento formal del anteproyecto
+│   │   └── Anteproyecto PETKO.pdf   # Documento formal del anteproyecto
 │   ├── base_datos/
-│   │   ├── kion.sql                # Volcado del esquema base (9 tablas) y catálogos iniciales
+│   │   ├── petko.sql                # Volcado del esquema base (9 tablas) y catálogos iniciales
 │   │   └── Arbol_de_base_de_datos.txt  # Diagrama textual de tablas y relaciones
 │   └── minutas/
 │       └── Sem1MinutaEquip2 .pdf   # Minutas de reuniones del equipo
@@ -196,11 +195,16 @@ PETKO/ (raíz del repositorio)
 └── src/
     ├── css/
     │   ├── catalogo.css            # Sistema de diseño del catálogo PETKO (temas, grid, modales, ticket)
-    │   ├── petko-ui.css            # Identidad visual compartida de los paneles (misma paleta, barra y botones que el home)
+    │   ├── cobranza.css            # Estilos del prototipo de cobranza
+    │   ├── dashboard.css           # Sistema de diseño de paneles (reservado; no enlazado actualmente)
+    │   └── style.css               # Hoja global heredada (usada por cobranza.php)
     ├── js/
     │   ├── catalogo.js             # Lógica del catálogo: filtros, búsqueda, carrito, apartados, checkout, i18n
-    │   ├── petko-prefs.js          # Tema e idioma compartidos con el home (claves petko_dark / petko_lang)
+    │   ├── cobranza.js             # Carrito y llamadas AJAX del prototipo de cobranza
+    │   ├── petko-prefs.js           # Módulo PetkoPrefs (tema/idioma compartidos; reservado)
+    │   └── script.js               # Marcador para JS global
     ├── img/                        # Productos ({id}.jpg), logotipos, iconos y mascotas (perrito, gatos)
+    │   └── originales/             # Respaldo de las ilustraciones originales
     ├── videoEJEMPLO/               # Videos de fondo de las pantallas de login y registro
     └── php/
         ├── config/
@@ -208,6 +212,11 @@ PETKO/ (raíz del repositorio)
         │   └── conexion.php        # Alias de compatibilidad (require de conexion_BD.php)
         ├── componentes/
         │   ├── catalogo.php        # Catálogo público PETKO (vista principal de clientes)
+        │   ├── header.php          # Componente reservado (cabecera compartida)
+        │   ├── navbar.php          # Componente reservado (navegación compartida)
+        │   └── footer.php          # Componente reservado (pie de página compartido)
+        ├── cobranza/
+        │   └── cobranza.php        # Prototipo de cobranza (sin base de datos)
         └── modulos/
             └── home/
                 ├── home.php                # Landing page pública
@@ -230,6 +239,7 @@ PETKO/ (raíz del repositorio)
 | `src/php/modulos/home/dashboard.php` | Vista + API | Administrador | Gestión global: sucursales, personal, catálogo, inventario y ventas |
 | `src/php/modulos/home/dashboard_gerente.php` | Vista + API | Gerente | Operación de una sucursal: inventario, productos, cajas, POS y cortes |
 | `src/php/modulos/home/dashboard_usuario.php` | Vista + API | Usuario autenticado | Apartados del cliente y cambio de contraseña |
+| `src/php/cobranza/cobranza.php` | Vista + API | Prototipo | Maqueta de cobro con datos en sesión |
 | `src/php/config/conexion_BD.php` | Configuración | Interno | Crea la instancia `$pdo` compartida |
 
 ---
@@ -262,8 +272,15 @@ $_SESSION['usuario'] = [
 | Verificación | `password_verify()` contra `usuarios.password_hash` (bcrypt) |
 | Fuerza bruta | Más de 5 intentos fallidos → bloqueo temporal de 15 minutos (`intentos_login`, `bloqueo_hasta`) |
 | Fijación de sesión | `session_regenerate_id(true)` en cada inicio de sesión exitoso |
-| "Recordarme" | Cookie `kion_remember` (64 caracteres hex, 30 días, `HttpOnly`, `SameSite=Lax`, `Secure` bajo HTTPS); en la BD se guarda solo su `SHA-256` en `remember_token` con caducidad en `remember_expires_at` |
+| "Recordarme" | Cookie `petko_remember` (64 caracteres hex, 30 días, `HttpOnly`, `SameSite=Lax`, `Secure` bajo HTTPS); en la BD se guarda solo su `SHA-256` en `remember_token` con caducidad en `remember_expires_at` |
 | Recuperación de contraseña | Genera un token cuyo `SHA-256` se guarda en `recovery_token` (vigencia 1 h); la respuesta es idéntica exista o no el correo, para no revelar qué cuentas existen |
+
+<table>
+  <tr>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/7d66e17c-5fef-4701-8d15-fcc255d69bf9" alt="Inicio de sesión" width="100%" /></td>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/8ba62dc3-fef1-4018-a0cf-a01995b5fcc6" alt="Registro" width="100%" /></td>
+  </tr>
+</table>
 
 #### Inicio de sesión con Google (`google-callback.php`)
 
@@ -273,7 +290,7 @@ sequenceDiagram
     participant L as inicioSesion.php
     participant G as Google Identity Services
     participant C as google-callback.php
-    participant DB as MariaDB (kion)
+    participant DB as MariaDB (petko)
 
     U->>L: Clic en "Continuar con Google"
     L->>G: google.accounts.id (client_id)
@@ -346,8 +363,14 @@ Las categorías se leen de la tabla `categorias`, y una consulta secundaria opci
 | Ticket | Comprobante con folio `FOLIO-####`, fecha, método, estado, partidas y total; vacía el carrito al confirmar |
 | Validación de sesión | El servidor publica `window.PETKO_SESION = {autenticado, loginUrl}`; sin sesión, agregar o apartar muestra un aviso y redirige al login |
 | Mascota interactiva | Perrito veterinario con globos de diálogo y expresiones según el contexto (éxito, error, búsqueda vacía) |
-| Accesibilidad | Textos de tamaño legible por defecto, navegación por teclado, atributos ARIA y respeto de `prefers-reduced-motion` |
+| Accesibilidad | Escala de texto A− / A / A+ (90 % a 130 %) persistente, navegación por teclado, atributos ARIA y respeto de `prefers-reduced-motion` |
 | Diseño | Paleta azul marino, verde y blanco; fondo animado con patrón de huellas; menú lateral fijo (`position: sticky`) con desplazamiento interno |
+
+<table>
+  <tr>
+    <td width="99%"><img src="https://github.com/user-attachments/assets/5d2c0b9c-658d-468d-a8ed-da30f19b15d6" alt="Catálogo PETKO" width="100%" /></td>
+  </tr>
+</table>
 
 ### 7.4 Panel de Administración General
 
@@ -361,6 +384,12 @@ Archivo: `src/php/modulos/home/dashboard.php`. Interfaz de una sola página (SPA
 | **Inventario** | Existencias consolidadas por sucursal con búsqueda y niveles OK / BAJO / AGOTADO | `SELECT` sobre `inventarios` + `productos` + `sucursales` |
 | **Catálogo global** | CRUD de productos con imagen por URL y asignación a sucursales | `INSERT` / `UPDATE` en `productos` e `inventarios` **dentro de una transacción** |
 | **Ventas** | Historial filtrable por sucursal y fechas, con detalle por venta | `SELECT` sobre `ventas` y `detalle_ventas` |
+
+<table>
+  <tr>
+    <td width="99%"><img src="https://github.com/user-attachments/assets/af202593-f630-4ebe-91c8-4d0caad4aaf0" alt="Panel de Administración General" width="100%" /></td>
+  </tr>
+</table>
 
 ### 7.5 Panel de Gerente y Punto de Venta
 
@@ -395,7 +424,7 @@ stateDiagram-v2
 - El **efectivo esperado** se calcula como `fondo inicial + ventas en efectivo − retiros`.
 - `procesar_venta` toma los precios de la base de datos (no del cliente), valida existencias y registra la venta, sus partidas y el descuento de inventario en una **única transacción**.
 - El POS admite lector de código de barras (búsqueda exacta por `codigo`) y búsqueda incremental por nombre.
-- Un turno abierto se recupera al recargar la página (`localStorage['kion-gerente-turno']`).
+- Un turno abierto se recupera al recargar la página (`localStorage['petko-gerente-turno']`).
 
 ### 7.6 Panel del Cliente ("Mi Cuenta")
 
@@ -404,13 +433,39 @@ Archivo: `src/php/modulos/home/dashboard_usuario.php`. Requiere sesión iniciada
 - **Mis apartados:** listado con producto, sucursal, precio, fecha y estado.
 - **Configuración:** datos de la cuenta y cambio de contraseña (verifica la actual con `password_verify` y guarda la nueva con bcrypt).
 
-### 7.7 Módulo de Cobranza
+### 7.7 Módulo de Cobranza (prototipo)
 
-El prototipo sin base de datos se retiró del proyecto; la funcionalidad productiva del POS vive en el Panel de Gerente (7.5).
+Archivo: `src/php/cobranza/cobranza.php` con `src/js/cobranza.js`. Es una **maqueta funcional sin base de datos**: punto de venta con escaneo de código, historial de pagos y corte de caja. Las ventas se guardan en `$_SESSION['ventas']` y los productos son de demostración. La funcionalidad productiva del POS vive en el Panel de Gerente (7.5).
 
 ### 7.8 Página de inicio pública
 
 Archivo: `src/php/modulos/home/home.php`. Página de presentación con secciones de funciones (punto de venta, inventario, multisucursal, personal), ventas, sucursales y roles. Con sesión iniciada muestra el nombre del usuario y un acceso directo al panel que corresponde a su rol.
+
+<table>
+  <tr>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/96bce1b9-397f-4b22-a4e7-83fdc542c828" alt="Inicio PETKO" width="100%" /></td>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/92c1531a-c547-457e-b83b-e6a9ce0c5453" alt="Funciones" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/a51d31c8-bbf3-4ebf-a678-7172b9926abd" alt="Expediente por mascota" width="100%" /></td>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/27cd980b-fdaa-4b49-a8a8-9b060d65075d" alt="Galería de mascotas" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/b2aaa168-09b5-42a5-a9f6-d3f94f63a745" alt="Ficha clínica" width="100%" /></td>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/8d1e8a03-4dcb-45e2-976c-76c616b5b385" alt="Punto de venta" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/8da97490-74dc-421c-849f-f8117380bdc9" alt="Inventario" width="100%" /></td>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/7cfa22b4-35e5-427a-bc75-9e18b984aa97" alt="Citas y recordatorios" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/04acaf86-4ad2-4de0-8ddc-2fe487d48719" alt="Multisucursal" width="100%" /></td>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/67955178-6a6c-46c4-aab4-c2ef8cf6b79d" alt="Comienza a utilizar PETKO" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="49%"><img src="https://github.com/user-attachments/assets/11447634-c405-4439-8033-e7a490590567" alt="Por qué PETKO" width="100%" /></td>
+  </tr>
+</table>
 
 ### 7.9 Internacionalización, temas y persistencia en el cliente
 
@@ -418,21 +473,26 @@ Todas las vistas principales ofrecen **español / inglés** y **modo claro / osc
 
 | Clave (`localStorage`) | Módulo | Contenido |
 |---|---|---|
-| `kion-cart` | Catálogo | Carrito de compras |
-| `kion-apartados` | Catálogo | Apartados vigentes (folio y caducidad) |
-| `kion-gerente-turno` | Gerente (POS) | Turno de caja en curso |
-| `petko_dark` / `petko_lang` | Home, login, catálogo y paneles | Tema (`1`/`0`) e idioma (`es`/`en`) compartidos: se cambian en un sitio y valen en todos |
+| `petko-cart` | Catálogo | Carrito de compras |
+| `petko-apartados` | Catálogo | Apartados vigentes (folio y caducidad) |
+| `petko-catalog-theme` / `petko-catalog-lang` | Catálogo | Tema e idioma |
+| `petko-font-scale` | Catálogo | Escala de texto (0.9–1.3) |
+| `petko-admin-theme` / `petko-admin-lang` | Administración | Tema e idioma |
+| `petko-gerente-theme` / `petko-gerente-lang` | Gerente | Tema e idioma |
+| `petko-gerente-turno` | Gerente (POS) | Turno de caja en curso |
+| `petko-user-theme` | Mi Cuenta | Tema |
+| `petko_dark` / `petko_lang` | Home | Tema e idioma |
 
 | Cookie | Propósito |
 |---|---|
 | `PHPSESSID` | Sesión PHP |
-| `kion_remember` | Inicio de sesión persistente ("Recordarme") |
+| `petko_remember` | Inicio de sesión persistente ("Recordarme") |
 
 ---
 
 ## 8. Modelo de datos
 
-Base de datos: **`kion`**, codificación `utf8mb4`, motor **InnoDB** con integridad referencial.
+Base de datos: **`petko`**, codificación `utf8mb4`, motor **InnoDB** con integridad referencial.
 
 ```mermaid
 erDiagram
@@ -518,7 +578,7 @@ erDiagram
 | `turnos_caja` | Apertura, cierre y corte de caja | FK a `cajas`, `cajeros` y `sucursales`; resultado EXACTO/SOBRANTE/FALTANTE |
 | `retiros_caja` | Retiros de efectivo durante un turno | FK a `turnos_caja` |
 
-> **Nota sobre el volcado:** `docs/base_datos/kion.sql` contiene el **esquema base** (las primeras 9 tablas). Las tablas de caja, el rol `Usuario` y las columnas `usuarios.google_id`, `productos.imagen_url` y `ventas.id_turno` se agregaron durante el desarrollo y se instalan con el script complementario del [paso 4 de la instalación](#paso-4-aplicar-la-migración-complementaria).
+> **Nota sobre el volcado:** `docs/base_datos/petko.sql` contiene el **esquema base** (las primeras 9 tablas). Las tablas de caja, el rol `Usuario` y las columnas `usuarios.google_id`, `productos.imagen_url` y `ventas.id_turno` se agregaron durante el desarrollo y se instalan con el script complementario del [paso 4 de la instalación](#paso-4-aplicar-la-migración-complementaria).
 
 ---
 
@@ -553,11 +613,11 @@ Clona el repositorio dentro de `htdocs` de XAMPP (en Windows, con Git Bash):
 
 ```bash
 cd /c/xampp/htdocs
-git clone <URL_DEL_REPOSITORIO> KION
-cd KION
+git clone <URL_DEL_REPOSITORIO> PETKO
+cd PETKO
 ```
 
-> La aplicación funciona en cualquier subcarpeta de `htdocs` porque todas las rutas internas son relativas. En esta guía se asume `htdocs/KION`, es decir, `http://localhost/KION/`.
+> La aplicación funciona en cualquier subcarpeta de `htdocs` porque todas las rutas internas son relativas. En esta guía se asume `htdocs/PETKO`, es decir, `http://localhost/PETKO/`.
 
 ### Paso 2. Instalar las dependencias de PHP
 
@@ -577,20 +637,20 @@ Inicia **Apache** y **MySQL** desde el panel de control de XAMPP y ejecuta:
 
 ```bash
 # Crear la base de datos con codificación completa UTF-8
-/c/xampp/mysql/bin/mysql.exe -u root -e "CREATE DATABASE IF NOT EXISTS kion CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+/c/xampp/mysql/bin/mysql.exe -u root -e "CREATE DATABASE IF NOT EXISTS petko CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
 # Importar el esquema base y los catálogos iniciales
-/c/xampp/mysql/bin/mysql.exe -u root kion < docs/base_datos/kion.sql
+/c/xampp/mysql/bin/mysql.exe -u root petko < docs/base_datos/petko.sql
 ```
 
-*Alternativa gráfica:* en `http://localhost/phpmyadmin`, crea la base `kion` con cotejamiento `utf8mb4_unicode_ci` y usa **Importar** con el archivo `docs/base_datos/kion.sql`.
+*Alternativa gráfica:* en `http://localhost/phpmyadmin`, crea la base `petko` con cotejamiento `utf8mb4_unicode_ci` y usa **Importar** con el archivo `docs/base_datos/petko.sql`.
 
 ### Paso 4. Aplicar la migración complementaria
 
-El código requiere objetos que no forman parte del volcado base. Ejecuta el siguiente script sobre la base `kion`, desde la pestaña **SQL** de phpMyAdmin o con el cliente de línea de comandos. Es **idempotente**: puede ejecutarse más de una vez sin errores.
+El código requiere objetos que no forman parte del volcado base. Ejecuta el siguiente script sobre la base `petko`, desde la pestaña **SQL** de phpMyAdmin o con el cliente de línea de comandos. Es **idempotente**: puede ejecutarse más de una vez sin errores.
 
 ```sql
-USE kion;
+USE petko;
 
 -- 1. Rol para clientes (registro.php y google-callback.php)
 INSERT IGNORE INTO roles (id_rol, nombre) VALUES (4, 'Usuario');
@@ -676,7 +736,7 @@ La conexión centralizada está en `src/php/config/conexion_BD.php`. Por defecto
 
 ```php
 $dbHost = 'localhost';
-$dbName = 'kion';
+$dbName = 'petko';
 $dbUser = 'root';
 $dbPass = '';
 ```
@@ -685,7 +745,7 @@ La conexión se crea con estas opciones de PDO:
 
 | Opción | Valor | Propósito |
 |---|---|---|
-| DSN | `mysql:host=…;dbname=kion;charset=utf8mb4` | Codificación UTF-8 completa (acentos, emojis) |
+| DSN | `mysql:host=…;dbname=petko;charset=utf8mb4` | Codificación UTF-8 completa (acentos, emojis) |
 | `PDO::ATTR_ERRMODE` | `ERRMODE_EXCEPTION` | Los errores lanzan `PDOException` |
 | `PDO::ATTR_DEFAULT_FETCH_MODE` | `FETCH_ASSOC` | Resultados como arreglos asociativos |
 | `PDO::ATTR_EMULATE_PREPARES` | `false` | Sentencias preparadas nativas del servidor |
@@ -721,7 +781,7 @@ php -r "echo password_hash('Admin#2026', PASSWORD_DEFAULT), PHP_EOL;"
 Después inserta una sucursal, un administrador y un gerente, sustituyendo `<HASH_GENERADO>` por el resultado anterior:
 
 ```sql
-USE kion;
+USE petko;
 
 INSERT INTO sucursales (nombre, direccion, telefono, contacto)
 VALUES ('Matriz Colima', 'Av. Principal #100, Colima, Col.', '3120000000', 'matriz@petko.mx');
@@ -738,16 +798,16 @@ Los clientes (rol `Usuario`) se registran por su cuenta desde `registro.php` o c
 
 | Recurso | URL |
 |---|---|
-| Inicio | `http://localhost/KION/` |
-| Inicio de sesión | `http://localhost/KION/inicioSesion.php` |
-| Registro | `http://localhost/KION/registro.php` |
-| Catálogo | `http://localhost/KION/src/php/componentes/catalogo.php` |
+| Inicio | `http://localhost/PETKO/` |
+| Inicio de sesión | `http://localhost/PETKO/inicioSesion.php` |
+| Registro | `http://localhost/PETKO/registro.php` |
+| Catálogo | `http://localhost/PETKO/src/php/componentes/catalogo.php` |
 | phpMyAdmin | `http://localhost/phpmyadmin` |
 
 ### Lista de verificación
 
 - [ ] `php -v` muestra la versión 8.1 o superior y existe la carpeta `vendor/`.
-- [ ] La base `kion` tiene 13 tablas (`SHOW TABLES;`) y el rol `Usuario` existe.
+- [ ] La base `petko` tiene 13 tablas (`SHOW TABLES;`) y el rol `Usuario` existe.
 - [ ] El catálogo carga sin el mensaje "Fallo al conectar con la base de datos".
 - [ ] `admin@petko.mx` entra a `dashboard.php` y `gerente@petko.mx` a `dashboard_gerente.php`.
 - [ ] Un cliente registrado en `registro.php` puede iniciar sesión y es enviado al catálogo.
@@ -765,11 +825,11 @@ Antes de desplegar en un servidor público (por ejemplo, IONOS):
 2. **Crear un usuario de base de datos dedicado** con privilegios mínimos, en lugar de `root` sin contraseña:
    ```sql
    CREATE USER 'petko_app'@'localhost' IDENTIFIED BY '<CONTRASEÑA_SEGURA>';
-   GRANT SELECT, INSERT, UPDATE, DELETE ON kion.* TO 'petko_app'@'localhost';
+   GRANT SELECT, INSERT, UPDATE, DELETE ON petko.* TO 'petko_app'@'localhost';
    FLUSH PRIVILEGES;
    ```
    Y actualizar las credenciales en los dos archivos del [paso 5](#paso-5-configurar-las-credenciales-de-la-base-de-datos).
-3. **Servir el sitio por HTTPS.** La cookie `kion_remember` activa el atributo `Secure` automáticamente.
+3. **Servir el sitio por HTTPS.** La cookie `petko_remember` activa el atributo `Secure` automáticamente.
 4. **Registrar el dominio de producción** en los orígenes autorizados de Google.
 5. **Ocultar errores de PHP al usuario** (`display_errors = Off`) y conservar `log_errors = On`. La capa de conexión ya registra los fallos con `error_log()` sin exponer detalles.
 
@@ -807,10 +867,29 @@ El proyecto es un **prototipo académico en desarrollo activo**. Se documentan c
 | CSRF en paneles | Las acciones AJAX de los dashboards no validan token | Reutilizar `$_SESSION['csrf_token']` en todas las peticiones POST |
 | Rol Cajero | El login envía a los cajeros al panel de gerente, cuya API solo admite gerentes; en la práctica los cajeros operan mediante la tabla `cajeros` en el POS | Definir un panel propio de cajero o unificar el modelo |
 | Recuperación de contraseña | Genera y guarda el token, pero no envía el correo | Integrar un servicio SMTP (por ejemplo, PHPMailer) y una página de restablecimiento |
-| Cierre de sesión | No revoca la cookie `kion_remember` | Limpiar el token en BD y la cookie al cerrar sesión |
+| Cierre de sesión | No revoca la cookie `petko_remember` | Limpiar el token en BD y la cookie al cerrar sesión |
 | Concurrencia en ventas | No se usa `SELECT … FOR UPDATE` al descontar inventario | Bloqueo de filas dentro de la transacción |
 | Configuración | Credenciales duplicadas en dos archivos | Centralizar en `conexion_BD.php` o en variables de entorno (`.env`, ya excluido en `.gitignore`) |
+| Componentes compartidos | `header.php`, `navbar.php`, `footer.php`, `script.js`, `petko-prefs.js` y `dashboard.css` están reservados y aún no se incluyen | Extraer la cabecera, la navegación y las preferencias comunes de las vistas |
 | Pruebas | No hay pruebas automatizadas | Pruebas unitarias con PHPUnit para las reglas de negocio (ventas, cortes) |
+
+---
+
+## 14. Cronograma de desarrollo
+
+El proyecto se desarrolló con una metodología ágil, en iteraciones semanales entre agosto y noviembre de 2026, con David Salgado Zepeda como jefe de proyecto.
+
+| Semana | Fecha | Actividades |
+|---|---|---|
+| 1 | 27 ago 2026 | Investigación de antecedentes de puntos de venta veterinarios; planteamiento del problema; objetivo general y específicos; justificación; hipótesis; marco teórico; materiales, equipo y presupuesto. |
+| 2 | 31 ago 2026 | Corrección del anteproyecto; definición de la metodología ágil; diseño preliminar de la arquitectura; propuesta de base de datos; mockups; cronograma; primera versión del README. |
+| 3 | 10 sep 2026 | Desarrollo de la vista principal (home), inicio y registro de sesión, catálogo y tienda web, dashboard de usuario, base de datos y módulo de métodos de pago y total de venta. |
+| 4 | 14 sep 2026 | Refinamiento de las vistas de frontend; modo oscuro y claro; soporte en inglés y español; integración de módulos; dashboard de gerente; modo caja; carrito de compras y apartado. |
+| 5 | 5 oct 2026 | Rediseño visual y del logotipo con tipografía más legible; vista ampliada de artículos y modo apartado; recordatorio de inicio de sesión y términos y condiciones; lector de códigos de barras con la cámara del teléfono; carga de imágenes locales; rediseño del home. |
+| 6 | 12 oct 2026 | Recuperación de contraseña y mejoras del dashboard de usuario; animaciones del home y pie de página; actualización del README; búsqueda de dominio y configuración de despliegue; rediseño de dashboards. |
+| 7 | 19 oct 2026 | Reporte final; artículo en formato IEEE; envío de términos y condiciones por correo a gerentes y administradores; video comercial bilingüe de máximo 4 minutos; ajustes de diseño; módulo de consultas veterinarias. |
+| 8 | 26 oct 2026 | Interfaz móvil responsiva; configuración de Google Auth y mejoras del inicio de sesión (regreso al home, modo claro/oscuro, idioma); finalización de dashboards y auditoría de seguridad; pruebas integrales y corrección de errores; ajustes del home. |
+| 9 | 2 nov 2026 | Guion bilingüe de la presentación; edición final del video comercial; correcciones del módulo de consultas veterinarias; identidad PETKO en el README (logotipo e iconos); integración de código (merge) y preparación del despliegue en el dominio. |
 
 ---
 
