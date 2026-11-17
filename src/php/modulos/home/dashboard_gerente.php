@@ -3,31 +3,18 @@ declare(strict_types=1);
 
 ob_start();
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-header("Cache-Control: no-cache, no-store, must-revalidate");
-header("Pragma: no-cache");
-header("Expires: 0");
-
-// Guardia de sesión: si no hay sesión activa, redirigir (o devolver JSON en AJAX)
-if (!isset($_SESSION['usuario'])) {
-    if (isset($_GET['action'])) {
-        ob_end_clean();
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['ok' => false, 'msg' => '[SESIÓN EXPIRADA] Tu sesión ha caducado. Vuelve a iniciar sesión.'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-    header('Location: ../../../../inicioSesion.php');
-    exit;
-}
+require_once __DIR__ . '/../../config/auth_guard.php';
 
 if (file_exists(__DIR__ . '/../../config/conexion_BD.php')) {
     require_once __DIR__ . '/../../config/conexion_BD.php';
 } elseif (file_exists(__DIR__ . '/../../config/conexion.php')) {
     require_once __DIR__ . '/../../config/conexion.php';
 }
+
+if (isset($_GET['action'])) {
+    verificarCsrf();
+}
+require_once __DIR__ . '/../../componentes/mi_cuenta_api.php';
 
 // --------------------------------------------------------------
 // Resolver el usuario/gerente en sesión y su sucursal asignada
@@ -41,9 +28,9 @@ if (is_array($_SESSION['usuario'] ?? null)) {
 
 $gerente = null;
 if (isset($pdo) && $pdo instanceof PDO && $id_usuario_actual > 0) {
-    $stG = $pdo->prepare("SELECT u.id_usuario, u.nombre, u.apellido, u.id_sucursal, r.nombre AS rol
-                           FROM usuarios u LEFT JOIN roles r ON r.id_rol = u.id_rol
-                           WHERE u.id_usuario = ?");
+    $stG = $pdo->prepare("SELECT u.id_usuario, u.nombre, u.apellido, u.correo, u.id_sucursal, r.nombre AS rol
+                       FROM usuarios u LEFT JOIN roles r ON r.id_rol = u.id_rol
+                       WHERE u.id_usuario = ?");
     $stG->execute([$id_usuario_actual]);
     $gerente = $stG->fetch(PDO::FETCH_ASSOC) ?: null;
 }
@@ -68,6 +55,7 @@ if (($esAdmin || ($id_sucursal <= 0)) && isset($pdo) && $pdo instanceof PDO) {
 
 $nombreGerente = trim(($gerente['nombre'] ?? $_SESSION['usuario']['nombre'] ?? 'Usuario') . ' ' . ($gerente['apellido'] ?? $_SESSION['usuario']['apellido'] ?? ''));
 if ($nombreGerente === '') $nombreGerente = 'Gerente';
+$correoUsuario = $gerente['correo'] ?? '';
 
 // Helper para procesamiento seguro de imágenes de producto (subida física o URL)
 function procesarSubidaImagen(?array $file, string $urlTexto = ''): ?string {
@@ -81,7 +69,7 @@ function procesarSubidaImagen(?array $file, string $urlTexto = ''): ?string {
             $ext = $allowed[$mime];
             $dirDestino = __DIR__ . '/../../../img/productos/';
             if (!is_dir($dirDestino)) {
-                @mkdir($dirDestino, 0777, true);
+                @mkdir($dirDestino, 0755, true);
             }
             $nombreArchivo = 'prod_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
             $destino = $dirDestino . $nombreArchivo;
@@ -114,6 +102,15 @@ if (isset($_GET['action'])) {
         // 2. Si aún no hay sucursal resuelta, bloquear
         if ($id_sucursal <= 0) {
             throw new RuntimeException('[ACCESO DENEGADO] No hay ninguna sucursal activa disponible. Crea una primero desde el panel de Administrador.');
+        }
+
+        $miCuenta = petkoMiCuentaApi($pdo, $id_usuario_actual, (string)($rolDB ?? ''));
+        if ($miCuenta['handled'] ?? false) {
+            $out = $miCuenta['response'];
+            ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($out, JSON_UNESCAPED_UNICODE);
+            exit;
         }
 
         if ($action === 'get_metrics') {
@@ -561,8 +558,17 @@ $fInicio = $stFI->fetchColumn();
             $carrito = json_decode($_POST['carrito'] ?? '[]', true);
             $idMetodo = (int)($_POST['id_metodo_pago'] ?? 0);
             $idTurno = (int)($_POST['id_turno'] ?? 0);
+            $montoRecibidoInput = $_POST['monto_recibido'] ?? null;
+
             if (!is_array($carrito) || count($carrito) === 0) throw new Exception('[ERROR DE USUARIO] El carrito está vacío.');
             if (!$idMetodo) throw new Exception('[ERROR DE USUARIO] Selecciona un método de pago.');
+
+            $stMp = $pdo->prepare('SELECT nombre FROM metodos_pago WHERE id_metodo_pago = ?');
+            $stMp->execute([$idMetodo]);
+            $nombreMetodo = (string)$stMp->fetchColumn();
+            if ($nombreMetodo === '') throw new Exception('[ERROR DE USUARIO] Método de pago no válido.');
+            $esEfectivo = stripos($nombreMetodo, 'efectivo') !== false;
+
             if ($idTurno) {
                 $chkT = $pdo->prepare("SELECT COUNT(*) FROM turnos_caja WHERE id_turno=? AND id_sucursal=? AND estado='ABIERTO'");
                 $chkT->execute([$idTurno, $id_sucursal]);
@@ -571,49 +577,109 @@ $fInicio = $stFI->fetchColumn();
 
             $pdo->beginTransaction();
             try {
-                $total = 0; $lineas = [];
-                $stStock = $pdo->prepare("SELECT i.existencias, p.precio, p.nombre FROM inventarios i JOIN productos p ON p.id_producto=i.id_producto WHERE i.id_producto=? AND i.id_sucursal=?");
+                $subtotalCentavos = 0;
+                $lineas = [];
+                $stStock = $pdo->prepare("SELECT i.existencias, p.precio, p.nombre, p.codigo FROM inventarios i JOIN productos p ON p.id_producto=i.id_producto WHERE i.id_producto=? AND i.id_sucursal=? FOR UPDATE");
                 foreach ($carrito as $item) {
-                    $idP = (int)($item['id_producto'] ?? 0); $cant = (int)($item['cantidad'] ?? 0);
+                    $idP = (int)($item['id_producto'] ?? 0);
+                    $cant = (int)($item['cantidad'] ?? 0);
                     if ($cant <= 0 || !$idP) continue;
                     $stStock->execute([$idP, $id_sucursal]);
-                    $row = $stStock->fetch();
+                    $row = $stStock->fetch(PDO::FETCH_ASSOC);
                     if (!$row) throw new Exception('[ERROR DE USUARIO] Un producto del carrito ya no está disponible.');
                     if ((int)$row['existencias'] < $cant) throw new Exception('[ERROR DE USUARIO] Stock insuficiente para "' . $row['nombre'] . '". Disponible: ' . $row['existencias']);
-                    $subtotal = (float)$row['precio'] * $cant;
-                    $total += $subtotal;
-                    $lineas[] = ['id_producto' => $idP, 'cantidad' => $cant, 'precio_unitario' => $row['precio'], 'subtotal' => $subtotal];
+
+                    $precioCentavos = (int)round((float)$row['precio'] * 100);
+                    $subLineaCentavos = $precioCentavos * $cant;
+                    $subtotalCentavos += $subLineaCentavos;
+
+                    $lineas[] = [
+                        'id_producto' => $idP,
+                        'codigo' => $row['codigo'],
+                        'nombre' => $row['nombre'],
+                        'cantidad' => $cant,
+                        'precio_unitario' => $precioCentavos / 100,
+                        'subtotal' => $subLineaCentavos / 100,
+                    ];
                 }
                 if (empty($lineas)) throw new Exception('[ERROR DE USUARIO] No hay productos válidos en el carrito.');
 
-                $pdo->prepare("INSERT INTO ventas(fecha_hora,total,estado,id_sucursal,id_metodo_pago,id_usuario,id_turno) VALUES(NOW(),?,'COMPLETADA',?,?,?,?)")
-                    ->execute([$total, $id_sucursal, $idMetodo, $id_usuario_actual, $idTurno ?: null]);
-                $idVenta = (int)$pdo->lastInsertId();
+                $ivaCentavos = (int)round($subtotalCentavos * 0.16);
+                $totalCentavos = $subtotalCentavos + $ivaCentavos;
+                $total = $totalCentavos / 100;
 
+                $montoRecibido = null;
+                $cambioEntregado = null;
+                if ($esEfectivo) {
+                    if ($montoRecibidoInput === null || $montoRecibidoInput === '' || !is_numeric($montoRecibidoInput)) throw new Exception('[ERROR DE USUARIO] Debes ingresar la cantidad recibida en efectivo.');
+                    $recibidoCentavos = (int)round((float)$montoRecibidoInput * 100);
+                    if ($recibidoCentavos < $totalCentavos) throw new Exception('[ERROR DE USUARIO] El importe recibido es insuficiente para cubrir el total.');
+                    $montoRecibido = $recibidoCentavos / 100;
+                    $cambioEntregado = ($recibidoCentavos - $totalCentavos) / 100;
+                }
+
+                $colsVentas = array_column($pdo->query('SHOW COLUMNS FROM ventas')->fetchAll(PDO::FETCH_ASSOC), 'Field');
+                if (in_array('monto_recibido', $colsVentas, true) && in_array('cambio_entregado', $colsVentas, true)) {
+                    $pdo->prepare("INSERT INTO ventas(fecha_hora,total,monto_recibido,cambio_entregado,estado,id_sucursal,id_metodo_pago,id_usuario,id_turno) VALUES(NOW(),?,?,?,'COMPLETADA',?,?,?,?)")
+                        ->execute([$total, $montoRecibido, $cambioEntregado, $id_sucursal, $idMetodo, $id_usuario_actual, $idTurno ?: null]);
+                } else {
+                    $pdo->prepare("INSERT INTO ventas(fecha_hora,total,estado,id_sucursal,id_metodo_pago,id_usuario,id_turno) VALUES(NOW(),?,'COMPLETADA',?,?,?,?)")
+                        ->execute([$total, $id_sucursal, $idMetodo, $id_usuario_actual, $idTurno ?: null]);
+                }
+
+                $idVenta = (int)$pdo->lastInsertId();
                 $stDet = $pdo->prepare("INSERT INTO detalle_ventas(id_venta,id_producto,cantidad,precio_unitario,subtotal) VALUES(?,?,?,?,?)");
                 $stUpd = $pdo->prepare("UPDATE inventarios SET existencias=existencias-? WHERE id_producto=? AND id_sucursal=?");
                 foreach ($lineas as $l) {
                     $stDet->execute([$idVenta, $l['id_producto'], $l['cantidad'], $l['precio_unitario'], $l['subtotal']]);
                     $stUpd->execute([$l['cantidad'], $l['id_producto'], $id_sucursal]);
                 }
+
+                $stSucInfo = $pdo->prepare('SELECT nombre, direccion, telefono, contacto FROM sucursales WHERE id_sucursal = ?');
+                $stSucInfo->execute([$id_sucursal]);
+                $sucInfo = $stSucInfo->fetch(PDO::FETCH_ASSOC) ?: [];
+
+                $cajeroNombre = $nombreGerente;
+                if ($idTurno) {
+                    $stCajN = $pdo->prepare("SELECT cj.nombre FROM turnos_caja tc JOIN cajeros cj ON cj.id_cajero = tc.id_cajero WHERE tc.id_turno = ?");
+                    $stCajN->execute([$idTurno]);
+                    $cajRes = $stCajN->fetchColumn();
+                    if ($cajRes) $cajeroNombre = $cajRes;
+                }
+
                 $pdo->commit();
 
                 $dineroEsperado = null;
                 if ($idTurno) {
-                    $stT = $pdo->prepare("SELECT dinero_inicial FROM turnos_caja WHERE id_turno=?");
+                    $stT = $pdo->prepare('SELECT dinero_inicial FROM turnos_caja WHERE id_turno=?');
                     $stT->execute([$idTurno]);
                     $dInicial = (float)$stT->fetchColumn();
                     $stVE = $pdo->prepare("SELECT COALESCE(SUM(v.total),0) FROM ventas v JOIN metodos_pago mp ON mp.id_metodo_pago=v.id_metodo_pago WHERE v.id_turno=? AND mp.nombre LIKE '%efectivo%'");
                     $stVE->execute([$idTurno]);
                     $totalEfectivo = (float)$stVE->fetchColumn();
-                    $stR = $pdo->prepare("SELECT COALESCE(SUM(monto),0) FROM retiros_caja WHERE id_turno=?");
+                    $stR = $pdo->prepare('SELECT COALESCE(SUM(monto),0) FROM retiros_caja WHERE id_turno=?');
                     $stR->execute([$idTurno]);
                     $totalRetiros = (float)$stR->fetchColumn();
                     $dineroEsperado = $dInicial + $totalEfectivo - $totalRetiros;
                 }
 
-                $out = ['ok' => true, 'msg' => 'Venta registrada correctamente.', 'data' => ['id_venta' => $idVenta, 'total' => $total, 'dinero_esperado' => $dineroEsperado]];
-            } catch (Exception $e) { $pdo->rollBack(); throw $e; }
+                $out = ['ok' => true, 'msg' => 'Venta registrada correctamente.', 'data' => [
+                    'id_venta' => $idVenta,
+                    'folio' => 'VTA-' . str_pad((string)$idVenta, 6, '0', STR_PAD_LEFT),
+                    'fecha_hora' => date('Y-m-d H:i:s'),
+                    'sucursal' => $sucInfo,
+                    'cajero' => $cajeroNombre,
+                    'metodo_pago' => $nombreMetodo,
+                    'es_efectivo' => $esEfectivo,
+                    'subtotal' => $subtotalCentavos / 100,
+                    'iva' => $ivaCentavos / 100,
+                    'total' => $total,
+                    'monto_recibido' => $montoRecibido,
+                    'cambio_entregado' => $cambioEntregado,
+                    'items' => $lineas,
+                    'dinero_esperado' => $dineroEsperado,
+                ]];
+            } catch (Exception $e) { if ($pdo->inTransaction()) { $pdo->rollBack(); } throw $e; }
         }
     } catch (Throwable $e) {
         $out = ['ok' => false, 'msg' => $e->getMessage()];
@@ -2035,6 +2101,9 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
         <nav class="nav-menu">
             <div class="nav-section-title" data-i18n="nav_section_panel">Panel</div>
             <button class="nav-btn active" data-target="view-dash"><i class="ph ph-squares-four"></i><span class="nav-label" data-i18n="nav_dash">Panel Principal</span></button>
+            <div class="nav-section-title">Mi Cuenta</div>
+            <button class="nav-btn" data-target="view-mi-cuenta"><i class="ph ph-user-circle"></i><span class="nav-label">Mis Apartados</span></button>
+            <button class="nav-btn" data-target="view-mi-cuenta-config"><i class="ph ph-gear"></i><span class="nav-label">Configuración</span></button>
             <div class="nav-section-title" data-i18n="nav_section_gestion">Gestión</div>
             <button class="nav-btn" data-target="view-inventario"><i class="ph ph-package"></i><span class="nav-label" data-i18n="nav_inventario">Inventario</span></button>
             <button class="nav-btn" data-target="view-cajas"><i class="ph ph-desktop"></i><span class="nav-label" data-i18n="nav_cajas">Cajas</span></button>
@@ -2093,6 +2162,8 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
         <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="alertas_title">Alertas de Inventario Bajo</h2></div></div><table style="margin-top:16px;" id="tblAlertas"><tr><th data-i18n="th_producto">Producto</th><th data-i18n="th_existencia">Existencia</th><th data-i18n="th_estado">Estado</th></tr></table></div>
     </div>
 </section>
+
+            <?php require_once __DIR__ . '/../../componentes/mi_cuenta_vistas.php'; ?>
 
             <!-- INVENTARIO -->
             <section id="view-inventario" class="view-section">
@@ -2246,15 +2317,70 @@ const escapeHtml = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','
 const money = v => '$' + Number(v || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 const notify = (msg, icon='success') => Swal.fire({ toast:true, position:'top-end', icon, title: msg, showConfirmButton:false, timer:2500, background: 'var(--bg-surface)', color: 'var(--ink)' });
+const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
 async function request(actionStr, options = {}) {
-    const r = await fetch(`${endpoint}?action=${actionStr}`, options);
+    const method = (options.method || 'GET').toUpperCase();
+    const requestOptions = { ...options, headers: new Headers(options.headers || {}) };
+
+    if (method !== 'GET') {
+        requestOptions.headers.set('X-CSRF-Token', csrfToken);
+
+        if (requestOptions.body instanceof FormData) {
+            requestOptions.body.append('csrf_token', csrfToken);
+        } else if (typeof requestOptions.body === 'string') {
+            if (!/(?:^|[?&])csrf_token=/.test(requestOptions.body)) {
+                const separator = requestOptions.body.length > 0 ? '&' : '';
+                requestOptions.body = `${requestOptions.body}${separator}csrf_token=${encodeURIComponent(csrfToken)}`;
+            }
+        }
+    }
+
+    const r = await fetch(`${endpoint}?action=${actionStr}`, requestOptions);
     const text = await r.text();
     let data;
     try { data = JSON.parse(text); } catch(e) { throw new Error('[ERROR DE SISTEMA] Respuesta inválida del servidor.'); }
     if (!data.ok) throw new Error(data.msg || 'No fue posible completar la operación.');
     return data;
 }
+
+window.abrirConfiguracionRapida = async function () {
+    const { isConfirmed, value } = await Swal.fire({
+        title: 'Configuración de cuenta',
+        html: `<div style="text-align:left;">
+            <p style="margin-bottom:12px; color:var(--ink-soft);">Actualiza tu contraseña actual.</p>
+            <label class="swal2-label" style="display:block; margin-bottom:6px;">Contraseña actual</label>
+            <input id="swal-pass-actual" type="password" class="swal2-input" style="width:100%; margin:0 0 12px;">
+            <label class="swal2-label" style="display:block; margin-bottom:6px;">Nueva contraseña</label>
+            <input id="swal-pass-nueva" type="password" class="swal2-input" style="width:100%; margin:0;">
+        </div>`,
+        confirmButtonText: 'Guardar',
+        showCancelButton: true,
+        preConfirm: () => {
+            const actual = document.getElementById('swal-pass-actual').value;
+            const nueva = document.getElementById('swal-pass-nueva').value;
+            if (!actual || !nueva) {
+                Swal.showValidationMessage('Completa ambos campos.');
+                return false;
+            }
+            return {
+                password_actual: actual,
+                password_nueva: nueva,
+            };
+        }
+    });
+
+    if (!isConfirmed || !value) return;
+    try {
+        const fd = new FormData();
+        fd.append('password_actual', value.password_actual);
+        fd.append('password_nueva', value.password_nueva);
+        const d = await request('update_password', { method: 'POST', body: fd });
+        Swal.fire({ icon: 'success', title: 'Contraseña actualizada', text: d.msg || 'Listo.' });
+    } catch (e) {
+        Swal.fire({ icon: 'error', title: 'No se pudo actualizar', text: e.message });
+    }
+};
 
 // -------- TEMA --------
 const body = document.body;
@@ -2264,6 +2390,7 @@ const appLayout = $('#appLayout');
 $('#btnCollapse').addEventListener('click', () => appLayout.classList.toggle('is-collapsed'));
 $('#btnMobileMenu').addEventListener('click', () => appLayout.classList.add('mobile-open'));
 $('#sidebarScrim').addEventListener('click', () => appLayout.classList.remove('mobile-open'));
+$('#btnSolicitarCambioPassQuick')?.addEventListener('click', () => abrirConfiguracionRapida());
 
 // -------- IDIOMA (ES / EN) --------
 const I18N = {
@@ -3199,34 +3326,188 @@ $('#cartBody').addEventListener('change', e => {
     updateCartUI();
 });
 
-$('#btnCobrar').addEventListener('click', async () => {
-    const Lp = currentLang === 'en'
-        ? { noItems:'There are no products in the sale.', noMethod:'Select a payment method.', title:'Process Payment', totalLabel:'Total to charge:', confirmBtn:'Confirm Payment', success:'Payment Successful!' }
-        : { noItems:'No hay productos en la venta.', noMethod:'Selecciona un método de pago.', title:'Procesar Cobro', totalLabel:'Total a cobrar:', confirmBtn:'Confirmar Pago', success:'¡Pago Exitoso!' };
-    if (cart.length === 0) { notify(Lp.noItems, 'error'); return; }
-    const idMetodo = $('#posMetodo').value;
-    if (!idMetodo) { notify(Lp.noMethod, 'error'); return; }
+let ventaEnProceso = false;
 
-    const conf = await Swal.fire({
-        title: Lp.title, text: `${Lp.totalLabel} ${$('#posTotal').innerText}`, icon: 'info',
-        showCancelButton: true, confirmButtonColor: 'var(--accent)', confirmButtonText: Lp.confirmBtn, cancelButtonText: t('cancelar')
+const formatMXN = (val) => new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+}).format(Number(val || 0));
+
+$('#btnCobrar').addEventListener('click', async () => {
+    if (ventaEnProceso) return;
+
+    if (cart.length === 0) {
+        notify(currentLang === 'en' ? 'There are no products in the sale.' : 'No hay productos en la venta.', 'error');
+        return;
+    }
+    const selMetodo = $('#posMetodo');
+    const idMetodo = selMetodo.value;
+    if (!idMetodo) {
+        notify(currentLang === 'en' ? 'Select a payment method.' : 'Selecciona un método de pago.', 'error');
+        return;
+    }
+
+    const textoMetodo = (selMetodo.options[selMetodo.selectedIndex]?.text || '').toLowerCase();
+    const esEfectivo = textoMetodo.includes('efectivo');
+
+    let subCents = 0;
+    cart.forEach(item => {
+        subCents += Math.round(Number(item.precio) * 100) * Number(item.qty);
     });
-    if (!conf.isConfirmed) return;
+    const ivaCents = Math.round(subCents * 0.16);
+    const totalCents = subCents + ivaCents;
+    const totalExacto = totalCents / 100;
+
+    let montoRecibidoFinal = null;
+
+    if (esEfectivo) {
+        const resEfectivo = await Swal.fire({
+            title: 'Cobro en Efectivo',
+            html: `
+                <div style="text-align:left; font-family:var(--font-body);">
+                    <div style="background:var(--bg-panel); border:1.5px solid var(--border-soft); border-radius:16px; padding:16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:14px; font-weight:700; color:var(--ink-soft);">TOTAL DE LA VENTA</span>
+                        <span style="font-size:26px; font-weight:800; color:var(--accent);">${formatMXN(totalExacto)}</span>
+                    </div>
+
+                    <label for="swal-recibido" style="display:block; font-size:13px; font-weight:700; color:var(--ink); margin-bottom:6px;">
+                        Cantidad recibida del cliente (MXN)
+                    </label>
+                    <input id="swal-recibido" type="number" step="0.01" min="0" value="${totalExacto.toFixed(2)}"
+                           class="swal2-input"
+                           style="width:100%; margin:0 0 14px; font-size:24px; font-weight:800; text-align:right; color:var(--ink); height:54px;">
+
+                    <div id="box-cambio" style="background:var(--success-bg); border:1.5px solid var(--success); border-radius:16px; padding:16px; display:flex; justify-content:space-between; align-items:center; transition:all .2s ease;">
+                        <span id="lbl-cambio-titulo" style="font-size:14px; font-weight:800; color:var(--success);">CAMBIO A DEVOLVER</span>
+                        <span id="lbl-cambio-valor" style="font-size:26px; font-weight:800; color:var(--success);">$0.00</span>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: '<i class="ph-bold ph-check"></i> Confirmar Pago',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0d734c',
+            allowOutsideClick: false,
+            didOpen: () => {
+                const inputRec = document.getElementById('swal-recibido');
+                const btnConfirm = Swal.getConfirmButton();
+                const boxCambio = document.getElementById('box-cambio');
+                const lblTitulo = document.getElementById('lbl-cambio-titulo');
+                const lblValor = document.getElementById('lbl-cambio-valor');
+
+                inputRec.focus();
+                inputRec.select();
+
+                const recalcular = () => {
+                    const raw = inputRec.value.trim();
+                    const val = parseFloat(raw);
+                    if (raw === '' || isNaN(val) || val < 0) {
+                        btnConfirm.disabled = true;
+                        boxCambio.style.background = 'var(--danger-bg)';
+                        boxCambio.style.borderColor = 'var(--danger)';
+                        lblTitulo.style.color = 'var(--danger)';
+                        lblValor.style.color = 'var(--danger)';
+                        lblTitulo.textContent = 'IMPORTE INVÁLIDO';
+                        lblValor.textContent = '---';
+                        return;
+                    }
+
+                    const recCents = Math.round(val * 100);
+                    const diffCents = recCents - totalCents;
+
+                    if (diffCents < 0) {
+                        btnConfirm.disabled = true;
+                        boxCambio.style.background = 'var(--danger-bg)';
+                        boxCambio.style.borderColor = 'var(--danger)';
+                        lblTitulo.style.color = 'var(--danger)';
+                        lblValor.style.color = 'var(--danger)';
+                        lblTitulo.textContent = 'IMPORTE INSUFICIENTE (FALTA)';
+                        lblValor.textContent = formatMXN(Math.abs(diffCents) / 100);
+                    } else {
+                        btnConfirm.disabled = false;
+                        boxCambio.style.background = 'var(--success-bg)';
+                        boxCambio.style.borderColor = 'var(--success)';
+                        lblTitulo.style.color = 'var(--success)';
+                        lblValor.style.color = 'var(--success)';
+                        lblTitulo.textContent = 'CAMBIO A DEVOLVER';
+                        lblValor.textContent = formatMXN(diffCents / 100);
+                    }
+                };
+
+                inputRec.addEventListener('input', recalcular);
+                inputRec.addEventListener('keydown', (ev) => {
+                    if (ev.key === 'Enter') {
+                        ev.preventDefault();
+                        if (!btnConfirm.disabled && !ventaEnProceso) {
+                            btnConfirm.click();
+                        }
+                    }
+                });
+
+                recalcular();
+            },
+            preConfirm: () => {
+                if (ventaEnProceso) return false;
+                const val = parseFloat(document.getElementById('swal-recibido').value);
+                if (isNaN(val) || Math.round(val * 100) < totalCents) {
+                    Swal.showValidationMessage('La cantidad recibida es insuficiente.');
+                    return false;
+                }
+                return val;
+            }
+        });
+
+        if (!resEfectivo.isConfirmed) return;
+        montoRecibidoFinal = resEfectivo.value;
+    } else {
+        const conf = await Swal.fire({
+            title: 'Procesar Cobro',
+            text: `Total a cobrar: ${formatMXN(totalExacto)}`,
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonColor: 'var(--accent)',
+            confirmButtonText: 'Confirmar Pago',
+            cancelButtonText: t('cancelar')
+        });
+        if (!conf.isConfirmed) return;
+    }
+
+    ventaEnProceso = true;
+    const btnCobrarEl = $('#btnCobrar');
+    btnCobrarEl.disabled = true;
 
     try {
         const fd = new FormData();
-        fd.append('carrito', JSON.stringify(cart.map(i => ({ id_producto:i.id_producto, cantidad:i.qty }))));
+        fd.append('carrito', JSON.stringify(cart.map(i => ({ id_producto: i.id_producto, cantidad: i.qty }))));
         fd.append('id_metodo_pago', idMetodo);
         if (currentTurnoId) fd.append('id_turno', currentTurnoId);
-        const d = await request('procesar_venta', { method:'POST', body: fd });
+        if (montoRecibidoFinal !== null) fd.append('monto_recibido', montoRecibidoFinal.toFixed(2));
+
+        const d = await request('procesar_venta', { method: 'POST', body: fd });
+
         if (d.data && d.data.dinero_esperado !== null && d.data.dinero_esperado !== undefined) {
             $('#posEfectivoEsperado').innerText = money(d.data.dinero_esperado);
             if (dineroInicial > 0 && d.data.dinero_esperado > dineroInicial * 2) promptRetiro();
         }
-        Swal.fire({ title:Lp.success, text:d.msg, icon:'success', timer:1800, showConfirmButton:false, background: 'var(--bg-surface)', color: 'var(--ink)' }).then(() => {
-            cart = []; updateCartUI(); posBarcode.focus(); loadDashboard();
-        });
-    } catch (e) { notify(e.message, 'error'); }
+
+        cart = [];
+        updateCartUI();
+        loadDashboard();
+
+        if (typeof window.mostrarComprobantePETKO === 'function') {
+            window.mostrarComprobantePETKO('venta', d.data);
+        } else {
+            Swal.fire({ title: '¡Pago Exitoso!', text: d.msg, icon: 'success' });
+        }
+        posBarcode.focus();
+    } catch (e) {
+        notify(e.message, 'error');
+    } finally {
+        ventaEnProceso = false;
+        btnCobrarEl.disabled = false;
+    }
 });
 
 // Reanudar un turno abierto si la página se recarga mientras el cajero trabaja
@@ -3381,6 +3662,6 @@ function detenerEscanerCamara() {
     }
 }
 </script>
-
+<?php require_once __DIR__ . '/../../componentes/comprobantes.php'; ?>
 </body>
 </html>

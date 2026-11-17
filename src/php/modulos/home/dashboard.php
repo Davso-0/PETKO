@@ -3,23 +3,18 @@ declare(strict_types=1);
 
 ob_start();
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-header("Cache-Control: no-cache, no-store, must-revalidate");
-header("Pragma: no-cache");
-header("Expires: 0");
-
-if (!isset($_SESSION['usuario']) && !isset($_GET['action'])) {
-    header('Location: ../../../../inicioSesion.php');
-    exit;
-}
+require_once __DIR__ . '/../../config/auth_guard.php';
 
 if (file_exists(__DIR__ . '/../../config/conexion_BD.php')) {
     require_once __DIR__ . '/../../config/conexion_BD.php';
 } elseif (file_exists(__DIR__ . '/../../config/conexion.php')) {
     require_once __DIR__ . '/../../config/conexion.php';
+}
+
+require_once __DIR__ . '/../../componentes/mi_cuenta_api.php';
+
+if (isset($_GET['action'])) {
+    verificarCsrf();
 }
 
 $id_usuario_actual = 0;
@@ -31,15 +26,15 @@ if (is_array($_SESSION['usuario'] ?? null)) {
 
 $admin = null;
 if (isset($pdo) && $pdo instanceof PDO && $id_usuario_actual > 0) {
-    $stA = $pdo->prepare("SELECT u.id_usuario, u.nombre, u.apellido, u.estado, r.nombre AS rol
-                           FROM usuarios u LEFT JOIN roles r ON r.id_rol = u.id_rol
-                           WHERE u.id_usuario = ?");
+    $stA = $pdo->prepare("SELECT u.id_usuario, u.nombre, u.apellido, u.correo, u.estado, r.nombre AS rol
+                       FROM usuarios u LEFT JOIN roles r ON r.id_rol = u.id_rol
+                       WHERE u.id_usuario = ?");
     $stA->execute([$id_usuario_actual]);
     $admin = $stA->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 $esAdmin = $admin && stripos((string)($admin['rol'] ?? ''), 'admin') !== false && ($admin['estado'] ?? '') !== 'INACTIVO';
 $nombreAdmin = trim(($admin['nombre'] ?? 'Administrador') . ' ' . ($admin['apellido'] ?? ''));
-
+$correoUsuario = $admin['correo'] ?? '';
 // Helper para procesamiento seguro de imágenes de producto (subida física o URL)
 function procesarSubidaImagen(?array $file, string $urlTexto = ''): ?string {
     if ($file && isset($file['error']) && $file['error'] === UPLOAD_ERR_OK && $file['size'] > 0) {
@@ -52,7 +47,7 @@ function procesarSubidaImagen(?array $file, string $urlTexto = ''): ?string {
             $ext = $allowed[$mime];
             $dirDestino = __DIR__ . '/../../../img/productos/';
             if (!is_dir($dirDestino)) {
-                @mkdir($dirDestino, 0777, true);
+                @mkdir($dirDestino, 0755, true);
             }
             $nombreArchivo = 'prod_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
             $destino = $dirDestino . $nombreArchivo;
@@ -76,6 +71,15 @@ if (isset($_GET['action'])) {
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         if (!$esAdmin) {
             throw new RuntimeException('[ERROR DE SISTEMA] Tu sesión no tiene permisos de administrador.');
+        }
+
+        $miCuenta = petkoMiCuentaApi($pdo, $id_usuario_actual, (string)($admin['rol'] ?? ''));
+        if ($miCuenta['handled'] ?? false) {
+            $out = $miCuenta['response'];
+            ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($out, JSON_UNESCAPED_UNICODE);
+            exit;
         }
 
         if ($action === 'get_metrics') {
@@ -169,11 +173,19 @@ if (isset($_GET['action'])) {
             // Obtener inventarios para calcular totales
             $result = [];
             foreach ($productos as $p) {
-                $stInv = $pdo->prepare("SELECT i.id_sucursal, s.nombre AS sucursal, i.existencias, i.stock_minimo 
-                                        FROM inventarios i 
-                                        JOIN sucursales s ON s.id_sucursal = i.id_sucursal 
-                                        WHERE i.id_producto = ?" . ($sid > 0 ? " AND i.id_sucursal = $sid" : ""));
-                $stInv->execute([$p['id_producto']]);
+                if ($sid > 0) {
+    $stInv = $pdo->prepare("SELECT i.id_sucursal, s.nombre AS sucursal, i.existencias, i.stock_minimo 
+                            FROM inventarios i 
+                            JOIN sucursales s ON s.id_sucursal = i.id_sucursal 
+                            WHERE i.id_producto = ? AND i.id_sucursal = ?");
+    $stInv->execute([$p['id_producto'], $sid]);
+} else {
+    $stInv = $pdo->prepare("SELECT i.id_sucursal, s.nombre AS sucursal, i.existencias, i.stock_minimo 
+                            FROM inventarios i 
+                            JOIN sucursales s ON s.id_sucursal = i.id_sucursal 
+                            WHERE i.id_producto = ?");
+    $stInv->execute([$p['id_producto']]);
+}
                 $invs = $stInv->fetchAll(PDO::FETCH_ASSOC);
                 
                 $totalExistencias = array_sum(array_column($invs, 'existencias'));
@@ -704,6 +716,9 @@ main { min-width: 0; width: 100%; overflow-x: hidden; }
             <button class="nav-btn" data-target="view-personal"><i class="ph ph-users-three"></i><span class="nav-label" data-i18n="nav_personal">Personal</span></button>
             <button class="nav-btn" data-target="view-gestion-productos"><i class="ph ph-package"></i><span class="nav-label" data-i18n="nav_gestion_productos">Gestión de Productos</span></button>
             <button class="nav-btn" data-target="view-ventas"><i class="ph ph-chart-line-up"></i><span class="nav-label" data-i18n="nav_ventas">Ventas</span></button>
+            <div class="nav-section-title">Mi Cuenta</div>
+            <button class="nav-btn" data-target="view-mi-cuenta"><i class="ph ph-user-circle"></i><span class="nav-label">Mis Apartados</span></button>
+            <button class="nav-btn" data-target="view-mi-cuenta-config"><i class="ph ph-gear"></i><span class="nav-label">Configuración</span></button>
             <div class="nav-section-title" data-i18n="nav_section_nav">Navegación</div>
             <a class="nav-btn" href="../../componentes/catalogo.php"><i class="ph ph-storefront"></i><span class="nav-label" data-i18n="nav_catalogo">Ir al Catálogo</span></a>
             <a class="nav-btn" href="home.php"><i class="ph ph-house"></i><span class="nav-label" data-i18n="nav_home">Volver a Home</span></a>
@@ -759,6 +774,8 @@ main { min-width: 0; width: 100%; overflow-x: hidden; }
                     </div>
                 </div>
             </section>
+
+            <?php require_once __DIR__ . '/../../componentes/mi_cuenta_vistas.php'; ?>
 
             <!-- SUCURSALES -->
             <section id="view-sucursales" class="view-section">
@@ -825,17 +842,65 @@ const $ = s => document.querySelector(s);
 const escapeHtml = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const money = v => '$' + Number(v || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const notify = (msg, icon='success') => Swal.fire({ toast:true, position:'top-end', icon, title: msg, showConfirmButton:false, timer:2600, background: 'var(--bg-surface)', color: 'var(--ink)' });
+const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
 async function request(actionStr, options = {}) {
-    const r = await fetch(`${endpoint}?action=${actionStr}`, options);
+    const method = (options.method || 'GET').toUpperCase();
+    const requestOptions = { ...options, headers: new Headers(options.headers || {}) };
+
+    if (method !== 'GET') {
+        requestOptions.headers.set('X-CSRF-Token', csrfToken);
+
+        if (requestOptions.body instanceof FormData) {
+            requestOptions.body.append('csrf_token', csrfToken);
+        } else if (typeof requestOptions.body === 'string') {
+            if (!/(?:^|[?&])csrf_token=/.test(requestOptions.body)) {
+                const separator = requestOptions.body.length > 0 ? '&' : '';
+                requestOptions.body = `${requestOptions.body}${separator}csrf_token=${encodeURIComponent(csrfToken)}`;
+            }
+        }
+    }
+
+    const r = await fetch(`${endpoint}?action=${actionStr}`, requestOptions);
     const text = await r.text();
     let data;
     try { data = JSON.parse(text); } catch(e) { throw new Error('[ERROR DE SISTEMA] Falló la lectura de la respuesta del servidor.'); }
     if (!data.ok) throw new Error(data.msg || 'No fue posible completar la operación.');
     return data;
 }
+
+window.abrirConfiguracionRapida = async function () {
+    const { isConfirmed, value } = await Swal.fire({
+        title: 'Configuración de cuenta',
+        html: `<div style="text-align:left;"><p style="margin-bottom:12px; color:var(--ink-soft);">Actualiza tu contraseña actual.</p><label class="swal2-label" style="display:block; margin-bottom:6px;">Contraseña actual</label><input id="swal-pass-actual" type="password" class="swal2-input" style="width:100%; margin:0 0 12px;"><label class="swal2-label" style="display:block; margin-bottom:6px;">Nueva contraseña</label><input id="swal-pass-nueva" type="password" class="swal2-input" style="width:100%; margin:0;"></div>`,
+        confirmButtonText: 'Guardar',
+        showCancelButton: true,
+        preConfirm: () => {
+            const actual = document.getElementById('swal-pass-actual').value;
+            const nueva = document.getElementById('swal-pass-nueva').value;
+            if (!actual || !nueva) {
+                Swal.showValidationMessage('Completa ambos campos.');
+                return false;
+            }
+            return { password_actual: actual, password_nueva: nueva };
+        }
+    });
+    if (!isConfirmed || !value) return;
+    try {
+        const fd = new FormData();
+        fd.append('password_actual', value.password_actual);
+        fd.append('password_nueva', value.password_nueva);
+        const d = await request('update_password', { method: 'POST', body: fd });
+        Swal.fire({ icon: 'success', title: 'Contraseña actualizada', text: d.msg || 'Listo.' });
+    } catch (e) {
+        Swal.fire({ icon: 'error', title: 'No se pudo actualizar', text: e.message });
+    }
+};
+
 const statusBadge = s => `<span class="badge ${String(s).toUpperCase().includes('INACT') ? 'b-red' : 'b-green'}">${escapeHtml(s)}</span>`;
 const empty = (cols, text=null) => `<tr><td colspan="${cols}" style="text-align:center;color:var(--ink-faint);padding:40px">${text || t('sin_registros')}</td></tr>`;
+
+$('#btnSolicitarCambioPassAdmin')?.addEventListener('click', () => abrirConfiguracionRapida());
 
 // -------- TEMA (compartido con el home: petko_dark) --------
 const body = document.body;
@@ -926,8 +991,16 @@ $('#sidebarScrim').addEventListener('click', () => appLayout.classList.remove('m
 
 const navButtons = document.querySelectorAll('.nav-btn[data-target]');
 const views = document.querySelectorAll('.view-section');
-const titleKeys = { 'view-general':'nav_general', 'view-sucursales':'nav_sucursales', 'view-personal':'nav_personal', 'view-gestion-productos':'nav_gestion_productos', 'view-ventas':'ven_title' };
-function switchView(targetId) {
+const titleKeys = {
+    'view-general': 'nav_general',
+    'view-sucursales': 'nav_sucursales',
+    'view-personal': 'nav_personal',
+    'view-gestion-productos': 'nav_gestion_productos',
+    'view-ventas': 'ven_title',
+    'view-mi-cuenta': 'Mis Apartados',
+    'view-mi-cuenta-config': 'Configuración'
+};
+    function switchView(targetId) { 
     views.forEach(v => v.classList.remove('active'));
     navButtons.forEach(b => b.classList.remove('active'));
     document.getElementById(targetId).classList.add('active');
@@ -1374,5 +1447,6 @@ window.addEventListener('DOMContentLoaded', () => {
     loadFiltrosGP();
 });
 </script>
+<?php require_once __DIR__ . '/../../componentes/comprobantes.php'; ?>
 </body>
 </html>
