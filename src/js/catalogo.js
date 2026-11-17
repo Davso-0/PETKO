@@ -1,30 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
 
     // ==========================================
-    // MODO OSCURO / CLARO
+    // MODO OSCURO / CLARO (compartido con el home: petko_dark)
     // ==========================================
     const body = document.body;
-    const btnTheme = document.getElementById('btnTheme');
-    const themeIcon = btnTheme.querySelector('i');
-
-    if (localStorage.getItem('kion-admin-theme') === 'dark' || localStorage.getItem('kion-catalog-theme') === 'dark') {
-        body.classList.add('dark-mode');
-        themeIcon.classList.replace('ph-moon', 'ph-sun');
-    }
-
-    btnTheme.addEventListener('click', () => {
-        body.classList.toggle('dark-mode');
-        const isDark = body.classList.contains('dark-mode');
-
-        if (isDark) {
-            themeIcon.classList.replace('ph-moon', 'ph-sun');
-        } else {
-            themeIcon.classList.replace('ph-sun', 'ph-moon');
-        }
-
-        localStorage.setItem('kion-catalog-theme', isDark ? 'dark' : 'light');
-        localStorage.setItem('kion-admin-theme', isDark ? 'dark' : 'light');
-    });
 
     // ==========================================
     // IDIOMA (Bilingüe)
@@ -109,11 +88,6 @@ document.addEventListener('DOMContentLoaded', () => {
             dog_reserve_dup: '¡Tranquilo, ese ya lo tienes apartado!',
             dog_reserve_out: 'Ese producto está agotado, no puedo apartarlo.',
             dog_reserve_cancel: 'Listo, liberé ese apartado.',
-            dog_text: '¡Así se lee mejor! Texto al {p}% 👓',
-            a11y_title: 'Tamaño de texto',
-            a11y_less: 'Reducir texto',
-            a11y_default: 'Tamaño de texto por defecto',
-            a11y_more: 'Aumentar texto',
             checkout_close: 'Cerrar',
             checkout_eyebrow: 'Finalizar pedido',
             checkout_title: '¿Cómo deseas finalizar tu pedido?',
@@ -221,11 +195,6 @@ document.addEventListener('DOMContentLoaded', () => {
             dog_reserve_dup: 'Relax, you already reserved that one!',
             dog_reserve_out: 'That product is out of stock, I can’t reserve it.',
             dog_reserve_cancel: 'Done, I released that reservation.',
-            dog_text: 'Easier to read! Text at {p}% 👓',
-            a11y_title: 'Text size',
-            a11y_less: 'Decrease text size',
-            a11y_default: 'Default text size',
-            a11y_more: 'Increase text size',
             checkout_close: 'Close',
             checkout_eyebrow: 'Complete order',
             checkout_title: 'How would you like to complete your order?',
@@ -256,7 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    let currentLang = localStorage.getItem('kion-catalog-lang') || 'es';
+    let currentLang = PetkoPrefs.lang();
 
     function t(key) { return I18N[currentLang][key] || key; }
 
@@ -283,9 +252,8 @@ document.addEventListener('DOMContentLoaded', () => {
         perritoCambiarIdioma();
     }
 
-    document.getElementById('btnLang').addEventListener('click', () => {
-        currentLang = currentLang === 'es' ? 'en' : 'es';
-        localStorage.setItem('kion-catalog-lang', currentLang);
+    PetkoPrefs.onLang(l => {
+        currentLang = l;
         applyLanguage();
     });
 
@@ -449,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => precargarTema(temaOscuroActivo(), ['feliz', 'triste']), 800);
         });
 
-        btnTheme.addEventListener('click', () => {
+        PetkoPrefs.onDark(() => {
             sincronizarPerritoConTema();
             precargarTema(temaOscuroActivo());
         });
@@ -1438,75 +1406,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ticketModal.classList.remove('is-cerrando');
             liberarDialogo(ticketModal);
             ultimoPedido = null;
-        });
-    }
-
-    // ==========================================
-    // ACCESIBILIDAD · tamaño de texto
-    // ==========================================
-    const ESCALAS_TEXTO = [0.9, 1, 1.1, 1.2, 1.3];
-    const ESCALA_BASE = 1;
-    const a11y = document.getElementById('a11y');
-    const a11yToggle = document.getElementById('a11y-toggle');
-    const a11yNivel = document.getElementById('a11y-nivel');
-    const a11yBotones = document.querySelectorAll('.a11y__btn');
-    let indiceEscala = ESCALAS_TEXTO.indexOf(parseFloat(localStorage.getItem('kion-font-scale')));
-    if (indiceEscala === -1) indiceEscala = ESCALAS_TEXTO.indexOf(ESCALA_BASE);
-
-    function aplicarEscalaTexto() {
-        const escala = ESCALAS_TEXTO[indiceEscala];
-        document.documentElement.style.setProperty('--font-scale', escala);
-        document.documentElement.classList.toggle('texto-grande', escala >= 1.2);
-        a11yNivel.textContent = `${Math.round(escala * 100)}%`;
-
-        a11yBotones.forEach(btn => {
-            const accion = btn.dataset.a11y;
-            const activo = accion === 'base' ? escala === ESCALA_BASE
-                : accion === 'menos' ? escala < ESCALA_BASE
-                : escala > ESCALA_BASE;
-            btn.classList.toggle('is-activo', activo);
-            btn.setAttribute('aria-pressed', String(activo));
-            btn.disabled = (accion === 'menos' && indiceEscala === 0)
-                || (accion === 'mas' && indiceEscala === ESCALAS_TEXTO.length - 1);
-        });
-    }
-
-    function cerrarA11y() {
-        a11y.classList.remove('is-abierto');
-        a11yToggle.setAttribute('aria-expanded', 'false');
-    }
-
-    if (a11y) {
-        aplicarEscalaTexto();
-
-        a11yBotones.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const anterior = indiceEscala;
-                if (btn.dataset.a11y === 'menos') indiceEscala = Math.max(0, indiceEscala - 1);
-                if (btn.dataset.a11y === 'mas') indiceEscala = Math.min(ESCALAS_TEXTO.length - 1, indiceEscala + 1);
-                if (btn.dataset.a11y === 'base') indiceEscala = ESCALAS_TEXTO.indexOf(ESCALA_BASE);
-                if (indiceEscala === anterior) return;
-
-                aplicarEscalaTexto();
-                localStorage.setItem('kion-font-scale', String(ESCALAS_TEXTO[indiceEscala]));
-                perritoDice('dog_text', { p: Math.round(ESCALAS_TEXTO[indiceEscala] * 100) });
-            });
-        });
-
-        a11yToggle.addEventListener('click', () => {
-            const abierto = a11y.classList.toggle('is-abierto');
-            a11yToggle.setAttribute('aria-expanded', String(abierto));
-        });
-
-        document.addEventListener('click', e => {
-            if (a11y.classList.contains('is-abierto') && !a11y.contains(e.target)) cerrarA11y();
-        });
-
-        document.addEventListener('keydown', e => {
-            if (e.key === 'Escape' && a11y.classList.contains('is-abierto')) {
-                cerrarA11y();
-                a11yToggle.focus();
-            }
         });
     }
 
