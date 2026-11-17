@@ -148,10 +148,10 @@ if ($metodoPost) {
     if ($pdo === null) {
         responderInicioSesion(false, $errorConexion ?? 'No fue posible conectar con la base de datos.');
     }
-
+    //a
     // =========================================================================
     // PROCESAMIENTO DE ACCESO RÁPIDO (MODO DEMO)
-    // =========================================================================
+
     if (isset($_POST['demo_login']) && DEV_MODE === true) {
         $idUsuarioDemo = (int)($_POST['id_usuario_demo'] ?? 0);
         
