@@ -13,7 +13,7 @@ declare(strict_types=1);
         color: #0a1f3d;
         box-shadow: 0 25px 60px rgba(0,0,0,0.35);
         margin: auto;
-        overflow: hidden;
+        overflow-y: auto;
     }
     #petkoReceiptModal::backdrop {
         background: rgba(6, 14, 29, 0.65);
@@ -35,7 +35,7 @@ declare(strict_types=1);
     .receipt-items th:last-child, .receipt-items td:last-child { text-align: right; }
     .receipt-total { margin-top: 18px; display: flex; justify-content: space-between; align-items: center; padding-top: 16px; border-top: 2px solid #dfeaf7; font-size: 18px; font-weight: 800; }
     .receipt-actions { display: flex; gap: 10px; padding: 14px 18px 18px; }
-    .receipt-actions button { flex: 1; padding: 11px 12px; border-radius: 10px; font-weight: 700; }
+    .receipt-actions button { flex: 1; padding: 11px 12px; border-radius: 10px; font-weight: 700; border: none; cursor: pointer; }
     .btn-print { background: #0a1f3d; color: #fff; }
     .btn-pdf { background: #dff6ea; color: #0d734c; }
     @media print {
@@ -51,10 +51,10 @@ declare(strict_types=1);
     <div id="petkoPrintableReceipt">
         <div class="receipt-toolbar">
             <div class="title">PETKO</div>
-            <button type="button" class="btn-close" data-close-receipt style="background:transparent; border:none; color:#fff; font-size:22px; cursor:pointer;">×</button>
+            <button type="button" class="btn-close" data-close-receipt data-html2canvas-ignore="true" style="background:transparent; border:none; color:#fff; font-size:22px; cursor:pointer;">×</button>
         </div>
         <div class="receipt-body" id="petkoReceiptContent"></div>
-        <div class="receipt-actions">
+        <div class="receipt-actions" data-html2canvas-ignore="true">
             <button type="button" class="btn-print" id="petkoPrintReceipt">Imprimir</button>
             <button type="button" class="btn-pdf" id="petkoDownloadPdf">Descargar PDF</button>
         </div>
@@ -88,6 +88,8 @@ declare(strict_types=1);
         const cajero = data?.cajero ?? data?.data?.cajero ?? '—';
         const recibido = data?.monto_recibido ?? data?.data?.monto_recibido ?? null;
         const cambio = data?.cambio_entregado ?? data?.data?.cambio_entregado ?? null;
+
+        modal.dataset.folio = String(folio).replace(/[^a-zA-Z0-9-_]/g, '') || 'PETKO';
 
         const rows = items.length ? items.map(item => {
             const qty = Number(item.cantidad ?? item.qty ?? 1);
@@ -134,12 +136,13 @@ declare(strict_types=1);
     printBtn.addEventListener('click', () => window.print());
     pdfBtn.addEventListener('click', () => {
         const element = document.getElementById('petkoPrintableReceipt');
-        const fileName = `Ticket_${(document.getElementById('petkoReceiptContent').innerText || 'PETKO').slice(0, 20).replace(/[^a-zA-Z0-9-_]/g, '') || 'PETKO'}.pdf`;
+        const folioClean = modal.dataset.folio || 'PETKO';
+        const fileName = `Ticket_${folioClean}.pdf`;
         html2pdf().set({
             margin: 6,
             filename: fileName,
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2 },
+            html2canvas: { scale: 2, useCORS: true },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         }).from(element).save();
     });

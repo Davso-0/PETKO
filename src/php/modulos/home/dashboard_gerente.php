@@ -15,6 +15,7 @@ if (isset($_GET['action'])) {
     verificarCsrf();
 }
 require_once __DIR__ . '/../../componentes/mi_cuenta_api.php';
+require_once __DIR__ . '/../../componentes/apartados_consultas_api.php';
 
 // --------------------------------------------------------------
 // Resolver el usuario/gerente en sesión y su sucursal asignada
@@ -122,7 +123,14 @@ if (isset($_GET['action'])) {
             echo json_encode($out, JSON_UNESCAPED_UNICODE);
             exit;
         }
-
+        $acApi = petkoApartadosConsultasApi($pdo, $id_usuario_actual, (string)($rolDB ?? ''), $id_sucursal);
+        if ($acApi['handled'] ?? false) {
+            $out = $acApi['response'];
+            ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($out, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         if ($action === 'get_metrics') {
             $rv = $pdo->prepare("SELECT COUNT(*) n, COALESCE(SUM(total),0) t FROM ventas WHERE id_sucursal=? AND DATE(fecha_hora)=CURDATE()");
             $rv->execute([$id_sucursal]); $rv = $rv->fetch();
@@ -387,9 +395,9 @@ if (isset($_GET['action'])) {
                     ->execute([$id_caja, $id_cajero, $id_sucursal, $dineroInicial]);
                 $idTurno = (int)$pdo->lastInsertId();
                 
-$stFI = $pdo->prepare("SELECT fecha_inicio FROM turnos_caja WHERE id_turno = ?");
-$stFI->execute([$idTurno]);
-$fInicio = $stFI->fetchColumn();
+                $stFI = $pdo->prepare("SELECT fecha_inicio FROM turnos_caja WHERE id_turno = ?");
+                $stFI->execute([$idTurno]);
+                $fInicio = $stFI->fetchColumn();
                 $out = ['ok' => true, 'msg' => 'Acceso concedido.', 'data' => [
                     'nombre_cajero' => $cajero['nombre'], 'nombre_caja' => $nombreCaja, 'id_caja' => $id_caja, 'id_cajero' => $id_cajero,
                     'id_turno' => $idTurno, 'dinero_inicial' => $dineroInicial, 'fecha_inicio' => $fInicio, 'horas_extra' => false, 'reanudado' => false
@@ -1490,6 +1498,7 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
             align-items: center;
             gap: 6px;
             white-space: nowrap;
+            text-decoration: none;
         }
         .chip-btn:hover, .chip-btn.active { 
             background: var(--accent); 
@@ -1891,243 +1900,105 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
         /* ==========================================================
            12. MEDIA QUERIES ADAPTATIVAS (LAPTOPS, TABLETS, MÓVILES)
            ========================================================== */
-        
-        /* LAPTOPS PEQUEÑAS / DESKTOPS COMPACTAS (hasta 1240px) */
         @media (max-width: 1240px) {
-            :root {
-                --sidebar-w: 236px;
-            }
-            .grid-2col { 
-                grid-template-columns: 1fr; 
-                gap: 20px;
-            }
-            .pos-layout {
-                grid-template-columns: 1.5fr 1fr;
-            }
+            :root { --sidebar-w: 236px; }
+            .grid-2col { grid-template-columns: 1fr; gap: 20px; }
+            .pos-layout { grid-template-columns: 1.5fr 1fr; }
         }
 
-        /* TABLETS HORIZONTALES / LAPTOPS SUB-1050px (hasta 1024px) */
         @media (max-width: 1024px) {
-            .app-layout { 
-                grid-template-columns: 1fr; 
-            }
+            .app-layout { grid-template-columns: 1fr; }
             .sidebar { 
-                position: fixed; 
-                left: 0; 
-                top: 0; 
-                width: min(84vw, 290px); 
-                height: 100vh; 
-                transform: translateX(-100%); 
-                box-shadow: 0 10px 40px rgba(7, 26, 50, 0.45); 
-                border-right: none; 
+                position: fixed; left: 0; top: 0; width: min(84vw, 290px); height: 100vh; 
+                transform: translateX(-100%); box-shadow: 0 10px 40px rgba(7, 26, 50, 0.45); border-right: none; 
             }
-            .app-layout.mobile-open .sidebar { 
-                transform: translateX(0); 
-            }
-            .app-layout.mobile-open .sidebar-scrim { 
-                display: block; 
-                opacity: 1; 
-                pointer-events: auto; 
-            }
+            .app-layout.mobile-open .sidebar { transform: translateX(0); }
+            .app-layout.mobile-open .sidebar-scrim { display: block; opacity: 1; pointer-events: auto; }
             .sidebar-collapse-btn { display: none; }
             .hamburger-btn { display: inline-flex; }
-
-            .pos-layout {
-                grid-template-columns: 1fr;
-            }
-            .pos-summary {
-                position: static;
-            }
+            .pos-layout { grid-template-columns: 1fr; }
+            .pos-summary { position: static; }
         }
 
-        /* TABLETS VERTICALES (hasta 768px) */
         @media (max-width: 768px) {
-            .topbar {
-                height: 66px;
-            }
-            .user-profile span:not(.admin-chip) {
-                display: none;
-            }
-            .user-profile {
-                padding-left: 8px;
-                gap: 6px;
-            }
-
-            .kpi-grid { 
-                grid-template-columns: repeat(2, 1fr); 
-                gap: 12px;
-            }
-            .kpi-card {
-                padding: 16px 14px;
-            }
-            .kpi-card i.kpi-icon {
-                font-size: 20px;
-                padding: 10px;
-            }
-
-            .form-inline {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .search-input, .select-input {
-                min-width: 100%;
-                width: 100%;
-                flex: 1 1 100%;
-            }
-
+            .topbar { height: 66px; }
+            .user-profile span:not(.admin-chip) { display: none; }
+            .user-profile { padding-left: 8px; gap: 6px; }
+            .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .kpi-card { padding: 16px 14px; }
+            .kpi-card i.kpi-icon { font-size: 20px; padding: 10px; }
+            .form-inline { flex-direction: column; align-items: stretch; }
+            .search-input, .select-input { min-width: 100%; width: 100%; flex: 1 1 100%; }
             .swal2-popup .swal2-html-container div[style*="display:flex"],
             .swal2-popup .swal2-html-container div[style*="display: flex"] {
-                flex-direction: column !important;
-                gap: 8px !important;
+                flex-direction: column !important; gap: 8px !important;
             }
         }
 
-        /* SMARTPHONES Y PANTALLAS PEQUEÑAS (hasta 580px) */
         @media (max-width: 580px) {
-            .topbar {
-                height: 62px;
-                padding: 0 12px;
-            }
-            .topbar-title-block .eyebrow {
-                display: none;
-            }
-            .topbar-title-block .title-main {
-                max-width: 140px;
-                font-size: 15px;
-            }
-            .admin-chip {
-                display: none;
-            }
-            .icon-btn {
-                width: 36px;
-                height: 36px;
-                font-size: 17px;
-            }
-
-            .header-row {
-                flex-direction: column;
-                align-items: stretch !important;
-                gap: 12px;
-            }
-            .header-row > div:first-child {
-                width: 100%;
-            }
-            .header-row .btn-primary, 
-            .header-row .btn-danger {
-                width: 100%;
-            }
-
-            .pos-scanner {
-                padding: 12px;
-            }
-            .pos-scanner > div {
-                flex-wrap: wrap;
-                gap: 10px !important;
-            }
-            .pos-scanner > div > i {
-                display: none;
-            }
-            .pos-scanner > div > div {
-                min-width: 0;
-                flex: 1 1 100% !important;
-            }
-            #btnStartCameraScan {
-                width: 100%;
-                justify-content: center;
-                padding: 10px 14px !important;
-            }
-
-            .pos-cart table th, 
-            .pos-cart table td {
-                padding: 9px 6px !important;
-                font-size: 12.5px !important;
-            }
-            .pos-cart table th:first-child, 
-            .pos-cart table td:first-child {
-                padding-left: 10px !important;
-            }
-            .pos-cart table th:last-child, 
-            .pos-cart table td:last-child {
-                padding-right: 10px !important;
-            }
-            .qty-ctrl {
-                padding: 2px;
-                gap: 2px;
-            }
-            .qty-btn {
-                width: 22px;
-                height: 22px;
-                font-size: 13px;
-            }
-            .qty-input {
-                width: 26px;
-                font-size: 12.5px;
-            }
+            .topbar { height: 62px; padding: 0 12px; }
+            .topbar-title-block .eyebrow { display: none; }
+            .topbar-title-block .title-main { max-width: 140px; font-size: 15px; }
+            .admin-chip { display: none; }
+            .icon-btn { width: 36px; height: 36px; font-size: 17px; }
+            .header-row { flex-direction: column; align-items: stretch !important; gap: 12px; }
+            .header-row > div:first-child { width: 100%; }
+            .header-row .btn-primary, .header-row .btn-danger { width: 100%; }
+            .pos-scanner { padding: 12px; }
+            .pos-scanner > div { flex-wrap: wrap; gap: 10px !important; }
+            .pos-scanner > div > i { display: none; }
+            .pos-scanner > div > div { min-width: 0; flex: 1 1 100% !important; }
+            #btnStartCameraScan { width: 100%; justify-content: center; padding: 10px 14px !important; }
+            .pos-cart table th, .pos-cart table td { padding: 9px 6px !important; font-size: 12.5px !important; }
+            .pos-cart table th:first-child, .pos-cart table td:first-child { padding-left: 10px !important; }
+            .pos-cart table th:last-child, .pos-cart table td:last-child { padding-right: 10px !important; }
+            .qty-ctrl { padding: 2px; gap: 2px; }
+            .qty-btn { width: 22px; height: 22px; font-size: 13px; }
+            .qty-input { width: 26px; font-size: 12.5px; }
         }
 
-        /* SMARTPHONES COMPACTOS (hasta 420px) */
         @media (max-width: 420px) {
-            .content {
-                padding: 14px 10px;
-            }
-            .kpi-grid {
-                grid-template-columns: 1fr;
-            }
-            .prod-grid {
-                grid-template-columns: 1fr;
-            }
-            .panel {
-                padding: 14px 12px;
-                border-radius: 16px;
-            }
-            .kpi-card {
-                border-radius: 16px;
-            }
-            .pos-summary {
-                padding: 18px 14px;
-                border-radius: 16px;
-            }
-            .summary-total {
-                font-size: 28px;
-            }
+            .content { padding: 14px 10px; }
+            .kpi-grid { grid-template-columns: 1fr; }
+            .prod-grid { grid-template-columns: 1fr; }
+            .panel { padding: 14px 12px; border-radius: 16px; }
+            .kpi-card { border-radius: 16px; }
+            .pos-summary { padding: 18px 14px; border-radius: 16px; }
+            .summary-total { font-size: 28px; }
         }
 
         @media (prefers-reduced-motion: reduce) {
-            * {
-                animation-duration: 0.01ms !important;
-                transition-duration: 0.01ms !important;
-            }
+            * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
         }
-    .sidebar,
-    .nav-menu,
-    .app-layout.is-collapsed .nav-btn { overflow: visible !important; }
-.nav-btn { position: relative !important; }
-.app-layout.is-collapsed .nav-btn::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    left: calc(100% + 14px);
-    top: 50%;
-    transform: translateY(-50%) translateX(-6px);
-    background: var(--ink);
-    color: var(--bg-surface);
-    font-size: 12.5px;
-    font-weight: 700;
-    padding: 7px 13px;
-    border-radius: 10px;
-    white-space: nowrap;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity .18s ease, transform .18s ease;
-    z-index: 9999;
-}
-.app-layout.is-collapsed .nav-btn:hover::after {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(-50%) translateX(0);
-}
-
+        .sidebar,
+        .nav-menu,
+        .app-layout.is-collapsed .nav-btn { overflow: visible !important; }
+        .nav-btn { position: relative !important; }
+        .app-layout.is-collapsed .nav-btn::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: calc(100% + 14px);
+            top: 50%;
+            transform: translateY(-50%) translateX(-6px);
+            background: var(--ink);
+            color: var(--bg-surface);
+            font-size: 12.5px;
+            font-weight: 700;
+            padding: 7px 13px;
+            border-radius: 10px;
+            white-space: nowrap;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity .18s ease, transform .18s ease;
+            z-index: 9999;
+        }
+        .app-layout.is-collapsed .nav-btn:hover::after {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(-50%) translateX(0);
+        }
     </style>    
     <link rel="stylesheet" href="../../../css/petko-ui.css?v=<?= (int) @filemtime(__DIR__ . '/../../../css/petko-ui.css') ?>">
 </head>
@@ -2148,6 +2019,10 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
             <button class="nav-btn" data-target="view-inventario"><i class="ph ph-package"></i><span class="nav-label" data-i18n="nav_inventario">Inventario</span></button>
             <button class="nav-btn" data-target="view-cajas"><i class="ph ph-desktop"></i><span class="nav-label" data-i18n="nav_cajas">Cajas</span></button>
             <button class="nav-btn" data-target="view-ventas"><i class="ph ph-chart-line-up"></i><span class="nav-label" data-i18n="nav_ventas">Ventas</span></button>
+            <button class="nav-btn" data-target="view-apartados-consultas">
+                <i class="ph ph-clipboard-text"></i>
+                <span class="nav-label">Apartados y Consultas</span>
+            </button>
             <button class="nav-btn" data-target="view-cortes"><i class="ph ph-calculator"></i><span class="nav-label" data-i18n="nav_cortes">Cortes de Caja</span></button>
             <div class="nav-section-title" data-i18n="nav_section_caja">Caja</div>
             <button class="nav-btn" id="btnIrPOS"><i class="ph ph-monitor"></i><span class="nav-label" data-i18n="nav_pos">Punto de Venta</span></button>
@@ -2182,28 +2057,29 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
         <div class="content">
 
             <!-- PANEL PRINCIPAL -->
-<section id="view-dash" class="view-section active">
-    <div class="header-row"><div><h1 class="title" data-i18n="dash_title">Resumen de Operaciones <span class="wave">👋</span></h1><p class="subtitle" data-i18n="dash_sub">Métricas en tiempo real de tu sucursal.</p></div></div>
-    
-    <div class="panel" style="margin-bottom: 24px;">
-        <div class="panel-head"><div><h2 class="panel-title" data-i18n="misuc_title">Mi Sucursal</h2><p class="panel-sub" data-i18n="misuc_sub">Información general de tu punto de venta.</p></div></div>
-        <div class="info-grid" id="infoSucursal" data-i18n="cargando">Cargando...</div>
-    </div>
+            <section id="view-dash" class="view-section active">
+                <div class="header-row"><div><h1 class="title" data-i18n="dash_title">Resumen de Operaciones <span class="wave">👋</span></h1><p class="subtitle" data-i18n="dash_sub">Métricas en tiempo real de tu sucursal.</p></div></div>
+                
+                <div class="panel" style="margin-bottom: 24px;">
+                    <div class="panel-head"><div><h2 class="panel-title" data-i18n="misuc_title">Mi Sucursal</h2><p class="panel-sub" data-i18n="misuc_sub">Información general de tu punto de venta.</p></div></div>
+                    <div class="info-grid" id="infoSucursal" data-i18n="cargando">Cargando...</div>
+                </div>
 
-    <div class="kpi-grid">
-        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-money kpi-icon"></i></div><div class="kpi-val" id="kpiIngresos">$0.00</div><div class="kpi-label" data-i18n="kpi_ingresos">Ingresos Hoy</div></div>
-        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-warning-circle kpi-icon" style="color:var(--danger); background:var(--danger-bg);"></i></div><div class="kpi-val" id="kpiBajo" style="color:var(--danger)">0</div><div class="kpi-label" data-i18n="kpi_bajo">Stock Bajo</div></div>
-        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-desktop kpi-icon"></i></div><div class="kpi-val" id="kpiCajas">0</div><div class="kpi-label" data-i18n="kpi_cajas">Cajas Activas</div></div>
-        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-package kpi-icon"></i></div><div class="kpi-val" id="kpiProductos">0</div><div class="kpi-label" data-i18n="kpi_productos">Productos Asignados</div></div>
-    </div>
+                <div class="kpi-grid">
+                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-money kpi-icon"></i></div><div class="kpi-val" id="kpiIngresos">$0.00</div><div class="kpi-label" data-i18n="kpi_ingresos">Ingresos Hoy</div></div>
+                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-warning-circle kpi-icon" style="color:var(--danger); background:var(--danger-bg);"></i></div><div class="kpi-val" id="kpiBajo" style="color:var(--danger)">0</div><div class="kpi-label" data-i18n="kpi_bajo">Stock Bajo</div></div>
+                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-desktop kpi-icon"></i></div><div class="kpi-val" id="kpiCajas">0</div><div class="kpi-label" data-i18n="kpi_cajas">Cajas Activas</div></div>
+                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-package kpi-icon"></i></div><div class="kpi-val" id="kpiProductos">0</div><div class="kpi-label" data-i18n="kpi_productos">Productos Asignados</div></div>
+                </div>
 
-    <div class="grid-2col">
-        <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="chart_ventas">Ventas (7 días)</h2></div></div><div class="chart-box"><canvas id="salesChart"></canvas></div></div>
-        <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="alertas_title">Alertas de Inventario Bajo</h2></div></div><table style="margin-top:16px;" id="tblAlertas"><tr><th data-i18n="th_producto">Producto</th><th data-i18n="th_existencia">Existencia</th><th data-i18n="th_estado">Estado</th></tr></table></div>
-    </div>
-</section>
+                <div class="grid-2col">
+                    <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="chart_ventas">Ventas (7 días)</h2></div></div><div class="chart-box"><canvas id="salesChart"></canvas></div></div>
+                    <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="alertas_title">Alertas de Inventario Bajo</h2></div></div><table style="margin-top:16px;" id="tblAlertas"><tr><th data-i18n="th_producto">Producto</th><th data-i18n="th_existencia">Existencia</th><th data-i18n="th_estado">Estado</th></tr></table></div>
+                </div>
+            </section>
 
             <?php require_once __DIR__ . '/../../componentes/mi_cuenta_vistas.php'; ?>
+            <?php require_once __DIR__ . '/../../componentes/gestion_apartados_consultas_vista.php'; ?>
 
             <!-- INVENTARIO -->
             <section id="view-inventario" class="view-section">
@@ -2297,54 +2173,200 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
             </section>
 
             <!-- PUNTO DE VENTA (ESTRUCTURA CORREGIDA DE 2 COLUMNAS) -->
-<section id="view-pos" class="view-section">
-    <div class="header-row" style="margin-bottom: 12px;">
-        <div><h1 class="title"><span data-i18n="pos_caja_label">Caja</span> <span id="lblCajaActual" style="color:var(--accent);">-</span></h1><p class="subtitle" style="margin-top:4px;"><span data-i18n="pos_cajero_label">Cajero:</span> <b id="lblCajeroActual" style="color:var(--ink);">—</b> <span style="margin:0 8px;">·</span> <span id="lblTurnoTiempo" style="color:var(--ink-soft); font-weight:600;"></span></p></div>
-        <button class="btn-danger" id="btnCerrarCaja"><i class="ph ph-sign-out"></i> <span data-i18n="btn_cerrar_turno">Cerrar Turno</span></button>
-    </div>
-    
-    <div class="pos-layout">
-        <!-- COLUMNA IZQUIERDA (Escáner + Carrito dentro del mismo contenedor) -->
-        <div>
-            <div class="pos-scanner" style="position:relative;">
-                <div style="display:flex; gap:16px; width:100%;">
-                    <i class="ph ph-barcode" style="font-size:32px; color:var(--accent); align-self:center;"></i>
-                    <div style="flex:1; position:relative;">
-                        <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
-                        <div id="posSearchResults" class="pos-search-dropdown"></div>
+            <section id="view-pos" class="view-section">
+                <div class="header-row" style="margin-bottom: 12px;">
+                    <div>
+                        <h1 class="title"><span data-i18n="pos_caja_label">Caja</span> <span id="lblCajaActual" style="color:var(--accent);">-</span></h1>
+                        <p class="subtitle" style="margin-top:4px;">
+                            <span data-i18n="pos_cajero_label">Cajero:</span> <b id="lblCajeroActual" style="color:var(--ink);">—</b>
+                            <span style="margin:0 8px;">·</span>
+                            <span id="lblTurnoTiempo" style="color:var(--ink-soft); font-weight:600;"></span>
+                        </p>
                     </div>
-                    <button type="button" class="chip-btn" id="btnStartCameraScan" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
-    <i class="ph ph-barcode" style="font-size:20px;"></i>
-    <span style="font-weight:700;">Escanear</span>
-</button>
+                    <button class="btn-danger" id="btnCerrarCaja"><i class="ph ph-sign-out"></i> <span data-i18n="btn_cerrar_turno">Cerrar Turno</span></button>
                 </div>
-            </div>
+                
+                <div class="pos-layout">
+                    <!-- COLUMNA IZQUIERDA (Escáner + Carrito dentro del mismo contenedor) -->
+                    <div>
+                        <div class="pos-scanner" style="position:relative;">
+                            <div style="display:flex; gap:16px; width:100%;">
+                                <i class="ph ph-barcode" style="font-size:32px; color:var(--accent); align-self:center;"></i>
+                                <div style="flex:1; position:relative;">
+                                    <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
+                                    <div id="posSearchResults" class="pos-search-dropdown"></div>
+                                </div>
+                                <button type="button" class="chip-btn" id="btnStartCameraScan" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
+                                    <i class="ph ph-barcode" style="font-size:20px;"></i>
+                                    <span style="font-weight:700;">Escanear</span>
+                                </button>
+                            </div>
+                        </div>
 
-            <div class="pos-cart panel" style="padding:0;">
-                <table style="width:100%; margin:0;">
-                    <thead><tr><th style="padding:16px 24px;" data-i18n="th_producto">Producto</th><th style="text-align:center;" data-i18n="th_cant">Cant.</th><th style="text-align:right;" data-i18n="th_precio">Precio</th><th style="text-align:right; padding-right:24px;" data-i18n="th_subtotal">Subtotal</th></tr></thead>
-                    <tbody id="cartBody"><tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--ink-faint); font-weight:600;" data-i18n="carrito_vacio">El carrito está vacío. Escanea un producto.</td></tr></tbody>
-                </table>
-            </div>
-        </div>
+                        <div class="pos-cart panel" style="padding:0;">
+                            <table style="width:100%; margin:0;">
+                                <thead>
+                                    <tr>
+                                        <th style="padding:16px 24px;" data-i18n="th_producto">Producto</th>
+                                        <th style="text-align:center;" data-i18n="th_cant">Cant.</th>
+                                        <th style="text-align:right;" data-i18n="th_precio">Precio</th>
+                                        <th style="text-align:right; padding-right:24px;" data-i18n="th_subtotal">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cartBody">
+                                    <tr>
+                                        <td colspan="4" style="text-align:center; padding: 40px; color:var(--ink-faint); font-weight:600;" data-i18n="carrito_vacio">El carrito está vacío. Escanea un producto.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
 
-        <!-- COLUMNA DERECHA (Resumen de venta) -->
-        <div class="pos-summary">
-            <h2 data-i18n="resumen_venta" style="font-family:var(--font-display); font-size:24px;">Resumen de Venta</h2>
-            <select class="pay-select" id="posMetodo"><option value="" data-i18n="cargando_metodos">Cargando métodos de pago...</option></select>
-            <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="fondo_inicial_label">Fondo inicial:</span><span id="posFondoInicial">$0.00</span></div>
-            <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="efectivo_esperado_label">Efectivo esperado:</span><span id="posEfectivoEsperado">$0.00</span></div>
-            <button class="chip-btn" id="btnRetiroManual" style="align-self:flex-start; background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.3); color:#fff;" type="button"><span data-i18n="btn_registrar_retiro">+ Registrar retiro</span></button>
-            <div style="flex:1;"></div>
-            <div class="summary-row"><span data-i18n="subtotal_label">Subtotal:</span><span id="posSubtotal">$0.00</span></div>
-            <div class="summary-row"><span data-i18n="iva_label">IVA (16%):</span><span id="posIva">$0.00</span></div>
-            <hr style="border:1px solid rgba(255,255,255,0.2)">
-            <div style="font-size:18px; font-weight:600; opacity:0.9;" data-i18n="total_pagar">Total a Pagar</div>
-            <div class="summary-total" id="posTotal">$0.00</div>
-            <button class="pay-btn" id="btnCobrar"><i class="ph-fill ph-credit-card"></i> <span data-i18n="btn_procesar_cobro">PROCESAR COBRO</span></button>
-        </div>
-    </div>
-</section>
+                    <!-- COLUMNA DERECHA (Resumen de venta) -->
+                    <div class="pos-summary">
+                        <h2 data-i18n="resumen_venta" style="font-family:var(--font-display); font-size:24px;">Resumen de Venta</h2>
+                        <select class="pay-select" id="posMetodo"><option value="" data-i18n="cargando_metodos">Cargando métodos de pago...</option></select>
+                        <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="fondo_inicial_label">Fondo inicial:</span><span id="posFondoInicial">$0.00</span></div>
+                        <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="efectivo_esperado_label">Efectivo esperado:</span><span id="posEfectivoEsperado">$0.00</span></div>
+                        <button class="chip-btn" id="btnRetiroManual" style="align-self:flex-start; background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.3); color:#fff;" type="button"><span data-i18n="btn_registrar_retiro">+ Registrar retiro</span></button>
+                        <div style="flex:1;"></div>
+                        <div class="summary-row"><span data-i18n="subtotal_label">Subtotal:</span><span id="posSubtotal">$0.00</span></div>
+                        <div class="summary-row"><span data-i18n="iva_label">IVA (16%):</span><span id="posIva">$0.00</span></div>
+                        <hr style="border:1px solid rgba(255,255,255,0.2)">
+                        <div style="font-size:18px; font-weight:600; opacity:0.9;" data-i18n="total_pagar">Total a Pagar</div>
+                        <div class="summary-total" id="posTotal">$0.00</div>
+                        <button class="pay-btn" id="btnCobrar"><i class="ph-fill ph-credit-card"></i> <span data-i18n="btn_procesar_cobro">PROCESAR COBRO</span></button>
+                    </div>
+                </div>
+
+                <!-- BLOQUE CAJERO: VALIDACIÓN Y ENTREGA DE APARTADOS PENDIENTES DE ENTREGA -->
+                <div class="panel" style="margin-top: 20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+                        <div>
+                            <h3 style="margin:0; font-size:17px; color:var(--ink); display:flex; align-items:center; gap:8px;">
+                                <i class="ph-fill ph-shopping-bag" style="color:var(--accent);"></i> Apartados pendientes de entrega (Sucursal)
+                            </h3>
+                            <small style="color:var(--ink-faint);">Busca por folio, ticket, nombre del cliente, teléfono o código de producto</small>
+                        </div>
+                        <div style="display:flex; gap:8px; flex:1; max-width:480px;">
+                            <input type="text" id="inputFolioCaja" class="search-input" style="min-width:0;"
+                                   placeholder="Folio, ticket, cliente o código..."
+                                   onkeydown="if(event.key==='Enter') buscarFolioEnCaja()">
+                            <button type="button" class="btn-primary" onclick="buscarFolioEnCaja()">Buscar</button>
+                        </div>
+                    </div>
+                    <div id="resultadoFolioCaja" style="display:none; background:var(--bg-panel); border:1.5px solid var(--border-soft); border-radius:14px; padding:16px;"></div>
+                </div>
+
+                <script>
+                function formatearFechaLegible(fechaStr) {
+                    if (!fechaStr) return 'N/A';
+                    const normalized = String(fechaStr).replace(' ', 'T');
+                    const dt = new Date(normalized);
+                    if (isNaN(dt.getTime())) return fechaStr;
+                    return dt.toLocaleString('es-MX', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                }
+
+                async function buscarFolioEnCaja() {
+                    const q = document.getElementById('inputFolioCaja').value.trim();
+                    const box = document.getElementById('resultadoFolioCaja');
+                    if (!q) return;
+
+                    box.style.display = 'block';
+                    box.innerHTML = '<p style="margin:0; color:var(--ink-soft);">Consultando apartados de la sucursal...</p>';
+
+                    try {
+                        const json = await request(`ac_buscar_folio_pdv&q=${encodeURIComponent(q)}`);
+                        const lista = json.lista || [json.data];
+
+                        box.innerHTML = lista.map(d => {
+                            const activo = (d.estado === 'PENDIENTE_RECOGER' || d.estado === 'PENDIENTE');
+                            const totalAp = parseFloat(d.total_apartado || d.total || 0);
+                            const badgeColor = activo ? '#d97706' : (d.estado === 'ENTREGADO' ? '#059669' : '#dc2626');
+                            const fechaLimiteFmt = formatearFechaLegible(d.fecha_limite);
+
+                            return `
+                                <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-soft);">
+                                    <div>
+                                        <span style="background:${badgeColor}; color:#fff; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:800;">${escapeHtml(d.estado)}</span>
+                                        <strong style="margin-left:8px;">${escapeHtml(d.folio)}</strong>
+                                        <h4 style="margin:6px 0 2px; font-size:15px;">${escapeHtml(d.producto_nombre)} (${d.cantidad} pza) · Cód: ${escapeHtml(d.producto_codigo)}</h4>
+                                        <p style="margin:0; font-size:13px; color:var(--ink-soft);">
+                                            Cliente: <strong>${escapeHtml(d.cliente_nombre)}</strong> ${d.telefono ? '· Tel: ' + escapeHtml(d.telefono) : ''} · Límite: <strong>${escapeHtml(fechaLimiteFmt)}</strong>
+                                        </p>
+                                        <p style="margin:6px 0 0; font-size:14px;">
+                                            Total: <strong style="color:var(--accent); font-size:15px;">${money(totalAp)}</strong>
+                                        </p>
+                                    </div>
+                                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                        ${activo ? `
+                                            <select id="metodoPagoApartado_${d.id_apartado}" class="select-input" style="min-width:130px; padding:9px 14px;">
+                                                <option value="1">Efectivo</option>
+                                                <option value="2">Tarjeta</option>
+                                                <option value="3">Transferencia</option>
+                                            </select>
+                                            <button type="button" class="btn-primary" style="background:var(--success); color:#fff;" onclick="confirmarEntregaApartadoCaja(${d.id_apartado}, ${totalAp})">
+                                                Confirmar Entrega
+                                            </button>
+                                        ` : ''}
+                                        <a href="../../componentes/comprobante_ticket.php?tipo=apartado&folio=${encodeURIComponent(d.folio)}" target="_blank" class="chip-btn">
+                                            Ver Ticket
+                                        </a>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                    } catch (err) {
+                        box.innerHTML = `<p style="margin:0; color:var(--danger); font-weight:700;">${escapeHtml(err.message)}</p>`;
+                    }
+                }
+
+                async function confirmarEntregaApartadoCaja(idApartado, totalApartado) {
+                    const metodoEl = document.getElementById(`metodoPagoApartado_${idApartado}`);
+                    const idMetodo = metodoEl ? metodoEl.value : '1';
+                    const metodoTexto = metodoEl ? (metodoEl.options[metodoEl.selectedIndex]?.text || 'Efectivo') : 'Efectivo';
+
+                    const conf = await Swal.fire({
+                        title: 'Confirmar Entrega de Apartado',
+                        html: `Total a registrar en caja: <b style="color:var(--accent); font-size:18px;">${money(totalApartado)}</b><br><small>Método de pago: <b>${escapeHtml(metodoTexto)}</b></small>`,
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: 'var(--success)',
+                        confirmButtonText: 'Confirmar y Registrar en Caja',
+                        cancelButtonText: 'Cancelar'
+                    });
+                    if (!conf.isConfirmed) return;
+
+                    const fd = new FormData();
+                    fd.append('id_apartado', idApartado);
+                    fd.append('id_metodo_pago', idMetodo);
+                    fd.append('cobrar_en_caja', '1');
+                    if (typeof currentTurnoId !== 'undefined' && currentTurnoId) {
+                        fd.append('id_turno', currentTurnoId);
+                    }
+
+                   try {
+                        const json = await request('ac_entregar_apartado', { method: 'POST', body: fd });
+                        notify(json.msg);
+                        buscarFolioEnCaja();
+                        if (typeof refrescarEsperado === 'function') await refrescarEsperado();
+                        if (typeof loadDashboard === 'function') loadDashboard();
+                        if (json.ticket && typeof window.mostrarComprobantePETKO === 'function') {
+                            window.mostrarComprobantePETKO('apartado', json.ticket);
+                        }
+                    } catch (e) {
+                        notify(e.message, 'error');
+                    }
+                }
+                </script>
+            </section>
 
         </div>
     </main>
@@ -2428,17 +2450,17 @@ const body = document.body;
 // -------- SIDEBAR: colapsar / móvil --------
 const appLayout = $('#appLayout');
 function syncTooltips() {
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                const lbl = btn.querySelector('.nav-label');
-                if (lbl) btn.setAttribute('data-tooltip', lbl.textContent.trim());
-            });
-        }
-        syncTooltips();
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        const lbl = btn.querySelector('.nav-label');
+        if (lbl) btn.setAttribute('data-tooltip', lbl.textContent.trim());
+    });
+}
+syncTooltips();
 
-        $('#btnCollapse').addEventListener('click', () => {
-            appLayout.classList.toggle('is-collapsed');
-            syncTooltips();
-        });
+$('#btnCollapse').addEventListener('click', () => {
+    appLayout.classList.toggle('is-collapsed');
+    syncTooltips();
+});
 $('#btnMobileMenu').addEventListener('click', () => appLayout.classList.add('mobile-open'));
 $('#sidebarScrim').addEventListener('click', () => appLayout.classList.remove('mobile-open'));
 $('#btnSolicitarCambioPassQuick')?.addEventListener('click', () => abrirConfiguracionRapida());
@@ -2522,9 +2544,9 @@ function applyLanguage() {
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
     document.querySelectorAll('.nav-btn').forEach(btn => {
-    const lbl = btn.querySelector('.nav-label');
-    if (lbl) btn.setAttribute('data-tooltip', lbl.textContent.trim());
-});
+        const lbl = btn.querySelector('.nav-label');
+        if (lbl) btn.setAttribute('data-tooltip', lbl.textContent.trim());
+    });
 }
 if (window.PetkoPrefs) {
     PetkoPrefs.onLang(function(l) {
@@ -2551,6 +2573,9 @@ function switchView(targetId) {
     if (targetId === 'view-cajas') loadCajas();
     if (targetId === 'view-ventas') loadVentas();
     if (targetId === 'view-cortes') loadCortes();
+    if (targetId === 'view-apartados-consultas' && typeof window.initModuloApartadosConsultas === 'function') {
+        window.initModuloApartadosConsultas();
+    }
 }
 navButtons.forEach(btn => btn.addEventListener('click', e => switchView(e.currentTarget.dataset.target)));
 
@@ -2695,7 +2720,6 @@ $('#invSearch').addEventListener('input', () => { clearTimeout(window.invTimer);
 $('#invCategory').addEventListener('change', loadInventario);
 $('#invStock').addEventListener('change', loadInventario);
 
-// Ajustar stock desde botón directo de la tarjeta/tabla
 document.addEventListener('click', e => {
     const btnAjustar = e.target.closest('[data-ajustar-stock]');
     if (btnAjustar) {
@@ -3264,7 +3288,7 @@ function addProductToCart(data) {
             nombre: data.nombre, 
             precio: parseFloat(data.precio), 
             qty: 1, 
-            maxStock: maxStock // Guardamos el stock máximo permitido
+            maxStock: maxStock
         }); 
     }
     updateCartUI();
@@ -3337,7 +3361,6 @@ function updateCartUI() {
     $('#posSubtotal').innerText = money(subtotal); $('#posIva').innerText = money(iva); $('#posTotal').innerText = money(total);
 }
 
-// Eventos para detectar los clics en los botones de [+] y [-] del carrito
 $('#cartBody').addEventListener('click', e => {
     const btn = e.target.closest('.qty-btn');
     if (!btn) return;
@@ -3354,12 +3377,11 @@ $('#cartBody').addEventListener('click', e => {
         }
     } else if (btn.dataset.action === 'minus') {
         item.qty--;
-        if (item.qty <= 0) cart = cart.filter(i => i.id_producto !== id); // Si llega a 0, se elimina
+        if (item.qty <= 0) cart = cart.filter(i => i.id_producto !== id);
     }
     updateCartUI();
 });
 
-// Evento para cuando el usuario escribe manualmente un número en el input
 $('#cartBody').addEventListener('change', e => {
     if (!e.target.classList.contains('qty-input')) return;
     
@@ -3368,14 +3390,13 @@ $('#cartBody').addEventListener('change', e => {
     const item = cart.find(i => i.id_producto === id);
     if (!item) return;
 
-    // VALIDACIÓN: Si el usuario teclea más de lo que hay en stock
     if (newQty > item.maxStock) {
         notify(`Stock excedido. Se ajustó al máximo disponible (${item.maxStock}).`, 'warning');
         newQty = item.maxStock;
     }
 
     if (newQty <= 0) {
-        cart = cart.filter(i => i.id_producto !== id); // Si pone 0 o menos, se elimina
+        cart = cart.filter(i => i.id_producto !== id);
     } else {
         item.qty = newQty;
     }
@@ -3595,7 +3616,7 @@ loadFiltrosInv();
 
 // -------- ESCÁNER DE CÓDIGO DE BARRAS Y QR (SOPORTE COMPLETO) --------
 let html5QrCode = null;
-let procesandoEscaneo = false; // Evita que lea el código múltiples veces seguidas
+let procesandoEscaneo = false;
 
 document.addEventListener('DOMContentLoaded', () => {
     const btnCamara = document.getElementById('btnStartCameraScan');
@@ -3605,7 +3626,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function abrirEscanerCamara() {
-    procesandoEscaneo = false; // Reiniciamos la bandera
+    procesandoEscaneo = false;
     Swal.fire({
         title: 'Escanear Código de Barras o QR',
         html: `
@@ -3636,7 +3657,6 @@ function iniciarCamaraModal() {
         qrbox: { width: 250, height: 140 },
         aspectRatio: 1.0,
         disableFlip: false,
-        // Habilitación explícita de todos los formatos de códigos 1D y 2D
         formatsToSupport: [
             Html5QrcodeSupportedFormats.EAN_13,
             Html5QrcodeSupportedFormats.EAN_8,
@@ -3659,11 +3679,9 @@ function iniciarCamaraModal() {
         { facingMode: "environment" },
         config,
         async (decodedText) => {
-            // Si ya se está procesando un código, ignorar lecturas consecutivas
             if (procesandoEscaneo) return;
             procesandoEscaneo = true;
 
-            // 1. Apagar la cámara de forma segura
             if (html5QrCode && html5QrCode.isScanning) {
                 try {
                     await html5QrCode.stop();
@@ -3674,14 +3692,11 @@ function iniciarCamaraModal() {
                 }
             }
 
-            // 2. Cerrar la ventana modal
             Swal.close();
 
-            // 3. Colocar el texto leído en el campo de entrada
             const posBarcode = document.getElementById('posBarcode');
             if (posBarcode) posBarcode.value = decodedText;
 
-            // 4. Buscar el producto en la base de datos y agregarlo
             try {
                 const { data } = await request(`buscar_producto_pos&codigo=${encodeURIComponent(decodedText)}`);
                 if (data) {
@@ -3692,9 +3707,7 @@ function iniciarCamaraModal() {
                 notify(err.message, 'error');
             }
         },
-        (errorMessage) => {
-            // Ignorar fotogramas sin detección
-        }
+        (errorMessage) => {}
     ).catch((err) => {
         console.error("Error al iniciar cámara:", err);
         Swal.showValidationMessage("No se pudo acceder a la cámara. Revisa los permisos.");

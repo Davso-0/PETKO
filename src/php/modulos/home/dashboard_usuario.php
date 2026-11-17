@@ -85,7 +85,8 @@ if (isset($_GET['action'])) {
             throw new RuntimeException('[ERROR] No fue posible conectar con la base de datos.');
         }
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
+        require_once __DIR__ . '/../../componentes/apartados_consultas_api.php';
+        petkoSincronizarVencimientos($pdo);
         // 1. Delegar primero al componente compartido de Mi Cuenta (apartados, contraseña, etc.)
         $miCuenta = petkoMiCuentaApi($pdo, $id_usuario_actual, (string)($usuario_data['rol'] ?? ''));
         if ($miCuenta['handled'] ?? false) {

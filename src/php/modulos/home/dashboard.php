@@ -13,7 +13,7 @@ if (file_exists(__DIR__ . '/../../config/conexion_BD.php')) {
 }
 
 require_once __DIR__ . '/../../componentes/mi_cuenta_api.php';
-
+require_once __DIR__ . '/../../componentes/apartados_consultas_api.php';
 if (isset($_GET['action'])) {
     verificarCsrf();
 }
@@ -82,6 +82,14 @@ if (isset($_GET['action'])) {
             echo json_encode($out, JSON_UNESCAPED_UNICODE);
             exit;
         }
+        $acApi = petkoApartadosConsultasApi($pdo, $id_usuario_actual, (string)($admin['rol'] ?? ''));
+if ($acApi['handled'] ?? false) {
+    $out = $acApi['response'];
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($out, JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
         if ($action === 'get_metrics') {
             $ts = (int)$pdo->query("SELECT COUNT(*) FROM sucursales")->fetchColumn();
@@ -769,6 +777,10 @@ main { min-width: 0; width: 100%; overflow-x: hidden; }
             <button class="nav-btn" data-target="view-personal"><i class="ph ph-users-three"></i><span class="nav-label" data-i18n="nav_personal">Personal</span></button>
             <button class="nav-btn" data-target="view-gestion-productos"><i class="ph ph-package"></i><span class="nav-label" data-i18n="nav_gestion_productos">Gestión de Productos</span></button>
             <button class="nav-btn" data-target="view-ventas"><i class="ph ph-chart-line-up"></i><span class="nav-label" data-i18n="nav_ventas">Ventas</span></button>
+            <button class="nav-btn" data-target="view-apartados-consultas">
+    <i class="ph ph-clipboard-text"></i>
+    <span class="nav-label">Apartados y Consultas</span>
+</button>
             <div class="nav-section-title" data-i18n="nav_section_cuenta">Mi Cuenta</div>
             <button class="nav-btn" data-target="view-mi-cuenta"><i class="ph ph-user-circle"></i><span class="nav-label" data-i18n="nav_mis_apartados">Mis Apartados</span></button>
             <button class="nav-btn" data-target="view-mi-cuenta-config"><i class="ph ph-gear"></i><span class="nav-label" data-i18n="nav_configuracion">Configuración</span></button>  
@@ -829,6 +841,7 @@ main { min-width: 0; width: 100%; overflow-x: hidden; }
             </section>
 
             <?php require_once __DIR__ . '/../../componentes/mi_cuenta_vistas.php'; ?>
+            <?php require_once __DIR__ . '/../../componentes/gestion_apartados_consultas_vista.php'; ?>
 
             <!-- SUCURSALES -->
             <section id="view-sucursales" class="view-section">
@@ -1076,6 +1089,9 @@ const titleKeys = {
     if (targetId === 'view-personal') loadPersonal();
     if (targetId === 'view-gestion-productos') loadGestionProductos();
     if (targetId === 'view-ventas') loadVentas();
+    if (targetId === 'view-apartados-consultas' && typeof window.initModuloApartadosConsultas === 'function') {
+    window.initModuloApartadosConsultas();
+}
 }
 navButtons.forEach(btn => btn.addEventListener('click', e => switchView(e.currentTarget.dataset.target)));
 document.addEventListener('click', e => { const g = e.target.closest('[data-goto]'); if (g) switchView(g.dataset.goto); });

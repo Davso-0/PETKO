@@ -125,7 +125,7 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
     dialog.mc-ticket-dialog::backdrop {
         background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px);
     }
-    .tk-box { position: relative; padding: 28px 24px 24px; }
+    .tk-box { position: relative; padding: 28px 24px 24px; background: var(--bg-surface); }
     .tk-close {
         position: absolute; top: 14px; right: 14px; width: 34px; height: 34px;
         border-radius: 50%; background: var(--bg-app); border: 1px solid var(--border-soft);
@@ -210,6 +210,20 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
     }
     body.dark-mode .tk-mascot { color: #93c5fd; }
     .tk-mascot img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #fff; }
+    .tk-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .tk-download-btn {
+        width: 100%; padding: 12px; border-radius: 999px;
+        background: rgba(22, 163, 74, 0.12); color: #15803d;
+        border: 1.5px solid rgba(22, 163, 74, 0.28);
+        font-weight: 700; font-size: 14px; display: inline-flex; align-items: center;
+        justify-content: center; gap: 8px; transition: .18s ease;
+    }
+    .tk-download-btn:hover { background: rgba(22, 163, 74, 0.2); transform: translateY(-1px); }
+    body.dark-mode .tk-download-btn { background: rgba(34, 197, 94, 0.15); color: #86efac; border-color: rgba(34, 197, 94, 0.3); }
     .tk-done-btn {
         width: 100%; padding: 13px; border-radius: 999px; background: #2563eb; color: #fff;
         font-weight: 700; font-size: 14.5px; display: inline-flex; align-items: center;
@@ -281,7 +295,7 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
 <!-- MODAL TICKET DE APARTADO -->
 <dialog id="mcModalTicket" class="mc-ticket-dialog" aria-labelledby="mc-tk-title">
     <div class="tk-box" id="mc-tk-box" data-pagado="0">
-        <button type="button" class="tk-close" id="mcTkClose" aria-label="Cerrar">
+        <button type="button" class="tk-close" id="mcTkClose" data-html2canvas-ignore="true" aria-label="Cerrar">
             <i class="ph-bold ph-x"></i>
         </button>
 
@@ -330,10 +344,16 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
             <p id="mc-tk-thanks" data-mc-i18n="tk_thanks">¡Guau! Gracias por tu pedido 🐾</p>
         </div>
 
-        <button type="button" class="tk-done-btn" id="mcTkDone">
-            <i class="ph-fill ph-paw-print"></i>
-            <span id="mc-tk-btn-lbl" data-mc-i18n="tk_close">Cerrar ticket</span>
-        </button>
+        <div class="tk-actions" data-html2canvas-ignore="true">
+            <button type="button" class="tk-download-btn" id="mcTkDownload">
+                <i class="ph-bold ph-download-simple"></i>
+                <span data-mc-i18n="tk_download">Descargar ticket (PDF)</span>
+            </button>
+            <button type="button" class="tk-done-btn" id="mcTkDone">
+                <i class="ph-fill ph-paw-print"></i>
+                <span id="mc-tk-btn-lbl" data-mc-i18n="tk_close">Cerrar ticket</span>
+            </button>
+        </div>
     </div>
 </dialog>
 
@@ -382,6 +402,8 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
             tk_estado: 'ESTADO',
             tk_total: 'TOTAL',
             tk_thanks: '¡Guau! Gracias por tu pedido 🐾',
+            tk_download: 'Descargar ticket (PDF)',
+            tk_downloading: 'Generando PDF...',
             tk_close: 'Cerrar ticket',
             tk_title_paid: '¡Compra y apartado confirmados!',
             tk_title_res: '¡Apartado confirmado por 48 h!',
@@ -428,6 +450,8 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
             tk_estado: 'STATUS',
             tk_total: 'TOTAL',
             tk_thanks: 'Woof! Thank you for your order 🐾',
+            tk_download: 'Download ticket (PDF)',
+            tk_downloading: 'Generating PDF...',
             tk_close: 'Close ticket',
             tk_title_paid: 'Purchase and reservation confirmed!',
             tk_title_res: 'Reservation confirmed for 48 hrs!',
@@ -452,6 +476,24 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
     function applyMcLang() {
         document.querySelectorAll('[data-mc-i18n]').forEach(el => {
             el.textContent = mct(el.dataset.mcI18n);
+        });
+    }
+
+    function ensureHtml2Pdf() {
+        if (typeof window.html2pdf === 'function') return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const existing = document.querySelector('script[data-petko-html2pdf]');
+            if (existing) {
+                existing.addEventListener('load', () => resolve());
+                existing.addEventListener('error', () => reject(new Error('No se pudo cargar html2pdf')));
+                return;
+            }
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+            s.dataset.petkoHtml2pdf = '1';
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error('No se pudo cargar el generador de PDF'));
+            document.head.appendChild(s);
         });
     }
 
@@ -570,6 +612,33 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
     document.getElementById('mcTkClose')?.addEventListener('click', () => dlg.close());
     document.getElementById('mcTkDone')?.addEventListener('click', () => dlg.close());
     dlg?.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+
+    // Descargar Ticket en PDF desde Mi Cuenta
+    document.getElementById('mcTkDownload')?.addEventListener('click', async function () {
+        const btn = this;
+        const origHtml = btn.innerHTML;
+        const box = document.getElementById('mc-tk-box');
+        const folio = (document.getElementById('mc-tk-folio')?.textContent || 'PETKO').trim().replace(/[^a-zA-Z0-9-_]/g, '');
+
+        btn.disabled = true;
+        btn.innerHTML = `<i class="ph ph-spinner"></i> <span>${esc(mct('tk_downloading'))}</span>`;
+
+        try {
+            await ensureHtml2Pdf();
+            await window.html2pdf().set({
+                margin: 8,
+                filename: `Ticket_${folio || 'PETKO'}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(box).save();
+        } catch (err) {
+            window.print();
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    });
 
     document.addEventListener('click', e => {
         const btn = e.target.closest('[data-mc-ticket]');
