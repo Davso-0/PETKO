@@ -236,9 +236,7 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
             <p class="subtitle" data-mc-i18n="ap_sub">Consulta los productos reservados por 48 horas, su estado de pago y sucursal de recolección.</p>
         </div>
     </div>
-    <div id="mcApartadosList" class="mc-compras-lista">
-        <div id="listaApartados"></div>
-    </div>
+    <div id="mcApartadosList" class="mc-compras-lista"></div>
 </section>
 
 <!-- VISTA: CONFIGURACIÓN DE CUENTA -->

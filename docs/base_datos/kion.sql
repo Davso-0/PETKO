@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS `ventas` (
 CREATE TABLE IF NOT EXISTS `detalle_ventas` (
   `id_detalle` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   `id_venta` bigint(20) UNSIGNED NOT NULL,
-  `id_producto` int(10) UNSIGNED NOT NULL,
+  `id_producto` int(10) UNSIGNED DEFAULT NULL,
   `cantidad` int(10) UNSIGNED NOT NULL,
   `precio_unitario` decimal(10,2) NOT NULL,
   `subtotal` decimal(10,2) NOT NULL,
@@ -207,6 +207,8 @@ CREATE TABLE IF NOT EXISTS `detalle_ventas` (
   CONSTRAINT `detalle_ventas_ibfk_1` FOREIGN KEY (`id_venta`) REFERENCES `ventas` (`id_venta`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `detalle_ventas_ibfk_2` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`) ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `detalle_ventas` MODIFY `id_producto` int(10) UNSIGNED DEFAULT NULL;
 
 -- ---------------------------------------------------------------------
 -- Por si alguna tabla ya existía de una importación anterior incompleta:

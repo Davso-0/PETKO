@@ -3,9 +3,6 @@ declare(strict_types=1);
 
 ob_start();
 require_once __DIR__ . '/../../config/auth_guard.php';
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
 header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");

@@ -224,7 +224,7 @@ if (isset($_GET['action'])) {
                     }
                     $out = ['ok' => true, 'msg' => 'Producto registrado exitosamente.'];
                 } else {
-                    if ($imagenUrl === null && !isset($_POST['imagen_url'])) {
+                    if ($imagenUrl === null) {
                         $stAct = $pdo->prepare("SELECT imagen_url FROM productos WHERE id_producto=?");
                         $stAct->execute([$id]);
                         $imagenUrl = $stAct->fetchColumn() ?: null;
@@ -926,8 +926,6 @@ window.abrirConfiguracionRapida = async function () {
 const statusBadge = s => `<span class="badge ${String(s).toUpperCase().includes('INACT') ? 'b-red' : 'b-green'}">${escapeHtml(s)}</span>`;
 const empty = (cols, text=null) => `<tr><td colspan="${cols}" style="text-align:center;color:var(--ink-faint);padding:40px">${text || t('sin_registros')}</td></tr>`;
 
-$('#btnSolicitarCambioPassAdmin')?.addEventListener('click', () => abrirConfiguracionRapida());
-
 // -------- TEMA (compartido con el home: petko_dark) --------
 const body = document.body;
 
@@ -1436,7 +1434,9 @@ async function loadBranchSelects() {
     try {
         const { data } = await request('get_sucursales_simple');
         const options = data.map(x => `<option value="${x.id_sucursal}">${escapeHtml(x.nombre)}</option>`).join('');
-        $('#salesBranch').innerHTML = `<option value="">${t('todas_sucursales')}</option>` + options;
+        const allBranchesOption = `<option value="">${t('todas_sucursales')}</option>`;
+        if ($('#salesBranch')) $('#salesBranch').innerHTML = allBranchesOption + options;
+        if ($('#gpBranch')) $('#gpBranch').innerHTML = allBranchesOption + options;
     } catch (e) {}
 }
 

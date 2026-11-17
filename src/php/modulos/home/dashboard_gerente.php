@@ -28,11 +28,21 @@ if (is_array($_SESSION['usuario'] ?? null)) {
 
 $gerente = null;
 if (isset($pdo) && $pdo instanceof PDO && $id_usuario_actual > 0) {
-    $stG = $pdo->prepare("SELECT u.id_usuario, u.nombre, u.apellido, u.correo, u.id_sucursal, r.nombre AS rol
+    $stG = $pdo->prepare("SELECT u.id_usuario, u.nombre, u.apellido, u.correo, u.estado, u.id_sucursal, r.nombre AS rol
                        FROM usuarios u LEFT JOIN roles r ON r.id_rol = u.id_rol
                        WHERE u.id_usuario = ?");
     $stG->execute([$id_usuario_actual]);
     $gerente = $stG->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+if (strtoupper(trim((string)($gerente['estado'] ?? ''))) === 'INACTIVO') {
+    session_unset();
+    session_destroy();
+    if (isset($_GET['action'])) {
+        responderJsonError('[ACCESO DENEGADO] Tu cuenta está inactiva. Inicia sesión nuevamente.', 403);
+    }
+    header('Location: ../../../../inicioSesion.php?error=inactivo');
+    exit;
 }
 
 // Determinar rol: Admin o Gerente
@@ -186,7 +196,7 @@ if (isset($_GET['action'])) {
             if (!$chk->fetchColumn()) throw new Exception('[ERROR DE USUARIO] Este producto no pertenece a tu sucursal.');
 
             $imagenUrl = procesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
-            if ($imagenUrl === null && !isset($_POST['imagen_url'])) {
+            if ($imagenUrl === null) {
                 $stAct = $pdo->prepare("SELECT imagen_url FROM productos WHERE id_producto=?");
                 $stAct->execute([$id]);
                 $imagenUrl = $stAct->fetchColumn() ?: null;
@@ -695,7 +705,7 @@ $fInicio = $stFI->fetchColumn();
 // --------------------------------------------------------------
 if ($id_sucursal <= 0) {
     ob_end_clean();
-    echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>KION · Sin Sucursal</title><style>
+    echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PETKO · Sin Sucursal</title><style>
     body { font-family: "Segoe UI", system-ui, sans-serif; background: #fffaf6; color: #38281f; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 16px; box-sizing: border-box; }
     .card { background: #fff; padding: clamp(24px, 5vw, 40px); border-radius: 18px; border: 1px solid #eeddd1; text-align: center; max-width: 440px; width: 100%; box-shadow: 0 10px 30px rgba(80,50,30,0.08); box-sizing: border-box; }
     h2 { font-size: clamp(20px, 4vw, 22px); color: #1a6fd8; margin-bottom: 12px; }
@@ -2088,8 +2098,10 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
                 transition-duration: 0.01ms !important;
             }
         }
-    .sidebar { overflow: visible !important; }
-.nav-btn { position: relative; }
+    .sidebar,
+    .nav-menu,
+    .app-layout.is-collapsed .nav-btn { overflow: visible !important; }
+.nav-btn { position: relative !important; }
 .app-layout.is-collapsed .nav-btn::after {
     content: attr(data-tooltip);
     position: absolute;
@@ -2103,12 +2115,12 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
     padding: 7px 13px;
     border-radius: 10px;
     white-space: nowrap;
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
     transition: opacity .18s ease, transform .18s ease;
-    z-index: 999;
+    z-index: 9999;
 }
 .app-layout.is-collapsed .nav-btn:hover::after {
     opacity: 1;
@@ -2118,42 +2130,6 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
 
     </style>    
     <link rel="stylesheet" href="../../../css/petko-ui.css?v=<?= (int) @filemtime(__DIR__ . '/../../../css/petko-ui.css') ?>">
-    <style>
-        /* Corrección Tooltip Sidebar Colapsado - Gerente */
-        .sidebar,
-        .nav-menu,
-        .app-layout.is-collapsed .nav-btn {
-            overflow: visible !important;
-        }
-        .nav-btn {
-            position: relative !important;
-        }
-        .app-layout.is-collapsed .nav-btn::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            left: calc(100% + 14px);
-            top: 50%;
-            transform: translateY(-50%) translateX(-6px);
-            background: var(--ink);
-            color: var(--bg-surface);
-            font-size: 12.5px;
-            font-weight: 700;
-            padding: 7px 13px;
-            border-radius: 10px;
-            white-space: nowrap;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-            transition: opacity .18s ease, transform .18s ease;
-            z-index: 9999;
-        }
-        .app-layout.is-collapsed .nav-btn:hover::after {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(-50%) translateX(0);
-        }
-    </style>
 </head>
 <body>
 <script src="../../../js/petko-prefs.js"></script>
@@ -2378,7 +2354,7 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
 const endpoint = 'dashboard_gerente.php';
 const $ = s => document.querySelector(s);
 const escapeHtml = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-const money = v => '$' + Number(v || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const money = n => Number(n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
 
 const notify = (msg, icon='success') => Swal.fire({ toast:true, position:'top-end', icon, title: msg, showConfirmButton:false, timer:2500, background: 'var(--bg-surface)', color: 'var(--ink)' });
 const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
@@ -2616,11 +2592,11 @@ async function loadDashboard() {
 }
 
 // -------- INVENTARIO (Visual y Técnico) --------
-let currentInventarioView = localStorage.getItem('kion-gerente-inv-view') || 'visual';
+let currentInventarioView = localStorage.getItem('petko-gerente-inv-view') || 'visual';
 
 function setInventarioView(view) {
     currentInventarioView = view;
-    localStorage.setItem('kion-gerente-inv-view', view);
+    localStorage.setItem('petko-gerente-inv-view', view);
     if (view === 'visual') {
         $('#invVisualView').style.display = 'grid';
         $('#invTechView').style.display = 'none';
@@ -3034,13 +3010,13 @@ let retiroPromptOpen = false, turnoTimerHandle = null;
 const OCHO_HORAS_MS = 8 * 60 * 60 * 1000;
 
 function guardarTurnoLocal() {
-    localStorage.setItem('kion-gerente-turno', JSON.stringify({
+    localStorage.setItem('petko-gerente-turno', JSON.stringify({
         id_turno: currentTurnoId, id_caja: currentCajaId, id_cajero: currentCajeroId,
         dinero_inicial: dineroInicial, turno_inicio_ts: turnoInicioTs, horas_extra: horasExtraAutorizadas,
         nombre_caja: $('#lblCajaActual').innerText, nombre_cajero: $('#lblCajeroActual').innerText
     }));
 }
-function limpiarTurnoLocal() { localStorage.removeItem('kion-gerente-turno'); }
+function limpiarTurnoLocal() { localStorage.removeItem('petko-gerente-turno'); }
 
 function activarModoCaja(datosLogin) {
     currentCajaId = datosLogin.id_caja; currentCajeroId = datosLogin.id_cajero; currentTurnoId = datosLogin.id_turno;
@@ -3592,7 +3568,7 @@ $('#btnCobrar').addEventListener('click', async () => {
 
 // Reanudar un turno abierto si la página se recarga mientras el cajero trabaja
 (async function resumirTurnoSiExiste() {
-    const raw = localStorage.getItem('kion-gerente-turno');
+    const raw = localStorage.getItem('petko-gerente-turno');
     if (!raw) return;
     let saved;
     try { saved = JSON.parse(raw); } catch (e) { limpiarTurnoLocal(); return; }
