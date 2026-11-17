@@ -80,7 +80,6 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
     }
     .mc-form-input:disabled { opacity: 0.85; cursor: not-allowed; }
 
-    /* Caja de restablecimiento idéntica a la imagen */
     .mc-pass-box {
         background: var(--bg-app);
         border: 1.5px solid var(--border-soft);
@@ -113,13 +112,8 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
         transform: translateY(-1px);
         box-shadow: 0 8px 22px rgba(47, 128, 237, 0.36);
     }
-    .mc-btn-cambiar-pass:active {
-        transform: scale(.97);
-    }
-    .mc-btn-cambiar-pass:disabled {
-        opacity: 0.7;
-        cursor: wait;
-    }
+    .mc-btn-cambiar-pass:active { transform: scale(.97); }
+    .mc-btn-cambiar-pass:disabled { opacity: 0.7; cursor: wait; }
 
     /* MODAL TICKET DE APARTADO */
     dialog.mc-ticket-dialog {
@@ -238,8 +232,8 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
 <section id="view-mi-cuenta" class="view-section">
     <div class="header-row">
         <div>
-            <h1 class="title"><i class="ph ph-shopping-bag"></i> <span>Mis Productos Apartados</span></h1>
-            <p class="subtitle">Consulta los productos reservados por 48 horas, su estado de pago y sucursal de recolección.</p>
+            <h1 class="title"><i class="ph ph-shopping-bag"></i> <span data-mc-i18n="ap_title">Mis Productos Apartados</span></h1>
+            <p class="subtitle" data-mc-i18n="ap_sub">Consulta los productos reservados por 48 horas, su estado de pago y sucursal de recolección.</p>
         </div>
     </div>
     <div id="mcApartadosList" class="mc-compras-lista">
@@ -251,35 +245,35 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
 <section id="view-mi-cuenta-config" class="view-section">
     <div class="header-row">
         <div>
-            <h1 class="title"><i class="ph ph-gear"></i> <span>Configuración de Cuenta</span></h1>
-            <p class="subtitle">Gestiona tu información personal y contraseña.</p>
+            <h1 class="title"><i class="ph ph-gear"></i> <span data-mc-i18n="cfg_title">Configuración de Cuenta</span></h1>
+            <p class="subtitle" data-mc-i18n="cfg_sub">Gestiona tu información personal y contraseña.</p>
         </div>
     </div>
     <div class="panel" style="display:flex; gap:36px; flex-wrap:wrap;">
         <div style="flex:1; min-width:280px;">
-            <h3 style="margin-bottom:18px; font-size:17px; font-weight:800;">Datos de Contacto</h3>
+            <h3 style="margin-bottom:18px; font-size:17px; font-weight:800;" data-mc-i18n="cfg_contact_title">Datos de Contacto</h3>
             <div class="mc-form-group">
-                <label>Nombre Completo</label>
+                <label data-mc-i18n="cfg_fullname">Nombre Completo</label>
                 <input type="text" class="mc-form-input" value="<?= htmlspecialchars((string)$mcNombre) ?>" disabled>
             </div>
             <div class="mc-form-group">
-                <label>Correo Electrónico</label>
+                <label data-mc-i18n="cfg_email">Correo Electrónico</label>
                 <input type="text" class="mc-form-input" id="mcCorreoInput" value="<?= htmlspecialchars((string)$mcCorreo) ?>" disabled>
             </div>
-            <p style="font-size:12px; color:var(--ink-faint);">* Para cambiar tu correo o nombre, contacta a una sucursal.</p>
+            <p style="font-size:12px; color:var(--ink-faint);" data-mc-i18n="cfg_note">* Para cambiar tu correo o nombre, contacta a una sucursal.</p>
         </div>
 
         <div style="flex:1; min-width:280px;">
-            <h3 style="margin-bottom:18px; font-size:17px; font-weight:800;">Cambiar Contraseña</h3>
+            <h3 style="margin-bottom:18px; font-size:17px; font-weight:800;" data-mc-i18n="cfg_pass_title">Cambiar Contraseña</h3>
             <div class="mc-form-group" style="margin-bottom:0;">
-                <label>Contraseña de la cuenta</label>
+                <label data-mc-i18n="cfg_pass_label">Contraseña de la cuenta</label>
                 <input type="password" class="mc-form-input" value="••••••••••••" disabled>
             </div>
             <div class="mc-pass-box">
-                <p>¿Deseas cambiar o actualizar tu contraseña?</p>
+                <p data-mc-i18n="cfg_pass_q">¿Deseas cambiar o actualizar tu contraseña?</p>
                 <button type="button" id="mcBtnSolicitarCambioPass" class="mc-btn-cambiar-pass">
                     <i class="ph-bold ph-key"></i>
-                    <span>Cambiar Contraseña</span>
+                    <span data-mc-i18n="cfg_pass_btn">Cambiar Contraseña</span>
                 </button>
             </div>
         </div>
@@ -302,19 +296,19 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
 
         <dl class="tk-meta">
             <div>
-                <dt>FOLIO</dt>
+                <dt data-mc-i18n="tk_folio">FOLIO</dt>
                 <dd class="tk-folio" id="mc-tk-folio"></dd>
             </div>
             <div>
-                <dt>FECHA</dt>
+                <dt data-mc-i18n="tk_fecha">FECHA</dt>
                 <dd id="mc-tk-fecha"></dd>
             </div>
             <div>
-                <dt>MÉTODO</dt>
+                <dt data-mc-i18n="tk_metodo">MÉTODO</dt>
                 <dd id="mc-tk-metodo"></dd>
             </div>
             <div>
-                <dt>ESTADO</dt>
+                <dt data-mc-i18n="tk_estado">ESTADO</dt>
                 <dd><span class="tk-status-pill" id="mc-tk-estado"></span></dd>
             </div>
         </dl>
@@ -324,7 +318,7 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
         <ul class="tk-items" id="mc-tk-items"></ul>
 
         <div class="tk-total-row">
-            <span>TOTAL</span>
+            <span data-mc-i18n="tk_total">TOTAL</span>
             <strong id="mc-tk-total">$0.00</strong>
         </div>
 
@@ -335,12 +329,12 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
 
         <div class="tk-mascot">
             <img src="../../../img/perrito_feliz.png" alt="" onerror="this.style.display='none'">
-            <p id="mc-tk-thanks">¡Guau! Gracias por tu pedido 🐾</p>
+            <p id="mc-tk-thanks" data-mc-i18n="tk_thanks">¡Guau! Gracias por tu pedido 🐾</p>
         </div>
 
         <button type="button" class="tk-done-btn" id="mcTkDone">
             <i class="ph-fill ph-paw-print"></i>
-            <span id="mc-tk-btn-lbl">Cerrar ticket</span>
+            <span id="mc-tk-btn-lbl" data-mc-i18n="tk_close">Cerrar ticket</span>
         </button>
     </div>
 </dialog>
@@ -352,6 +346,192 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
     const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
     const fmtMoney = v => '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     let mcCache = [];
+
+    const MC_I18N = {
+        es: {
+            ap_title: 'Mis Productos Apartados',
+            ap_sub: 'Consulta los productos reservados por 48 horas, su estado de pago y sucursal de recolección.',
+            cfg_title: 'Configuración de Cuenta',
+            cfg_sub: 'Gestiona tu información personal y contraseña.',
+            cfg_contact_title: 'Datos de Contacto',
+            cfg_fullname: 'Nombre Completo',
+            cfg_email: 'Correo Electrónico',
+            cfg_note: '* Para cambiar tu correo o nombre, contacta a una sucursal.',
+            cfg_pass_title: 'Cambiar Contraseña',
+            cfg_pass_label: 'Contraseña de la cuenta',
+            cfg_pass_q: '¿Deseas cambiar o actualizar tu contraseña?',
+            cfg_pass_btn: 'Cambiar Contraseña',
+            generating: 'Generando enlace...',
+            empty_msg: 'Aún no tienes productos apartados o comprados.',
+            go_catalog: 'Ir al Catálogo',
+            folio_copied: 'Folio copiado',
+            paid: 'YA PAGADO',
+            awaiting_pay: 'EN ESPERA DE PAGO',
+            reserved_48: 'APARTADO (48H)',
+            delivered: 'ENTREGADO',
+            expired: 'VENCIDO',
+            canceled: 'CANCELADO',
+            unit: 'unidad',
+            units: 'unidades',
+            each: 'c/u',
+            expires_on: 'Vence el',
+            pickup_branch: 'Recoger en sucursal',
+            main_branch: 'Sucursal Principal',
+            view_ticket: 'Ver ticket',
+            tk_folio: 'FOLIO',
+            tk_fecha: 'FECHA',
+            tk_metodo: 'MÉTODO',
+            tk_estado: 'ESTADO',
+            tk_total: 'TOTAL',
+            tk_thanks: '¡Guau! Gracias por tu pedido 🐾',
+            tk_close: 'Cerrar ticket',
+            tk_title_paid: '¡Compra y apartado confirmados!',
+            tk_title_res: '¡Apartado confirmado por 48 h!',
+            tk_sub_paid: 'Pedido pagado y apartado por 48 horas en sucursal',
+            tk_sub_res: 'Producto(s) apartados por 48 horas para pago en sucursal',
+            tk_method_online: 'Pago en línea',
+            tk_method_cash: 'Pago en sucursal (Efectivo)',
+            tk_st_paid: 'PAGADO · APARTADO (48H)',
+            tk_st_pend: 'PENDIENTE DE PAGO (48H)'
+        },
+        en: {
+            ap_title: 'My Reserved Products',
+            ap_sub: 'Check products reserved for 48 hours, their payment status, and pickup branch.',
+            cfg_title: 'Account Settings',
+            cfg_sub: 'Manage your personal information and password.',
+            cfg_contact_title: 'Contact Information',
+            cfg_fullname: 'Full Name',
+            cfg_email: 'Email Address',
+            cfg_note: '* To change your email or name, please contact a branch.',
+            cfg_pass_title: 'Change Password',
+            cfg_pass_label: 'Account password',
+            cfg_pass_q: 'Would you like to change or update your password?',
+            cfg_pass_btn: 'Change Password',
+            generating: 'Generating link...',
+            empty_msg: 'You do not have any reserved or purchased products yet.',
+            go_catalog: 'Go to Catalog',
+            folio_copied: 'ID copied',
+            paid: 'PAID',
+            awaiting_pay: 'AWAITING PAYMENT',
+            reserved_48: 'RESERVED (48H)',
+            delivered: 'DELIVERED',
+            expired: 'EXPIRED',
+            canceled: 'CANCELED',
+            unit: 'unit',
+            units: 'units',
+            each: 'each',
+            expires_on: 'Expires on',
+            pickup_branch: 'Pick up at branch',
+            main_branch: 'Main Branch',
+            view_ticket: 'View ticket',
+            tk_folio: 'FOLIO',
+            tk_fecha: 'DATE',
+            tk_metodo: 'METHOD',
+            tk_estado: 'STATUS',
+            tk_total: 'TOTAL',
+            tk_thanks: 'Woof! Thank you for your order 🐾',
+            tk_close: 'Close ticket',
+            tk_title_paid: 'Purchase and reservation confirmed!',
+            tk_title_res: 'Reservation confirmed for 48 hrs!',
+            tk_sub_paid: 'Order paid and reserved for 48 hours at branch',
+            tk_sub_res: 'Product(s) reserved for 48 hours for payment at branch',
+            tk_method_online: 'Online payment',
+            tk_method_cash: 'In-branch payment (Cash)',
+            tk_st_paid: 'PAID · RESERVED (48H)',
+            tk_st_pend: 'PENDING PAYMENT (48H)'
+        }
+    };
+
+    function getMcLang() {
+        return (window.PetkoPrefs && typeof PetkoPrefs.lang === 'function')
+            ? PetkoPrefs.lang()
+            : (localStorage.getItem('petko_lang') || 'es');
+    }
+    function mct(key) {
+        const l = getMcLang();
+        return (MC_I18N[l] && MC_I18N[l][key]) || MC_I18N.es[key] || key;
+    }
+    function applyMcLang() {
+        document.querySelectorAll('[data-mc-i18n]').forEach(el => {
+            el.textContent = mct(el.dataset.mcI18n);
+        });
+    }
+
+    function renderApartados() {
+        const list = document.getElementById('mcApartadosList');
+        if (!list) return;
+        const locale = getMcLang() === 'en' ? 'en-US' : 'es-MX';
+
+        if (!mcCache.length) {
+            list.innerHTML = `<div class="mc-empty">
+                <i class="ph ph-shopping-bag" style="font-size:44px; opacity:.75;"></i>
+                <p>${esc(mct('empty_msg'))}</p>
+                <a href="../../componentes/catalogo.php" class="mc-btn-ticket" style="width:auto; margin-top:6px;">${esc(mct('go_catalog'))}</a>
+            </div>`;
+            return;
+        }
+
+        list.innerHTML = mcCache.map((x, idx) => {
+            const pagado = x.estado_pago === 'PAGADO';
+            let badgeEstado = 'b-yellow';
+            let estadoIcon = 'ph-hourglass-medium';
+            let estadoTexto = mct('reserved_48');
+            if (x.estado === 'ENTREGADO') { badgeEstado = 'b-green'; estadoIcon = 'ph-package'; estadoTexto = mct('delivered'); }
+            else if (x.estado === 'VENCIDO') { badgeEstado = 'b-red'; estadoIcon = 'ph-warning-circle'; estadoTexto = mct('expired'); }
+            else if (x.estado === 'CANCELADO') { badgeEstado = 'b-red'; estadoIcon = 'ph-warning-circle'; estadoTexto = mct('canceled'); }
+
+            const cant = Number(x.cantidad || 1);
+            const precioUnit = Number(x.precio || 0);
+            const total = precioUnit * cant;
+            const folio = x.folio || ('#' + x.id_apartado);
+            const fechaFmt = x.fecha_reserva
+                ? new Date(x.fecha_reserva.replace(' ', 'T')).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })
+                : '-';
+            const expiraFmt = x.fecha_expiracion
+                ? new Date(x.fecha_expiracion.replace(' ', 'T')).toLocaleString(locale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                : '';
+
+            return `<article class="mc-compra-card">
+                <header class="mc-card-header">
+                    <div class="mc-card-fecha">
+                        <i class="ph ph-calendar-blank" style="font-size:16px;"></i>
+                        <span>${esc(fechaFmt)}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="mc-folio-tag">${esc(folio)}</span>
+                        <button type="button" class="mc-btn-copy" onclick="navigator.clipboard?.writeText('${esc(folio)}'); Swal.fire({toast:true,position:'top-end',icon:'success',title:'${esc(mct('folio_copied'))}',showConfirmButton:false,timer:1800});">
+                            <i class="ph ph-copy"></i>
+                        </button>
+                    </div>
+                </header>
+                <div class="mc-card-body">
+                    <div class="mc-card-thumb"><img src="${esc(x.imagen_resuelta)}" alt="${esc(x.producto)}"></div>
+                    <div class="mc-card-info">
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <span class="badge ${pagado ? 'b-green' : 'b-yellow'}"><i class="ph-bold ${pagado ? 'ph-check-circle' : 'ph-clock'}"></i> ${pagado ? mct('paid') : mct('awaiting_pay')}</span>
+                            <span class="badge ${badgeEstado}"><i class="ph-bold ${estadoIcon}"></i> ${estadoTexto}</span>
+                        </div>
+                        <h3 class="mc-card-titulo">${esc(x.producto)}</h3>
+                        <div class="mc-card-detalles">
+                            <span class="mc-card-total">${fmtMoney(total)}</span>
+                            <span>·</span>
+                            <span>${cant} ${cant === 1 ? mct('unit') : mct('units')} ${cant > 1 ? `(${fmtMoney(precioUnit)} ${mct('each')})` : ''}</span>
+                        </div>
+                        ${expiraFmt ? `<div class="mc-card-vigencia"><i class="ph ph-timer"></i> <span>${esc(mct('expires_on'))} <b>${esc(expiraFmt)}</b></span></div>` : ''}
+                    </div>
+                    <div class="mc-card-side">
+                        <div>
+                            <div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--ink-faint); font-weight:700;">${esc(mct('pickup_branch'))}</div>
+                            <div style="font-size:14px; font-weight:700; margin-top:2px;"><i class="ph-fill ph-storefront"></i> ${esc(x.sucursal || mct('main_branch'))}</div>
+                        </div>
+                        <button type="button" class="mc-btn-ticket" data-mc-ticket="${idx}">
+                            <i class="ph ph-receipt"></i> <span>${esc(mct('view_ticket'))}</span>
+                        </button>
+                    </div>
+                </div>
+            </article>`;
+        }).join('');
+    }
 
     async function mcFetch(action, opts = {}) {
         const method = (opts.method || 'GET').toUpperCase();
@@ -371,74 +551,7 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
         try {
             const { data } = await mcFetch('get_apartados');
             mcCache = data || [];
-            if (!mcCache.length) {
-                list.innerHTML = `<div class="mc-empty">
-                    <i class="ph ph-shopping-bag" style="font-size:44px; opacity:.75;"></i>
-                    <p>Aún no tienes productos apartados o comprados.</p>
-                    <a href="../../componentes/catalogo.php" class="mc-btn-ticket" style="width:auto; margin-top:6px;">Ir al Catálogo</a>
-                </div>`;
-                return;
-            }
-            list.innerHTML = mcCache.map((x, idx) => {
-                const pagado = x.estado_pago === 'PAGADO';
-                let badgeEstado = 'b-yellow';
-                let estadoIcon = 'ph-hourglass-medium';
-                let estadoTexto = 'APARTADO (48H)';
-                if (x.estado === 'ENTREGADO') { badgeEstado = 'b-green'; estadoIcon = 'ph-package'; estadoTexto = 'ENTREGADO'; }
-                else if (x.estado === 'VENCIDO') { badgeEstado = 'b-red'; estadoIcon = 'ph-warning-circle'; estadoTexto = 'VENCIDO'; }
-                else if (x.estado === 'CANCELADO') { badgeEstado = 'b-red'; estadoIcon = 'ph-warning-circle'; estadoTexto = 'CANCELADO'; }
-
-                const cant = Number(x.cantidad || 1);
-                const precioUnit = Number(x.precio || 0);
-                const total = precioUnit * cant;
-                const folio = x.folio || ('#' + x.id_apartado);
-                const fechaFmt = x.fecha_reserva
-                    ? new Date(x.fecha_reserva.replace(' ', 'T')).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
-                    : '-';
-                const expiraFmt = x.fecha_expiracion
-                    ? new Date(x.fecha_expiracion.replace(' ', 'T')).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-                    : '';
-
-                return `<article class="mc-compra-card">
-                    <header class="mc-card-header">
-                        <div class="mc-card-fecha">
-                            <i class="ph ph-calendar-blank" style="font-size:16px;"></i>
-                            <span>${esc(fechaFmt)}</span>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span class="mc-folio-tag">${esc(folio)}</span>
-                            <button type="button" class="mc-btn-copy" onclick="navigator.clipboard?.writeText('${esc(folio)}'); Swal.fire({toast:true,position:'top-end',icon:'success',title:'Folio copiado',showConfirmButton:false,timer:1800});">
-                                <i class="ph ph-copy"></i>
-                            </button>
-                        </div>
-                    </header>
-                    <div class="mc-card-body">
-                        <div class="mc-card-thumb"><img src="${esc(x.imagen_resuelta)}" alt="${esc(x.producto)}"></div>
-                        <div class="mc-card-info">
-                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                                <span class="badge ${pagado ? 'b-green' : 'b-yellow'}"><i class="ph-bold ${pagado ? 'ph-check-circle' : 'ph-clock'}"></i> ${pagado ? 'YA PAGADO' : 'EN ESPERA DE PAGO'}</span>
-                                <span class="badge ${badgeEstado}"><i class="ph-bold ${estadoIcon}"></i> ${estadoTexto}</span>
-                            </div>
-                            <h3 class="mc-card-titulo">${esc(x.producto)}</h3>
-                            <div class="mc-card-detalles">
-                                <span class="mc-card-total">${fmtMoney(total)}</span>
-                                <span>·</span>
-                                <span>${cant} ${cant === 1 ? 'unidad' : 'unidades'} ${cant > 1 ? `(${fmtMoney(precioUnit)} c/u)` : ''}</span>
-                            </div>
-                            ${expiraFmt ? `<div class="mc-card-vigencia"><i class="ph ph-timer"></i> <span>Vence el <b>${esc(expiraFmt)}</b></span></div>` : ''}
-                        </div>
-                        <div class="mc-card-side">
-                            <div>
-                                <div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--ink-faint); font-weight:700;">Recoger en sucursal</div>
-                                <div style="font-size:14px; font-weight:700; margin-top:2px;"><i class="ph-fill ph-storefront"></i> ${esc(x.sucursal || 'Sucursal Principal')}</div>
-                            </div>
-                            <button type="button" class="mc-btn-ticket" data-mc-ticket="${idx}">
-                                <i class="ph ph-receipt"></i> <span>Ver ticket</span>
-                            </button>
-                        </div>
-                    </div>
-                </article>`;
-            }).join('');
+            renderApartados();
         } catch (err) {
             list.innerHTML = `<div class="mc-empty" style="color:var(--danger);"><p>${esc(err.message)}</p></div>`;
         }
@@ -466,23 +579,22 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
         const item = mcCache[Number(btn.dataset.mcTicket)];
         if (!item) return;
 
+        const locale = getMcLang() === 'en' ? 'en-US' : 'es-MX';
         const grupo = item.folio ? mcCache.filter(x => x.folio === item.folio) : [item];
         const esPagado = item.estado_pago === 'PAGADO';
         const estaVencido = item.estado === 'VENCIDO' || item.estado === 'CANCELADO';
         const folioStr = item.folio || ('PTK-' + item.id_apartado);
 
         document.getElementById('mc-tk-box').dataset.pagado = esPagado ? '1' : '0';
-        document.getElementById('mc-tk-title').textContent = esPagado ? '¡Compra y apartado confirmados!' : '¡Apartado confirmado por 48 h!';
-        document.getElementById('mc-tk-sub').textContent = esPagado
-            ? `Pedido pagado y apartado por 48 horas en sucursal ${item.sucursal || ''}.`
-            : `Producto(s) apartados por 48 horas para pago en sucursal ${item.sucursal || ''}.`;
-        document.getElementById('mc-tk-metodo').textContent = esPagado ? 'Pago en línea' : 'Pago en sucursal (Efectivo)';
+        document.getElementById('mc-tk-title').textContent = esPagado ? mct('tk_title_paid') : mct('tk_title_res');
+        document.getElementById('mc-tk-sub').textContent = (esPagado ? mct('tk_sub_paid') : mct('tk_sub_res')) + ` ${item.sucursal || ''}.`;
+        document.getElementById('mc-tk-metodo').textContent = esPagado ? mct('tk_method_online') : mct('tk_method_cash');
         document.getElementById('mc-tk-estado').textContent = estaVencido
-            ? item.estado
-            : (esPagado ? 'PAGADO · APARTADO (48H)' : 'PENDIENTE DE PAGO (48H)');
+            ? (item.estado === 'VENCIDO' ? mct('expired') : mct('canceled'))
+            : (esPagado ? mct('tk_st_paid') : mct('tk_st_pend'));
 
         const fechaFmt = item.fecha_reserva
-            ? new Date(item.fecha_reserva.replace(' ', 'T')).toLocaleString('es-MX', {
+            ? new Date(item.fecha_reserva.replace(' ', 'T')).toLocaleString(locale, {
                 day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
             })
             : '-';
@@ -503,12 +615,12 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
         dlg.showModal();
     });
 
-    // Botón Cambiar Contraseña -> Genera token y redirige a ../../../../recuperar.php?token=...
+    // Botón Cambiar Contraseña
     document.getElementById('mcBtnSolicitarCambioPass')?.addEventListener('click', async function () {
         const btn = this;
         const originalHtml = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<i class="ph ph-spinner"></i> <span>Generando enlace...</span>';
+        btn.innerHTML = `<i class="ph ph-spinner"></i> <span>${esc(mct('generating'))}</span>`;
         try {
             const d = await mcFetch('solicitar_cambio_password', { method: 'POST' });
             if (d.redirect) {
@@ -521,7 +633,6 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
         }
     });
 
-    // Cargar datos al entrar a las pestañas
     document.addEventListener('click', e => {
         const nav = e.target.closest('[data-target="view-mi-cuenta"], [data-goto="view-mi-cuenta"]');
         if (nav) cargarApartadosMiCuenta();
@@ -529,7 +640,16 @@ $mcCsrf   = $_SESSION['csrf_token'] ?? '';
         if (navCfg) cargarPerfilSiVacio();
     });
 
+    if (window.PetkoPrefs && typeof PetkoPrefs.onLang === 'function') {
+        PetkoPrefs.onLang(() => {
+            applyMcLang();
+            renderApartados();
+        });
+    }
+
+    applyMcLang();
     window.addEventListener('DOMContentLoaded', () => {
+        applyMcLang();
         if (document.getElementById('view-mi-cuenta')?.classList.contains('active')) {
             cargarApartadosMiCuenta();
         }

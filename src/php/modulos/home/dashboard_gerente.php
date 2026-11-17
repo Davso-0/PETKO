@@ -2088,8 +2088,72 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
                 transition-duration: 0.01ms !important;
             }
         }
-    </style>
+    .sidebar { overflow: visible !important; }
+.nav-btn { position: relative; }
+.app-layout.is-collapsed .nav-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: calc(100% + 14px);
+    top: 50%;
+    transform: translateY(-50%) translateX(-6px);
+    background: var(--ink);
+    color: var(--bg-surface);
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 7px 13px;
+    border-radius: 10px;
+    white-space: nowrap;
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+    z-index: 999;
+}
+.app-layout.is-collapsed .nav-btn:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%) translateX(0);
+}
+
+    </style>    
     <link rel="stylesheet" href="../../../css/petko-ui.css?v=<?= (int) @filemtime(__DIR__ . '/../../../css/petko-ui.css') ?>">
+    <style>
+        /* Corrección Tooltip Sidebar Colapsado - Gerente */
+        .sidebar,
+        .nav-menu,
+        .app-layout.is-collapsed .nav-btn {
+            overflow: visible !important;
+        }
+        .nav-btn {
+            position: relative !important;
+        }
+        .app-layout.is-collapsed .nav-btn::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: calc(100% + 14px);
+            top: 50%;
+            transform: translateY(-50%) translateX(-6px);
+            background: var(--ink);
+            color: var(--bg-surface);
+            font-size: 12.5px;
+            font-weight: 700;
+            padding: 7px 13px;
+            border-radius: 10px;
+            white-space: nowrap;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity .18s ease, transform .18s ease;
+            z-index: 9999;
+        }
+        .app-layout.is-collapsed .nav-btn:hover::after {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(-50%) translateX(0);
+        }
+    </style>
 </head>
 <body>
 <script src="../../../js/petko-prefs.js"></script>
@@ -2101,9 +2165,9 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
         <nav class="nav-menu">
             <div class="nav-section-title" data-i18n="nav_section_panel">Panel</div>
             <button class="nav-btn active" data-target="view-dash"><i class="ph ph-squares-four"></i><span class="nav-label" data-i18n="nav_dash">Panel Principal</span></button>
-            <div class="nav-section-title">Mi Cuenta</div>
-            <button class="nav-btn" data-target="view-mi-cuenta"><i class="ph ph-user-circle"></i><span class="nav-label">Mis Apartados</span></button>
-            <button class="nav-btn" data-target="view-mi-cuenta-config"><i class="ph ph-gear"></i><span class="nav-label">Configuración</span></button>
+            <div class="nav-section-title" data-i18n="nav_section_cuenta">Mi Cuenta</div>
+            <button class="nav-btn" data-target="view-mi-cuenta"><i class="ph ph-user-circle"></i><span class="nav-label" data-i18n="nav_mis_apartados">Mis Apartados</span></button>
+            <button class="nav-btn" data-target="view-mi-cuenta-config"><i class="ph ph-gear"></i><span class="nav-label" data-i18n="nav_configuracion">Configuración</span></button>
             <div class="nav-section-title" data-i18n="nav_section_gestion">Gestión</div>
             <button class="nav-btn" data-target="view-inventario"><i class="ph ph-package"></i><span class="nav-label" data-i18n="nav_inventario">Inventario</span></button>
             <button class="nav-btn" data-target="view-cajas"><i class="ph ph-desktop"></i><span class="nav-label" data-i18n="nav_cajas">Cajas</span></button>
@@ -2387,7 +2451,18 @@ const body = document.body;
 
 // -------- SIDEBAR: colapsar / móvil --------
 const appLayout = $('#appLayout');
-$('#btnCollapse').addEventListener('click', () => appLayout.classList.toggle('is-collapsed'));
+function syncTooltips() {
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                const lbl = btn.querySelector('.nav-label');
+                if (lbl) btn.setAttribute('data-tooltip', lbl.textContent.trim());
+            });
+        }
+        syncTooltips();
+
+        $('#btnCollapse').addEventListener('click', () => {
+            appLayout.classList.toggle('is-collapsed');
+            syncTooltips();
+        });
 $('#btnMobileMenu').addEventListener('click', () => appLayout.classList.add('mobile-open'));
 $('#sidebarScrim').addEventListener('click', () => appLayout.classList.remove('mobile-open'));
 $('#btnSolicitarCambioPassQuick')?.addEventListener('click', () => abrirConfiguracionRapida());
@@ -2426,7 +2501,8 @@ const I18N = {
         btn_registrar_retiro: '+ Registrar retiro', agotado_label: 'Agotado',
         modal_prod_new: 'Nuevo Producto', modal_prod_edit: 'Editar Producto', img_url: 'Imagen del Producto (URL)', desc_lbl: 'Descripción', asign_suc: 'Stock Inicial y Mínimo',
         todas_categorias: 'Todas las categorías', cualquier_stock: 'Cualquier nivel de stock', stock_bajo: 'Stock Bajo', stock_agotado: 'Agotados',
-        title_eliminar_prod: '¿Eliminar producto?', desc_eliminar_prod: 'Solo procederá si el stock global es 0.'
+        title_eliminar_prod: '¿Eliminar producto?', desc_eliminar_prod: 'Solo procederá si el stock global es 0.',
+        nav_section_cuenta: 'Mi Cuenta', nav_mis_apartados: 'Mis Apartados', nav_configuracion: 'Configuración'
     },
     en: {
         brand_sub: 'Branch Management', role_chip: 'Manager', branch_prefix: 'Branch',
@@ -2460,7 +2536,7 @@ const I18N = {
         btn_registrar_retiro: '+ Register withdrawal', agotado_label: 'Out of stock',
         modal_prod_new: 'New Product', modal_prod_edit: 'Edit Product', img_url: 'Product Image (URL)', desc_lbl: 'Description', asign_suc: 'Initial and Minimum Stock',
         todas_categorias: 'All categories', cualquier_stock: 'Any stock level', stock_bajo: 'Low Stock', stock_agotado: 'Out of stock',
-        title_eliminar_prod: 'Delete product?', desc_eliminar_prod: 'Will only proceed if global stock is 0.'
+        title_eliminar_prod: 'Delete product?', desc_eliminar_prod: 'Will only proceed if global stock is 0.', nav_section_cuenta: 'My Account', nav_mis_apartados: 'My Reservations', nav_configuracion: 'Settings'
     }
 };
 let currentLang = (window.PetkoPrefs ? PetkoPrefs.lang() : null) || localStorage.getItem('petko_lang') || 'es';
@@ -2469,6 +2545,10 @@ function applyLanguage() {
     document.documentElement.lang = currentLang;
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+    const lbl = btn.querySelector('.nav-label');
+    if (lbl) btn.setAttribute('data-tooltip', lbl.textContent.trim());
+});
 }
 if (window.PetkoPrefs) {
     PetkoPrefs.onLang(function(l) {

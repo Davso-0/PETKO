@@ -697,7 +697,33 @@ main { min-width: 0; width: 100%; overflow-x: hidden; }
     .kpi-grid, .prod-grid { grid-template-columns: 1fr; }
 }
     
-
+.sidebar { overflow: visible !important; }
+.nav-btn { position: relative; }
+.app-layout.is-collapsed .nav-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: calc(100% + 14px);
+    top: 50%;
+    transform: translateY(-50%) translateX(-6px);
+    background: var(--ink);
+    color: var(--bg-surface);
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 7px 13px;
+    border-radius: 10px;
+    white-space: nowrap;
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+    z-index: 999;
+}
+.app-layout.is-collapsed .nav-btn:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%) translateX(0);
+}
 </style>
     <link rel="stylesheet" href="../../../css/petko-ui.css?v=<?= (int) @filemtime(__DIR__ . '/../../../css/petko-ui.css') ?>">
 </head>
@@ -716,14 +742,14 @@ main { min-width: 0; width: 100%; overflow-x: hidden; }
             <button class="nav-btn" data-target="view-personal"><i class="ph ph-users-three"></i><span class="nav-label" data-i18n="nav_personal">Personal</span></button>
             <button class="nav-btn" data-target="view-gestion-productos"><i class="ph ph-package"></i><span class="nav-label" data-i18n="nav_gestion_productos">Gestión de Productos</span></button>
             <button class="nav-btn" data-target="view-ventas"><i class="ph ph-chart-line-up"></i><span class="nav-label" data-i18n="nav_ventas">Ventas</span></button>
-            <div class="nav-section-title">Mi Cuenta</div>
-            <button class="nav-btn" data-target="view-mi-cuenta"><i class="ph ph-user-circle"></i><span class="nav-label">Mis Apartados</span></button>
-            <button class="nav-btn" data-target="view-mi-cuenta-config"><i class="ph ph-gear"></i><span class="nav-label">Configuración</span></button>
+            <div class="nav-section-title" data-i18n="nav_section_cuenta">Mi Cuenta</div>
+            <button class="nav-btn" data-target="view-mi-cuenta"><i class="ph ph-user-circle"></i><span class="nav-label" data-i18n="nav_mis_apartados">Mis Apartados</span></button>
+            <button class="nav-btn" data-target="view-mi-cuenta-config"><i class="ph ph-gear"></i><span class="nav-label" data-i18n="nav_configuracion">Configuración</span></button>  
             <div class="nav-section-title" data-i18n="nav_section_nav">Navegación</div>
             <a class="nav-btn" href="../../componentes/catalogo.php"><i class="ph ph-storefront"></i><span class="nav-label" data-i18n="nav_catalogo">Ir al Catálogo</span></a>
             <a class="nav-btn" href="home.php"><i class="ph ph-house"></i><span class="nav-label" data-i18n="nav_home">Volver a Home</span></a>
             <a class="nav-btn" href="cerrarSesion.php" style="color:var(--danger)"><i class="ph ph-sign-out"></i><span class="nav-label" data-i18n="nav_logout">Cerrar sesión</span></a>
-        </nav>
+            </nav>
     </aside>
     <div class="sidebar-scrim" id="sidebarScrim"></div>
 
@@ -748,11 +774,11 @@ main { min-width: 0; width: 100%; overflow-x: hidden; }
         </header>
 
         <div class="content">
-
+    
             <!-- RESUMEN GENERAL -->
             <section id="view-general" class="view-section active">
                 <div class="header-row">
-                    <div><h1 class="title"><span data-i18n="greeting">Hola, administración</span> <span class="wave">👋</span></h1><p class="subtitle" data-i18n="greeting_sub">Este es el pulso operativo de PETKO al día de hoy.</p></div>
+                    <div><h1 class="title"><span data-i18n="greeting">Hola, administrador</span> <span class="wave">👋</span></h1><p class="subtitle" data-i18n="greeting_sub">Este es el pulso operativo de PETKO al día de hoy.</p></div>
                     <button class="btn-ghost" id="refreshDashboard"><i class="ph ph-arrows-clockwise"></i> <span data-i18n="btn_actualizar">Actualizar</span></button>
                 </div>
                 <div class="kpi-grid">
@@ -935,7 +961,8 @@ const I18N = {
         modal_prod_new: 'Nuevo Producto', modal_prod_edit: 'Editar Producto', img_url: 'Imagen del Producto (subir archivo o ingresar URL)', desc_lbl: 'Descripción', asign_suc: 'Asignar a sucursales:',
         funcion_csv_desarrollo: 'Función de exportación CSV en desarrollo.',
         ajustar_stock_title: 'Ajustar Stock', sucursal_destino: 'Sucursal Destino', tipo_movimiento: 'Tipo de movimiento', cantidad_piezas: 'Cantidad de piezas',
-        mov_entrada: 'Entrada de mercancía (Sumar)', mov_salida: 'Salida / Merma (Restar)', mov_reemplazo: 'Ajuste Fijo (Reemplazar total)', aplicar_ajuste: 'Aplicar Ajuste'
+        mov_entrada: 'Entrada de mercancía (Sumar)', mov_salida: 'Salida / Merma (Restar)', mov_reemplazo: 'Ajuste Fijo (Reemplazar total)', aplicar_ajuste: 'Aplicar Ajuste',
+        nav_section_cuenta: 'Mi Cuenta', nav_mis_apartados: 'Mis Apartados', nav_configuracion: 'Configuración'
     },
     en: {
         brand_sub: 'General Administration', role_chip: 'Admin', eyebrow_panel: 'Main panel',
@@ -965,7 +992,8 @@ const I18N = {
         modal_prod_new: 'New Product', modal_prod_edit: 'Edit Product', img_url: 'Image URL', desc_lbl: 'Description', asign_suc: 'Assign to branches:',
         funcion_csv_desarrollo: 'CSV export feature in development.',
         ajustar_stock_title: 'Adjust Stock', sucursal_destino: 'Target Branch', tipo_movimiento: 'Movement type', cantidad_piezas: 'Quantity',
-        mov_entrada: 'Inbound (Add)', mov_salida: 'Outbound (Subtract)', mov_reemplazo: 'Fixed Adjustment (Replace)', aplicar_ajuste: 'Apply Adjustment'
+        mov_entrada: 'Inbound (Add)', mov_salida: 'Outbound (Subtract)', mov_reemplazo: 'Fixed Adjustment (Replace)', aplicar_ajuste: 'Apply Adjustment',
+        nav_section_cuenta: 'My Account', nav_mis_apartados: 'My Reservations', nav_configuracion: 'Settings'
     }
 };
 let currentLang = PetkoPrefs.lang();
@@ -974,6 +1002,10 @@ function applyLanguage() {
     document.documentElement.lang = currentLang;
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+    const lbl = btn.querySelector('.nav-label');
+    if (lbl) btn.setAttribute('data-tooltip', lbl.textContent.trim());
+});
 }
 PetkoPrefs.onLang(function (l) {
     currentLang = l;
@@ -985,7 +1017,13 @@ applyLanguage();
 
 // -------- SIDEBAR --------
 const appLayout = $('#appLayout');
-$('#btnCollapse').addEventListener('click', () => appLayout.classList.toggle('is-collapsed'));
+$('#btnCollapse').addEventListener('click', () => {
+    appLayout.classList.toggle('is-collapsed');
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        const lbl = btn.querySelector('.nav-label');
+        if (lbl) btn.setAttribute('data-tooltip', lbl.textContent.trim());
+    });
+});
 $('#btnMobileMenu').addEventListener('click', () => appLayout.classList.add('mobile-open'));
 $('#sidebarScrim').addEventListener('click', () => appLayout.classList.remove('mobile-open'));
 
@@ -997,8 +1035,8 @@ const titleKeys = {
     'view-personal': 'nav_personal',
     'view-gestion-productos': 'nav_gestion_productos',
     'view-ventas': 'ven_title',
-    'view-mi-cuenta': 'Mis Apartados',
-    'view-mi-cuenta-config': 'Configuración'
+    'view-mi-cuenta': 'nav_mis_apartados',
+'view-mi-cuenta-config': 'nav_configuracion'
 };
     function switchView(targetId) { 
     views.forEach(v => v.classList.remove('active'));
