@@ -1,7 +1,15 @@
 <?php
 declare(strict_types=1);
 
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+$csrfToken = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
+$_SESSION['csrf_token'] = $csrfToken;
 $incrustado = isset($_GET['embed']) && $_GET['embed'] === '1';
+if ($incrustado) {
+    $_SESSION['registro_terminos_abiertos'] = true;
+}
 $tokenActivacion = isset($_GET['token']) && is_string($_GET['token'])
     && preg_match('/\A[a-f0-9]{64}\z/', $_GET['token']) ? $_GET['token'] : null;
 $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !== null;
@@ -75,7 +83,7 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
         .terms-content::-webkit-scrollbar { width: 6px; }
         .terms-content::-webkit-scrollbar-thumb { background: var(--green-primary); border-radius: 10px; }
         .terms-content::-webkit-scrollbar-track { background: #f1f5f9; }
-        .terms-content section { margin: 0 0 22px; }
+        .terms-content section { margin: 0 0 22px; scroll-margin-block-start: 14px; }
         .terms-content h3 { margin: 0 0 8px; color: var(--green-hover); font-size: 15px; line-height: 1.45; }
         .terms-content p { margin: 0 0 9px; }
         .terms-content ul { margin: 0 0 10px; padding-left: 22px; }
@@ -105,9 +113,49 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { scroll-behavior: auto !important; }
         }
-    </style>
+    
+
+:root{--green-primary:#3966B3;--green-hover:#294980;--green-glow:rgba(82,146,255,.35);--bg-gradient:linear-gradient(135deg,#EEF4FF 0%,#BAD3FF 55%,#86B3FF 100%);--bg-main:#EEF4FF;--field-border:#BAD3FF;--text-main:#14284a;--text-muted:#4f678c}
+.bg-viewport::before{background:radial-gradient(circle,#BAD3FF 0%,rgba(186,211,255,.6) 35%,transparent 70%)}
+.bg-viewport::after{background:radial-gradient(circle,#86B3FF 0%,rgba(134,179,255,.5) 35%,transparent 70%)}
+.bg-orb{background:radial-gradient(circle,rgba(82,146,255,.45),rgba(186,211,255,.15) 55%,transparent 72%)}
+.floating-paw{fill:#3966B3}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background:url(src/img/petko/patron.png) center/560px;opacity:.06}
+.auth-card{border:1px solid rgba(82,146,255,.28);box-shadow:0 24px 60px rgba(41,73,128,.22);transition:transform .35s cubic-bezier(.22,1,.36,1),box-shadow .35s}
+.auth-card:hover{transform:translateY(-4px);box-shadow:0 30px 70px rgba(41,73,128,.28)}
+.brand-badge{background:rgba(82,146,255,.12);border-color:rgba(82,146,255,.4);color:#294980}
+.brand-logo{color:#294980}.brand-logo span{color:#5292FF}
+.form-title,.dialog-head h2,.role-picker h2{color:#294980}
+input:focus{border-color:#5292FF;box-shadow:0 0 0 4px rgba(82,146,255,.22)}
+input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus{box-shadow:0 0 0 1000px #EEF4FF inset}
+.forgot-link,.form-footer a,.toggle-password:hover,.dialog-close:hover,.role-picker-close:hover{color:#3966B3}
+.forgot-link:hover,.form-footer a:hover{color:#294980}
+.check-row input{accent-color:#3966B3}
+.btn-submit,.dialog-submit{background:linear-gradient(135deg,#5292FF 0%,#3966B3 100%);color:#fff}
+.btn-submit:hover{box-shadow:0 8px 24px rgba(82,146,255,.4)}
+.btn-secondary:hover,.role-option:hover{border-color:#5292FF;color:#294980;background:rgba(82,146,255,.1)}
+.recovery-dialog,.role-picker{border:1px solid rgba(82,146,255,.3);background:rgba(255,255,255,.97);box-shadow:0 25px 60px rgba(41,73,128,.25)}
+.dialog-backdrop,.role-overlay{background:rgba(12,26,53,.6)}
+@media(max-width:480px){.auth-card{border-radius:20px}input[type="email"],input[type="password"],input[type="text"]{font-size:16px}}
+
+body.dark-mode{background:linear-gradient(135deg,#030710 0%,#071225 55%,#0b1d3a 100%);--text-main:#eaf3ff;--text-muted:#a3b8d6;--green-primary:#5cc8ff;--green-hover:#8fd6ff;color-scheme:dark}
+body.dark-mode .terms-card{border-color:rgba(92,200,255,.2);background:rgba(11,29,58,.92);color:#eaf3ff;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+body.dark-mode .brand-logo{color:#eaf3ff}
+body.dark-mode h2,body.dark-mode .terms-content h3{color:#8fd6ff}
+body.dark-mode .terms-content{scrollbar-color:#5cc8ff #0b1d3a}
+body.dark-mode .terms-content::-webkit-scrollbar-track{background:#0b1d3a}
+body.dark-mode .terms-content code{background:rgba(255,255,255,.08);color:#eaf3ff}
+body.dark-mode .terms-button{background:linear-gradient(135deg,#5cc8ff 0%,#2f80ed 100%);color:#04142e}
+</style>
 </head>
 <body>
+    <script>
+        try {
+            var d = localStorage.getItem('petko_dark');
+            if (d === null && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) d = '1';
+            if (d === '1') document.body.classList.add('dark-mode');
+        } catch (err) {}
+    </script>
     <video id="videoFondo" autoplay muted loop playsinline aria-hidden="true">
         <source src="src/videoEJEMPLO/22.mp4" type="video/mp4">
     </video>
@@ -122,12 +170,11 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
         <?php if ($esActivacion): ?>
             <div class="activation-banner" role="status">
                 Estás en proceso de activación de tu cuenta.
-                <br><a href="activar-cuenta.php?token=<?= rawurlencode($tokenActivacion) ?>">Regresar a la activación</a>
             </div>
         <?php endif; ?>
 
         <div class="terms-content" tabindex="0" aria-label="Términos, condiciones y política de privacidad">
-            <section>
+            <section id="terminos-y-condiciones">
                 <h3>1. Aceptación y alcance de los servicios</h3>
                 <p>PETKO es una plataforma de gestión y comercio orientada a actividades veterinarias y agropecuarias. Sus funciones pueden incluir un catálogo digital de productos, consulta de información y herramientas de gestión para usuarios, cajeros, gerentes y administradores.</p>
                 <p>Al crear una cuenta, marcar la casilla de aceptación o utilizar las funciones de PETKO, la persona usuaria declara que ha leído y acepta estos Términos y la Política de Privacidad. Si no está de acuerdo, debe abstenerse de registrarse o utilizar la plataforma.</p>
@@ -135,7 +182,7 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
 
             <section>
                 <h3>2. Cuentas de usuario, roles y autenticación</h3>
-                <p>Para registrarse se requiere tener al menos 18 años �?"o la mayoría de edad aplicable en el lugar de residencia�?", proporcionar información completa y verídica y disponer de una dirección de correo electrónico válida. La persona usuaria debe mantener sus datos actualizados.</p>
+                <p>Para registrarse se requiere tener al menos 18 años o la mayoría de edad aplicable en el lugar de residencia, proporcionar información completa y verídica y disponer de una dirección de correo electrónico válida. La persona usuaria debe mantener sus datos actualizados.</p>
                 <p>Las funciones disponibles dependen del rol asignado por PETKO. Los roles pueden incluir Usuario/Cliente, Cajero, Gerente y Administrador General. Los permisos de cada cuenta no deben transferirse ni utilizarse para acceder a funciones ajenas a sus responsabilidades.</p>
                 <p>Si se ofrece inicio de sesión con Google Identity, PETKO recibe de Google los datos de perfil necesarios para identificar y crear la cuenta, que pueden incluir nombre, apellidos y correo electrónico, según los permisos otorgados. La autenticación de Google se rige también por las condiciones y la política de privacidad de Google.</p>
                 <p>La persona usuaria es responsable de mantener confidenciales sus credenciales, cerrar sesión en dispositivos compartidos y notificar al operador de PETKO si sospecha de un acceso no autorizado.</p>
@@ -148,7 +195,7 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
                 <p>La disponibilidad, los precios, las descripciones y las existencias del catálogo pueden cambiar y están sujetos a confirmación al momento de la compra. La publicación de un producto no garantiza su disponibilidad ni constituye una oferta irrevocable.</p>
             </section>
 
-            <section>
+            <section id="aviso-de-privacidad">
                 <h3>4. Política de privacidad y datos personales</h3>
                 <p>Para operar la plataforma, PETKO puede tratar los datos que la persona usuaria proporciona o genera al utilizarla, por ejemplo:</p>
                 <ul>
@@ -183,7 +230,15 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
         </div>
 
         <footer class="terms-footer">
-            <?php if ($incrustado): ?>
+            <?php if ($esActivacion): ?>
+                <form method="post" action="activar-cuenta.php">
+                    <input type="hidden" name="token" value="<?= htmlspecialchars($tokenActivacion, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+                    <input type="hidden" name="accion" value="aceptar_terminos">
+                    <input type="hidden" name="acepto_terminos" value="1">
+                    <button class="terms-button" type="submit">Aceptar y continuar</button>
+                </form>
+            <?php elseif ($incrustado): ?>
                 <button class="terms-button" id="closeAndAccept" type="button">Cerrar y aceptar</button>
             <?php else: ?>
                 <a class="terms-button" href="registro.php">Volver al registro</a>
@@ -193,6 +248,7 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
     </main>
     <?php if ($incrustado): ?>
         <script>
+            window.parent.postMessage({ type: 'kion-terms-opened' }, window.location.origin);
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Escape') {
                     window.parent.postMessage({ type: 'kion-terms-dismissed' }, window.location.origin);

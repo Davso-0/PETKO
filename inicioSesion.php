@@ -1,11 +1,6 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/vendor/autoload.php';
-
-Dotenv\Dotenv::createMutable(__DIR__)->safeLoad();
-$googleClientId = trim((string)(getenv('GOOGLE_CLIENT_ID') ?: ($_ENV['GOOGLE_CLIENT_ID'] ?? $_SERVER['GOOGLE_CLIENT_ID'] ?? '')));
-
 function cookieSegura(): bool
 {
     $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
@@ -24,7 +19,10 @@ session_set_cookie_params([
 ]);
 
 session_start();
-define('DEV_MODE', filter_var(getenv('KION_DEV_MODE') ?: false, FILTER_VALIDATE_BOOL));
+$hostSolicitud = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
+$esSolicitudLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)
+    && preg_match('/\A(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\z/', $hostSolicitud) === 1;
+define('DEV_MODE', $esSolicitudLocal || filter_var(getenv('KION_DEV_MODE') ?: false, FILTER_VALIDATE_BOOL));
 $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 
 function responderInicioSesion(bool $ok, string $message, ?string $redirect = null): never
@@ -86,7 +84,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_usuarios_por_rol' && DEV_
                 FROM usuarios u 
                 LEFT JOIN roles r ON r.id_rol = u.id_rol 
                 LEFT JOIN sucursales s ON s.id_sucursal = u.id_sucursal 
-                WHERE LOWER(u.estado) = 'activo'";
+                WHERE u.estado = 'ACTIVO'";
 
         if ($rolBuscado === 'admin') {
             $sql .= " AND r.nombre LIKE '%admin%'";
@@ -126,7 +124,7 @@ if (!$metodoPost && !isset($_SESSION['usuario']) && isset($_COOKIE['kion_remembe
             $consultaRecordarme = $pdo->prepare('SELECT u.id_usuario, u.nombre, u.apellido, u.correo, u.id_rol, u.id_sucursal, u.estado, r.nombre AS rol FROM usuarios u INNER JOIN roles r ON r.id_rol = u.id_rol WHERE u.remember_token = ? AND u.remember_expires_at > CURRENT_TIMESTAMP LIMIT 1');
             $consultaRecordarme->execute([hash('sha256', $tokenRecordarme)]);
             $usuarioRecordado = $consultaRecordarme->fetch();
-            if ($usuarioRecordado && strtolower((string)$usuarioRecordado['estado']) === 'activo') {
+            if ($usuarioRecordado && $usuarioRecordado['estado'] === 'ACTIVO') {
                 session_regenerate_id(true);
                 $destino = obtenerDestinoUsuario($usuarioRecordado);
                 header('Location: ' . $destino);
@@ -153,10 +151,10 @@ if ($metodoPost) {
     if ($pdo === null) {
         responderInicioSesion(false, $errorConexion ?? 'No fue posible conectar con la base de datos.');
     }
-
+    //a
     // =========================================================================
     // PROCESAMIENTO DE ACCESO RÁPIDO (MODO DEMO)
-    // =========================================================================
+
     if (isset($_POST['demo_login']) && DEV_MODE === true) {
         $idUsuarioDemo = (int)($_POST['id_usuario_demo'] ?? 0);
         
@@ -168,7 +166,7 @@ if ($metodoPost) {
             if (!$usuario) {
                 responderInicioSesion(false, 'El usuario seleccionado no existe en la base de datos.');
             }
-            if (strtolower((string)$usuario['estado']) !== 'activo') {
+            if ($usuario['estado'] !== 'ACTIVO') {
                 responderInicioSesion(false, 'Esta cuenta se encuentra inactiva.');
             }
 
@@ -195,7 +193,7 @@ if ($metodoPost) {
             || (is_string($hostSolicitud) && str_contains($hostSolicitud, 'localhost'));
 
         try {
-            $consultaRecuperacion = $pdo->prepare("SELECT id_usuario, nombre FROM usuarios WHERE correo = ? AND LOWER(estado) = 'activo' LIMIT 1");
+            $consultaRecuperacion = $pdo->prepare("SELECT id_usuario, nombre FROM usuarios WHERE correo = ? AND estado = 'ACTIVO' LIMIT 1");
             $consultaRecuperacion->execute([$correoRecuperacion]);
             $usuarioRec = $consultaRecuperacion->fetch();
             if ($usuarioRec) {
@@ -299,7 +297,7 @@ if ($metodoPost) {
             }
             responderInicioSesion(false, 'La contraseña o correo electrónico no son correctos.');
         }
-        if (strtolower((string)$usuario['estado']) !== 'activo') {
+        if ($usuario['estado'] !== 'ACTIVO') {
             responderInicioSesion(false, 'Esta cuenta se encuentra inactiva.');
         }
 
@@ -343,7 +341,7 @@ if ($metodoPost) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="documentTitle">PETKO | Iniciar sesión</title>
+    <title>PETKO | Iniciar sesión</title>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
@@ -367,8 +365,6 @@ if ($metodoPost) {
             --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
             --font-brand: 'Fredoka', sans-serif;
             --bg-main: #f8fafc;
-            --bg-surface: var(--field-bg);
-            --ink: var(--text-main);
             --gold: var(--green-primary);
             --gold-light: var(--green-hover);
             --bg-card: var(--card-bg);
@@ -420,14 +416,10 @@ if ($metodoPost) {
             font-size: 14px;
         }
         input:focus { border-color: var(--gold-light); box-shadow: 0 0 0 2px rgba(201, 164, 68, .22); }
-        input:-webkit-autofill,
-        input:-webkit-autofill:hover,
-        input:-webkit-autofill:focus,
-        input:-webkit-autofill:active {
-            -webkit-box-shadow: 0 0 0 30px var(--bg-surface) inset !important;
-            -webkit-text-fill-color: var(--ink) !important;
-            caret-color: var(--ink) !important;
-            transition: background-color 5000s ease-in-out 0s;
+        input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+            -webkit-text-fill-color: var(--text-main);
+            box-shadow: 0 0 0 1000px #191815 inset;
+            transition: background-color 9999s ease-out;
         }
         .input-wrapper { position: relative; }
         .input-wrapper input { padding-right: 46px; }
@@ -465,7 +457,9 @@ if ($metodoPost) {
         .dialog-submit { min-height: 38px; padding: 0 15px; border: 0; border-radius: 8px; background: linear-gradient(135deg, #e6c260, #c9a444); color: #17130a; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; }
         
         <?php if (DEV_MODE === true): ?>
-        .role-demo-link { display: inline-block; margin-top: 8px; color: var(--text-muted) !important; font-size: 10px; font-weight: 400 !important; cursor: pointer; }
+        .role-demo-link { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; margin-top: 10px; padding: 0 14px; border: 1px solid var(--field-border); border-radius: 999px; background: var(--field-bg); color: var(--green-hover) !important; font: inherit; font-size: 11px; font-weight: 700 !important; cursor: pointer; transition: border-color .2s, background-color .2s, transform .2s; }
+        .role-demo-link:hover { border-color: var(--green-primary); background: transparent; transform: translateY(-1px); }
+        .role-demo-link:focus-visible { outline: 2px solid var(--green-primary); outline-offset: 2px; }
         .role-overlay { position: fixed; inset: 0; z-index: 6; display: none; place-items: center; padding: 16px; background: rgba(0, 0, 0, .66); backdrop-filter: blur(6px); }
         .role-overlay.visible { display: grid; }
         .role-picker { position: relative; width: min(330px, 100%); padding: 22px; border: 1px solid rgba(201, 164, 68, .3); border-radius: 12px; background: #171717; }
@@ -552,39 +546,125 @@ if ($metodoPost) {
         .role-picker h2 { color: var(--success-green); }
         .role-option { border-radius: 10px; font-family: var(--font-main); }
         .role-option:hover { border-color: var(--green-primary); color: var(--success-green); background: rgba(34, 197, 94, .1); }
-        .role-demo-link { color: var(--text-muted) !important; }
-        .top-controls { position: absolute; top: 20px; right: 24px; z-index: 100; display: flex; gap: 10px; }
-        .icon-btn { display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid var(--border-soft, var(--card-border)); border-radius: 50%; background: var(--bg-surface); color: var(--ink); cursor: pointer; font-size: 19px; text-decoration: none; transition: background .2s, transform .15s; }
-        .icon-btn:hover { background: var(--field-bg); color: var(--green-primary); transform: translateY(-1px); }
-        body.dark-mode {
-            --bg-gradient: linear-gradient(135deg, #0b1220 0%, #10251d 50%, #0c2030 100%);
-            --card-bg: rgba(15, 23, 42, .92);
-            --card-border: rgba(148, 163, 184, .25);
-            --field-bg: rgba(15, 23, 42, .82);
-            --field-border: #475569;
-            --text-main: #e2e8f0;
-            --text-muted: #a8b5c7;
-            --bg-main: #0b1220;
-            --bg-surface: #102033;
-            --ink: #e2e8f0;
-            --error-bg: #3b171b;
-            --success-bg: #12301f;
-        }
-        body.dark-mode .brand-logo { color: var(--text-main); }
-        body.dark-mode input[type="email"], body.dark-mode input[type="password"], body.dark-mode input[type="text"] { color: var(--text-main); }
-        body.dark-mode .recovery-dialog, body.dark-mode .role-picker { background: rgba(11, 34, 56, .97); }
-        body.dark-mode .dialog-backdrop, body.dark-mode .role-overlay { background: rgba(2, 12, 24, .78); }
-        @media (max-width: 540px) { .top-controls { top: 12px; right: 12px; gap: 7px; } .icon-btn { width: 36px; height: 36px; } }
+        .role-demo-link { color: var(--green-hover) !important; }
         .notice.error { border-color: rgba(248, 113, 113, .35); background: var(--error-bg); color: var(--error-red); }
         .notice.success { border-color: rgba(74, 222, 128, .35); background: var(--success-bg); color: var(--success-green); }
-    </style>
+    
+/* ===== PETKO · TEMA AZUL DE MARCA (solo estilos) ===== */
+:root{--green-primary:#3966B3;--green-hover:#294980;--green-glow:rgba(82,146,255,.35);--bg-gradient:linear-gradient(135deg,#EEF4FF 0%,#BAD3FF 55%,#86B3FF 100%);--bg-main:#EEF4FF;--field-border:#BAD3FF;--text-main:#14284a;--text-muted:#4f678c}
+.bg-viewport::before{background:radial-gradient(circle,#BAD3FF 0%,rgba(186,211,255,.6) 35%,transparent 70%)}
+.bg-viewport::after{background:radial-gradient(circle,#86B3FF 0%,rgba(134,179,255,.5) 35%,transparent 70%)}
+.bg-orb{background:radial-gradient(circle,rgba(82,146,255,.45),rgba(186,211,255,.15) 55%,transparent 72%)}
+.floating-paw{fill:#3966B3}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background:url(src/img/petko/patron.png) center/560px;opacity:.06}
+.auth-card{border:1px solid rgba(82,146,255,.28);box-shadow:0 24px 60px rgba(41,73,128,.22);transition:transform .35s cubic-bezier(.22,1,.36,1),box-shadow .35s}
+.auth-card:hover{transform:translateY(-4px);box-shadow:0 30px 70px rgba(41,73,128,.28)}
+.brand-badge{background:rgba(82,146,255,.12);border-color:rgba(82,146,255,.4);color:#294980}
+.brand-logo{color:#294980}.brand-logo span{color:#5292FF}
+.form-title,.dialog-head h2,.role-picker h2{color:#294980}
+input:focus{border-color:#5292FF;box-shadow:0 0 0 4px rgba(82,146,255,.22)}
+input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus{box-shadow:0 0 0 1000px #EEF4FF inset}
+.forgot-link,.form-footer a,.toggle-password:hover,.dialog-close:hover,.role-picker-close:hover{color:#3966B3}
+.forgot-link:hover,.form-footer a:hover{color:#294980}
+.check-row input{accent-color:#3966B3}
+.btn-submit,.dialog-submit{background:linear-gradient(135deg,#5292FF 0%,#3966B3 100%);color:#fff}
+.btn-submit:hover{box-shadow:0 8px 24px rgba(82,146,255,.4)}
+.btn-secondary:hover,.role-option:hover{border-color:#5292FF;color:#294980;background:rgba(82,146,255,.1)}
+.recovery-dialog,.role-picker{border:1px solid rgba(82,146,255,.3);background:rgba(255,255,255,.97);box-shadow:0 25px 60px rgba(41,73,128,.25)}
+.dialog-backdrop,.role-overlay{background:rgba(12,26,53,.6)}
+@media(max-width:480px){.auth-card{border-radius:20px}input[type="email"],input[type="password"],input[type="text"]{font-size:16px}}
+
+
+/* ===== PETKO · BARRA SUPERIOR (volver + modo + idioma) ===== */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;padding-top:max(14px,env(safe-area-inset-top));pointer-events:none}
+.topbar>*{pointer-events:auto}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.back-btn,.dark-mode-btn,.language-btn{height:42px;border:1px solid rgba(57,102,179,.35);background:rgba(255,255,255,.72);color:#294980;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:background .25s,color .25s,border-color .25s,transform .25s,box-shadow .25s}
+.back-btn{gap:8px;padding:0 18px 0 14px;border-radius:21px;font-size:13px}
+.back-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform .25s}
+.back-btn:hover svg{transform:translateX(-3px)}
+.dark-mode-btn{width:42px;border-radius:50%;font-size:18px;line-height:1;padding:0}
+.language-btn{min-width:42px;padding:0 12px;border-radius:21px;font-size:13px}
+.back-btn:hover,.dark-mode-btn:hover,.language-btn:hover{background:#5292FF;border-color:#5292FF;color:#fff;box-shadow:0 8px 22px rgba(82,146,255,.35);transform:translateY(-1px)}
+.back-btn:focus-visible,.dark-mode-btn:focus-visible,.language-btn:focus-visible{outline:3px solid rgba(82,146,255,.55);outline-offset:2px}
+
+/* ===== PETKO · LOGO IMAGEN ===== */
+.brand-logo{margin:0 0 4px;line-height:0}
+.brand-logo img{display:block;height:64px;width:auto;max-width:100%;margin:0 auto;filter:drop-shadow(0 6px 14px rgba(41,73,128,.25));transition:transform .3s}
+.auth-card:hover .brand-logo img{transform:scale(1.04) rotate(-1.5deg)}
+.brand-header{margin-bottom:14px}
+
+/* ===== PETKO · MODO OSCURO (body.dark-mode, igual que el home) ===== */
+body{transition:background .3s,color .3s}
+.auth-card,.recovery-dialog,.role-picker,input,.btn-secondary,.role-option{transition:background .3s,border-color .3s,color .3s,box-shadow .3s,transform .35s cubic-bezier(.22,1,.36,1)}
+body.dark-mode{--bg-gradient:linear-gradient(135deg,#030710 0%,#071225 55%,#0b1d3a 100%);--bg-main:#071225;--card-bg:rgba(11,29,58,.88);--card-border:rgba(92,200,255,.18);--field-bg:rgba(255,255,255,.06);--field-border:#1f3f73;--text-main:#eaf3ff;--text-muted:#a3b8d6;--error-red:#ff9a8d;--error-bg:rgba(255,120,100,.12);--success-green:#7ee0a8;--success-bg:rgba(60,200,130,.12);--green-primary:#5cc8ff;--green-hover:#8fd6ff;--green-glow:rgba(92,200,255,.35);color-scheme:dark}
+body.dark-mode,html:has(body.dark-mode){background:#071225}
+body.dark-mode .bg-viewport::before{background:radial-gradient(circle,rgba(47,128,237,.55) 0%,rgba(23,71,154,.35) 35%,transparent 70%)}
+body.dark-mode .bg-viewport::after{background:radial-gradient(circle,rgba(92,200,255,.28) 0%,rgba(23,71,154,.25) 35%,transparent 70%)}
+body.dark-mode .bg-orb{background:radial-gradient(circle,rgba(47,128,237,.35),rgba(23,71,154,.12) 55%,transparent 72%)}
+body.dark-mode .floating-paw{fill:#5cc8ff}
+body.dark-mode::before{opacity:.05;filter:invert(1)}
+body.dark-mode .auth-card{border-color:rgba(92,200,255,.2);box-shadow:0 24px 60px rgba(0,0,0,.6)}
+body.dark-mode .auth-card:hover{box-shadow:0 30px 70px rgba(0,0,0,.7)}
+body.dark-mode .brand-logo img{filter:drop-shadow(0 6px 16px rgba(0,0,0,.55))}
+body.dark-mode .brand-badge{background:rgba(92,200,255,.12);border-color:rgba(92,200,255,.4);color:#8fd6ff}
+body.dark-mode .form-title,body.dark-mode .dialog-head h2,body.dark-mode .role-picker h2{color:#eaf3ff}
+body.dark-mode label,body.dark-mode .dialog-copy,body.dark-mode .form-footer,body.dark-mode .login-divider,body.dark-mode .brand-subtitle{color:#a3b8d6}
+body.dark-mode input[type="email"],body.dark-mode input[type="password"],body.dark-mode input[type="text"]{background:rgba(255,255,255,.06);border-color:#1f3f73;color:#eaf3ff}
+body.dark-mode input::placeholder{color:#6f87ab}
+body.dark-mode input:focus{border-color:#5cc8ff;box-shadow:0 0 0 4px rgba(92,200,255,.2)}
+body.dark-mode input:-webkit-autofill,body.dark-mode input:-webkit-autofill:hover,body.dark-mode input:-webkit-autofill:focus{-webkit-text-fill-color:#eaf3ff;box-shadow:0 0 0 1000px #0d2145 inset}
+body.dark-mode .forgot-link,body.dark-mode .form-footer a,body.dark-mode .toggle-password:hover,body.dark-mode .dialog-close:hover,body.dark-mode .role-picker-close:hover{color:#5cc8ff}
+body.dark-mode .forgot-link:hover,body.dark-mode .form-footer a:hover{color:#8fd6ff}
+body.dark-mode .check-row input{accent-color:#5cc8ff}
+body.dark-mode .btn-submit,body.dark-mode .dialog-submit{background:linear-gradient(135deg,#5cc8ff 0%,#2f80ed 100%);color:#04142e}
+body.dark-mode .btn-submit:hover{box-shadow:0 8px 24px rgba(92,200,255,.4)}
+body.dark-mode .btn-secondary{border-color:#1f3f73;color:#a3b8d6}
+body.dark-mode .btn-secondary:hover,body.dark-mode .role-option:hover{border-color:#5cc8ff;color:#eaf3ff;background:rgba(92,200,255,.12)}
+body.dark-mode .role-option{border-color:#1f3f73;color:#eaf3ff}
+body.dark-mode .recovery-dialog,body.dark-mode .role-picker{border-color:rgba(92,200,255,.3);background:rgba(11,29,58,.98);box-shadow:0 25px 60px rgba(0,0,0,.65)}
+body.dark-mode .dialog-backdrop,body.dark-mode .role-overlay{background:rgba(2,6,14,.75)}
+body.dark-mode .notice.error{border-color:rgba(255,154,141,.35)}
+body.dark-mode .notice.success{border-color:rgba(126,224,168,.35)}
+body.dark-mode .back-btn,body.dark-mode .dark-mode-btn,body.dark-mode .language-btn{background:rgba(2,6,14,.6);border-color:rgba(200,225,255,.3);color:#f2f8ff}
+body.dark-mode .back-btn:hover,body.dark-mode .dark-mode-btn:hover,body.dark-mode .language-btn:hover{background:#5cc8ff;border-color:#5cc8ff;color:#04142e;box-shadow:0 8px 22px rgba(92,200,255,.35)}
+body.dark-mode #btnVolverRoles{color:#5cc8ff!important}
+
+/* ===== PETKO · TELÉFONO ===== */
+body{padding-top:calc(68px + env(safe-area-inset-top))}
+.auth-card{max-height:calc(100svh - 84px - env(safe-area-inset-top))}
+@media(max-width:480px){
+  .topbar{padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top))}
+  .back-btn{height:38px;padding:0 14px 0 11px;font-size:12px}
+  .dark-mode-btn{width:38px;height:38px;font-size:16px}
+  .language-btn{height:38px;min-width:38px;font-size:12px}
+  body{padding-left:12px;padding-right:12px;padding-top:calc(60px + env(safe-area-inset-top))}
+  .auth-card{max-height:calc(100svh - 72px - env(safe-area-inset-top))}
+  .brand-logo img{height:54px}
+}
+@media(max-width:340px){.back-btn .back-text{display:none}.back-btn{padding:0 12px}}
+@media(max-height:650px){.brand-logo img{height:46px}.brand-badge{margin-bottom:5px}}
+</style>
 </head>
 <body>
-    <nav class="top-controls" aria-label="Controles de página" data-i18n-aria="pageControls">
-        <a href="index.php" class="icon-btn" title="Volver al inicio" aria-label="Volver al inicio" data-i18n-title="homeTitle" data-i18n-aria="homeTitle"><i class="ph ph-house" aria-hidden="true"></i></a>
-        <button type="button" class="icon-btn" id="btnLang" title="Cambiar idioma" aria-label="Cambiar idioma" data-i18n-title="languageToggle" data-i18n-aria="languageToggle"><i class="ph ph-translate" aria-hidden="true"></i></button>
-        <button type="button" class="icon-btn" id="btnTheme" title="Modo Oscuro" aria-label="Modo Oscuro"><i class="ph ph-moon" aria-hidden="true"></i></button>
-    </nav>
+    <script>
+        try {
+            var d = localStorage.getItem('petko_dark');
+            if (d === null && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) d = '1';
+            if (d === '1') document.body.classList.add('dark-mode');
+        } catch (err) {}
+    </script>
+
+    <div class="topbar">
+        <a class="back-btn" id="backHome" href="src/php/modulos/home/home.php" aria-label="Volver al inicio">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m11 18-6-6 6-6"/></svg>
+            <span class="back-text">Inicio</span>
+        </a>
+        <div class="topbar-right">
+            <button id="darkModeBtn" class="dark-mode-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro" aria-pressed="false" data-no-i18n>🌙</button>
+            <button id="languageToggle" class="language-btn" type="button" title="Switch to English" aria-label="Switch to English" data-no-i18n>EN</button>
+        </div>
+    </div>
     <div class="bg-viewport" aria-hidden="true">
         <span class="bg-orb"></span>
         <svg class="floating-paw" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="13" cy="27" rx="6" ry="8" transform="rotate(-25 13 27)"/><ellipse cx="25" cy="17" rx="6" ry="8" transform="rotate(-8 25 17)"/><ellipse cx="39" cy="17" rx="6" ry="8" transform="rotate(8 39 17)"/><ellipse cx="51" cy="27" rx="6" ry="8" transform="rotate(25 51 27)"/></svg>
@@ -596,52 +676,40 @@ if ($metodoPost) {
 
     <main class="auth-card">
         <header class="brand-header">
-            <span class="brand-badge"><i class="ph-fill ph-paw-print" aria-hidden="true"></i> <span data-i18n="brandBadge">Veterinaria &amp; Farmacia</span></span>
-            <h1 class="brand-logo">PET<span>KO</span></h1>
-            <div class="brand-subtitle" data-i18n="brandSubtitle">Vet &amp; Agropecuario</div>
+            <span class="brand-badge"><i class="ph-fill ph-paw-print" aria-hidden="true"></i> Veterinaria &amp; Farmacia</span>
+            <h1 class="brand-logo"><img src="src/img/petko/logo_amarillo.png" alt="PETKO" width="208" height="64"></h1>
+            <div class="brand-subtitle">Vet &amp; Agropecuario</div>
         </header>
-        <h2 class="form-title" data-i18n="loginTitle">Iniciar sesión</h2>
-        <div class="notice" id="loginNotice" role="status" aria-live="polite"></div>
+        <h2 class="form-title">Iniciar sesión</h2>
+        <div class="notice" id="loginNotice" data-no-i18n role="status" aria-live="polite"></div>
         <form id="loginForm" method="post" novalidate>
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
             <div class="form-group">
-                <label for="correo" data-i18n="emailLabel">Correo electrónico</label>
-                <input id="correo" name="correo" type="email" placeholder="usuario@kion.com" data-i18n-placeholder="emailPlaceholder" autocomplete="email" required>
+                <label for="correo">Correo electrónico</label>
+                <input id="correo" name="correo" type="email" placeholder="usuario@kion.com" autocomplete="email" required>
             </div>
             <div class="form-group">
-                <label for="contrasena" data-i18n="passwordLabel">Contraseña</label>
+                <label for="contrasena">Contraseña</label>
                 <div class="input-wrapper">
-                    <input id="contrasena" name="contrasena" type="password" placeholder="Tu contraseña" data-i18n-placeholder="passwordPlaceholder" autocomplete="current-password" required>
-                    <button class="toggle-password" type="button" aria-label="Mostrar contraseña" data-i18n-aria="showPassword" aria-pressed="false">
+                    <input id="contrasena" name="contrasena" type="password" placeholder="Tu contraseña" autocomplete="current-password" required>
+                    <button class="toggle-password" type="button" aria-label="Mostrar contraseña" aria-pressed="false">
                         <i class="ph ph-eye" aria-hidden="true"></i><i class="ph ph-eye-slash" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
-            <a class="forgot-link" href="#recuperar-contrasena" id="forgotPassword" data-i18n="forgotPassword">¿Olvidaste tu contraseña?</a>
+            <a class="forgot-link" href="#recuperar-contrasena" id="forgotPassword">¿Olvidaste tu contraseña?</a>
             <div class="check-row">
                 <input id="recordarme" name="recordarme" type="checkbox" value="1">
-                <label for="recordarme" data-i18n="rememberMe">Recordarme</label>
+                <label for="recordarme">Recordarme</label>
             </div>
-            <button class="btn-submit" type="submit" data-i18n="loginButton">Iniciar sesión</button>
+            <button class="btn-submit" type="submit">Iniciar sesión</button>
         </form>
-        <div class="login-divider"><span data-i18n="orContinue">o continúa con</span></div>
-        <div id="g_id_onload"
-             data-client_id="<?= htmlspecialchars($googleClientId !== '' ? $googleClientId : 'TU_CLIENT_ID_DE_GOOGLE', ENT_QUOTES, 'UTF-8') ?>"
-             data-callback="procesarRespuestaGoogle"
-             data-auto_prompt="false"></div>
-        <div class="google-login g_id_signin"
-             data-type="standard"
-             data-size="large"
-             data-theme="outline"
-             data-text="signin_with"
-             data-shape="rectangular"
-             data-logo_alignment="left"
-             aria-label="Continuar con Google"
-             data-i18n-aria="googleLogin"></div>
+        <div class="login-divider"><span>o continúa con</span></div>
+        <div class="google-login" id="googleLoginButton" aria-label="Continuar con Google"></div>
         <div class="form-footer">
-            <span data-i18n="noAccount">¿No tienes cuenta?</span> <a href="registro.php" data-i18n="registerLink">Regístrate</a>
+            ¿No tienes cuenta? <a href="registro.php">Regístrate</a>
             <?php if (DEV_MODE === true): ?>
-                <br><a class="role-demo-link" href="#seleccionar-rol" id="openRolePicker" data-i18n="demoRole">Seleccionar rol (demostración)</a>
+                <br><button class="role-demo-link" type="button" id="openRolePicker" aria-haspopup="dialog" aria-controls="roleOverlay">Seleccionar rol (demostración)</button>
             <?php endif; ?>
         </div>
     </main>
@@ -650,21 +718,21 @@ if ($metodoPost) {
     <div class="dialog-backdrop" id="recoveryBackdrop">
         <section class="recovery-dialog" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle">
             <div class="dialog-head">
-                <h2 id="recoveryTitle" data-i18n="recoveryTitle">Recuperar contraseña</h2>
-                <button class="dialog-close" id="closeRecovery" type="button" aria-label="Cerrar" data-i18n-aria="close">×</button>
+                <h2 id="recoveryTitle">Recuperar contraseña</h2>
+                <button class="dialog-close" id="closeRecovery" type="button" aria-label="Cerrar">&times;</button>
             </div>
-            <p class="dialog-copy" data-i18n="recoveryCopy">Escribe el correo asociado a tu cuenta y te indicaremos cómo continuar.</p>
-            <div class="notice" id="recoveryNotice" role="status" aria-live="polite"></div>
+            <p class="dialog-copy">Escribe el correo asociado a tu cuenta y te indicaremos cómo continuar.</p>
+            <div class="notice" id="recoveryNotice" data-no-i18n role="status" aria-live="polite"></div>
             <form id="recoveryForm" novalidate>
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="action" value="recuperar">
                 <div class="form-group">
-                    <label for="correoRecuperacion" data-i18n="emailLabel">Correo electrónico</label>
-                    <input id="correoRecuperacion" name="correo_recuperacion" type="email" placeholder="usuario@kion.com" data-i18n-placeholder="emailPlaceholder" autocomplete="email" required>
+                    <label for="correoRecuperacion">Correo electrónico</label>
+                    <input id="correoRecuperacion" name="correo_recuperacion" type="email" placeholder="usuario@kion.com" autocomplete="email" required>
                 </div>
                 <div class="dialog-actions">
-                    <button class="btn-secondary" id="cancelRecovery" type="button" data-i18n="cancel">Cancelar</button>
-                    <button class="dialog-submit" type="submit" data-i18n="sendInstructions">Enviar instrucciones</button>
+                    <button class="btn-secondary" id="cancelRecovery" type="button">Cancelar</button>
+                    <button class="dialog-submit" type="submit">Enviar instrucciones</button>
                 </div>
             </form>
         </section>
@@ -674,185 +742,174 @@ if ($metodoPost) {
     <?php if (DEV_MODE === true): ?>
         <div class="role-overlay" id="roleOverlay">
             <section class="role-picker" role="dialog" aria-modal="true" aria-labelledby="rolePickerTitle">
-                <button class="role-picker-close" id="closeRolePicker" type="button" aria-label="Cerrar" data-i18n-aria="close">×</button>
+                <button class="role-picker-close" id="closeRolePicker" type="button" aria-label="Cerrar">&times;</button>
                 
                 <!-- Cabecera de 2 pasos -->
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                    <button id="btnVolverRoles" type="button" style="display: none; background: none; border: none; color: var(--gold-light); cursor: pointer; font-size: 12px; font-weight: bold; padding:0;" data-i18n="back">← Volver</button>
-                    <h2 id="rolePickerTitle" style="margin: 0; flex: 1; text-align: center;" data-i18n="selectRole">Seleccionar rol</h2>
+                    <button id="btnVolverRoles" type="button" style="display: none; background: none; border: none; color: var(--gold-light); cursor: pointer; font-size: 12px; font-weight: bold; padding:0;">← Volver</button>
+                    <h2 id="rolePickerTitle" data-no-i18n style="margin: 0; flex: 1; text-align: center;">Seleccionar rol</h2>
                 </div>
-                <p id="rolePickerSub" style="margin: 0 0 14px; color: var(--text-muted); font-size: 11px; text-align: center;" data-i18n="demoAccess">Acceso rápido para la exposición de avances.</p>
+                <p id="rolePickerSub" data-no-i18n style="margin: 0 0 14px; color: var(--text-muted); font-size: 11px; text-align: center;">Acceso rápido para la exposición de avances.</p>
 
                 <!-- Paso 1: Elegir el tipo de rol -->
-                <nav class="role-options" id="stepRoles" aria-label="Roles de demostración" data-i18n-aria="demoRoles">
-                    <button type="button" class="role-option btn-rol-categoria" data-rol="admin" data-i18n="administrator">Administrador General</button>
-                    <button type="button" class="role-option btn-rol-categoria" data-rol="gerente" data-i18n="manager">Gerente</button>
-                    <button type="button" class="role-option btn-rol-categoria" data-rol="cajero" data-i18n="cashier">Cajero</button>
-                    <button type="button" class="role-option btn-rol-categoria" data-rol="usuario" data-i18n="customer">Usuario / Cliente</button>
+                <nav class="role-options" id="stepRoles" aria-label="Roles de demostración">
+                    <button type="button" class="role-option btn-rol-categoria" data-rol="admin" data-label="Administrador General">Administrador General</button>
+                    <button type="button" class="role-option btn-rol-categoria" data-rol="gerente" data-label="Gerente">Gerente</button>
+                    <button type="button" class="role-option btn-rol-categoria" data-rol="cajero" data-label="Cajero">Cajero</button>
+                    <button type="button" class="role-option btn-rol-categoria" data-rol="usuario" data-label="Usuario / Cliente">Usuario / Cliente</button>
                 </nav>
 
                 <!-- Paso 2: Elegir el usuario (Llenado con AJAX) -->
-                <div class="role-options" id="stepUsuarios" style="display: none; max-height: 220px; overflow-y: auto; padding-right: 5px;">
+                <div class="role-options" id="stepUsuarios" data-no-i18n style="display: none; max-height: 220px; overflow-y: auto; padding-right: 5px;">
                 </div>
             </section>
         </div>
     <?php endif; ?>
 
     <script>
-        const I18N = {
-            es: {
-                documentTitle: 'PETKO | Iniciar sesión', brandBadge: 'Veterinaria & Farmacia', brandSubtitle: 'Vet & Agropecuario',
-                loginTitle: 'Iniciar sesión', emailLabel: 'Correo electrónico', emailPlaceholder: 'usuario@kion.com',
-                passwordLabel: 'Contraseña', passwordPlaceholder: 'Tu contraseña', showPassword: 'Mostrar contraseña',
-                hidePassword: 'Ocultar contraseña', forgotPassword: '¿Olvidaste tu contraseña?', rememberMe: 'Recordarme',
-                darkMode: 'Modo Oscuro', lightMode: 'Modo Claro',
-                languageToggle: 'Cambiar idioma',
-                pageControls: 'Controles de página',
-                loginButton: 'Iniciar sesión', orContinue: 'o continúa con', googleLogin: 'Continuar con Google',
-                noAccount: '¿No tienes cuenta?', registerLink: 'Regístrate', demoRole: 'Seleccionar rol (demostración)',
-                homeTitle: 'Volver al inicio', recoveryTitle: 'Recuperar contraseña', close: 'Cerrar',
-                recoveryCopy: 'Escribe el correo asociado a tu cuenta y te indicaremos cómo continuar.',
-                cancel: 'Cancelar', sendInstructions: 'Enviar instrucciones', back: '← Volver',
-                selectRole: 'Seleccionar rol', demoAccess: 'Acceso rápido para la exposición de avances.',
-                roleUsers: 'Usuarios', selectAccount: 'Selecciona la cuenta con la que deseas ingresar.',
-                demoRoles: 'Roles de demostración', administrator: 'Administrador General', manager: 'Gerente',
-                cashier: 'Cajero', customer: 'Usuario / Cliente',
-                invalidEmail: 'Escribe un correo electrónico válido.', enterPassword: 'Escribe tu contraseña.',
-                requestFailed: 'No fue posible completar la solicitud.', requestComplete: 'Solicitud completada.',
-                connectionFailed: 'No fue posible conectar con el servidor. Inténtalo de nuevo.',
-                googleFailed: 'No fue posible iniciar sesión con Google.', loginSuccess: 'Inicio de sesión correcto.',
-                googleConnectionFailed: 'No fue posible conectar con Google.', loadingUsers: 'Cargando usuarios...',
-                noUsers: 'No se encontraron usuarios activos en este rol.', connectionError: 'Error de conexión.',
-                serverConnectionError: 'Error de conexión con el servidor.',
-                messages: {
-                    'La solicitud expiró o no es válida. Recarga la página e inténtalo de nuevo.': 'The request expired or is invalid. Reload the page and try again.',
-                    'No fue posible conectar con la base de datos.': 'Could not connect to the database.',
-                    'El usuario seleccionado no existe en la base de datos.': 'The selected user does not exist in the database.',
-                    'Esta cuenta se encuentra inactiva.': 'This account is inactive.',
-                    'Acceso de prueba correcto.': 'Demo login successful.',
-                    'Error de BD al procesar rol de prueba.': 'Database error while processing the demo role.',
-                    'Demasiados intentos fallidos. Inténtalo en 15 minutos.': 'Too many failed attempts. Try again in 15 minutes.',
-                    'La contraseña o correo electrónico no son correctos.': 'The email or password is incorrect.',
-                    'No fue posible completar el inicio de sesión. Inténtalo de nuevo.': 'Could not complete sign-in. Please try again.',
-                    'Entorno local detectado: Redirigiendo a la pantalla para restablecer contraseña...': 'Local environment detected: redirecting to the password reset page...',
-                    'Si el correo está registrado, recibirás un enlace de recuperación en tu bandeja de entrada.': 'If the email is registered, you will receive a recovery link in your inbox.',
-                    'No fue posible procesar la solicitud. Inténtalo de nuevo.': 'Could not process the request. Please try again.',
-                    'No fue posible procesar la solicitud.': 'Could not process the request.',
-                    'Escribe tu contraseña.': 'Enter your password.',
-                    'Escribe un correo electrónico válido.': 'Enter a valid email address.',
-                    'No fue posible iniciar sesión con Google.': 'Could not sign in with Google.',
-                    'Inicio de sesión correcto.': 'Sign-in successful.',
-                    'No fue posible conectar con Google.': 'Could not connect to Google.',
-                    'Error de conexión con el servidor.': 'Could not connect to the server.'
-                }
-            },
-            en: {
-                documentTitle: 'PETKO | Sign in', brandBadge: 'Veterinary & Pharmacy', brandSubtitle: 'Veterinary & Agriculture',
-                loginTitle: 'Sign in', emailLabel: 'Email address', emailPlaceholder: 'user@kion.com',
-                passwordLabel: 'Password', passwordPlaceholder: 'Your password', showPassword: 'Show password',
-                hidePassword: 'Hide password', forgotPassword: 'Forgot your password?', rememberMe: 'Remember me',
-                darkMode: 'Dark mode', lightMode: 'Light mode',
-                languageToggle: 'Switch language',
-                pageControls: 'Page controls',
-                loginButton: 'Sign in', orContinue: 'or continue with', googleLogin: 'Continue with Google',
-                noAccount: "Don't have an account?", registerLink: 'Sign up', demoRole: 'Select role (demo)',
-                homeTitle: 'Back to home', recoveryTitle: 'Reset password', close: 'Close',
-                recoveryCopy: 'Enter the email associated with your account and we will tell you how to continue.',
-                cancel: 'Cancel', sendInstructions: 'Send instructions', back: '← Back',
-                selectRole: 'Select a role', demoAccess: 'Quick access for the progress presentation.',
-                roleUsers: 'Users', selectAccount: 'Select the account you want to sign in with.',
-                demoRoles: 'Demo roles', administrator: 'General Administrator', manager: 'Manager',
-                cashier: 'Cashier', customer: 'User / Customer',
-                invalidEmail: 'Enter a valid email address.', enterPassword: 'Enter your password.',
-                requestFailed: 'Could not complete the request.', requestComplete: 'Request completed.',
-                connectionFailed: 'Could not connect to the server. Please try again.',
-                googleFailed: 'Could not sign in with Google.', loginSuccess: 'Sign-in successful.',
-                googleConnectionFailed: 'Could not connect to Google.', loadingUsers: 'Loading users...',
-                noUsers: 'No active users were found for this role.', connectionError: 'Connection error.',
-                serverConnectionError: 'Could not connect to the server.',
-                messages: {
-                    'La solicitud expiró o no es válida. Recarga la página e inténtalo de nuevo.': 'The request expired or is invalid. Reload the page and try again.',
-                    'No fue posible conectar con la base de datos.': 'Could not connect to the database.',
-                    'El usuario seleccionado no existe en la base de datos.': 'The selected user does not exist in the database.',
-                    'Esta cuenta se encuentra inactiva.': 'This account is inactive.',
-                    'Acceso de prueba correcto.': 'Demo login successful.',
-                    'Error de BD al procesar rol de prueba.': 'Database error while processing the demo role.',
-                    'Demasiados intentos fallidos. Inténtalo en 15 minutos.': 'Too many failed attempts. Try again in 15 minutes.',
-                    'La contraseña o correo electrónico no son correctos.': 'The email or password is incorrect.',
-                    'No fue posible completar el inicio de sesión. Inténtalo de nuevo.': 'Could not complete sign-in. Please try again.',
-                    'Entorno local detectado: Redirigiendo a la pantalla para restablecer contraseña...': 'Local environment detected: redirecting to the password reset page...',
-                    'Si el correo está registrado, recibirás un enlace de recuperación en tu bandeja de entrada.': 'If the email is registered, you will receive a recovery link in your inbox.',
-                    'No fue posible procesar la solicitud. Inténtalo de nuevo.': 'Could not process the request. Please try again.',
-                    'No fue posible procesar la solicitud.': 'Could not process the request.',
-                    'Escribe tu contraseña.': 'Enter your password.',
-                    'Escribe un correo electrónico válido.': 'Enter a valid email address.',
-                    'No fue posible iniciar sesión con Google.': 'Could not sign in with Google.',
-                    'Inicio de sesión correcto.': 'Sign-in successful.',
-                    'No fue posible conectar con Google.': 'Could not connect to Google.',
-                    'Error de conexión con el servidor.': 'Could not connect to the server.'
-                }
-            }
-        };
-        let currentLang = localStorage.getItem('kion-lang') === 'en' ? 'en' : 'es';
-        const themeButton = document.getElementById('btnTheme');
-        let darkMode = localStorage.getItem('kion-theme') === 'dark';
-        document.body.classList.toggle('dark-mode', darkMode);
-
-        function updateThemeControl() {
-            themeButton.querySelector('i').className = `ph ${darkMode ? 'ph-sun' : 'ph-moon'}`;
-            const label = I18N[currentLang][darkMode ? 'lightMode' : 'darkMode'] || (darkMode ? 'Modo Claro' : 'Modo Oscuro');
-            themeButton.title = label;
-            themeButton.setAttribute('aria-label', label);
-        }
-        function applyTranslations() {
-            const translations = I18N[currentLang];
-            document.documentElement.lang = currentLang;
-            document.querySelectorAll('[data-i18n]').forEach((element) => {
-                const key = element.dataset.i18n;
-                if (translations[key] !== undefined) element.textContent = translations[key];
-            });
-            document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => {
-                const key = element.dataset.i18nPlaceholder;
-                if (translations[key] !== undefined) element.setAttribute('placeholder', translations[key]);
-            });
-            document.querySelectorAll('[data-i18n-title]').forEach((element) => {
-                const key = element.dataset.i18nTitle;
-                if (translations[key] !== undefined) element.title = translations[key];
-            });
-            document.querySelectorAll('[data-i18n-aria]').forEach((element) => {
-                const key = element.dataset.i18nAria;
-                if (translations[key] !== undefined) element.setAttribute('aria-label', translations[key]);
-            });
-            document.querySelectorAll('.toggle-password').forEach((button) => {
-                const key = button.getAttribute('aria-pressed') === 'true' ? 'hidePassword' : 'showPassword';
-                button.dataset.i18nAria = key;
-                button.setAttribute('aria-label', translations[key]);
-            });
-            updateThemeControl();
-        }
-        document.getElementById('btnLang').addEventListener('click', () => {
-            currentLang = currentLang === 'es' ? 'en' : 'es';
-            localStorage.setItem('kion-lang', currentLang);
-            applyTranslations();
-        });
-        themeButton.addEventListener('click', () => {
-            darkMode = !darkMode;
-            document.body.classList.toggle('dark-mode', darkMode);
-            localStorage.setItem('kion-theme', darkMode ? 'dark' : 'light');
-            updateThemeControl();
-        });
-        applyTranslations();
-
         const loginForm = document.getElementById('loginForm');
         const loginNotice = document.getElementById('loginNotice');
         const recoveryForm = document.getElementById('recoveryForm');
         const recoveryNotice = document.getElementById('recoveryNotice');
         const recoveryBackdrop = document.getElementById('recoveryBackdrop');
+        const googleClientId = '467947233896-kuvnpl5cdegqkduq4m3e1ste6280feaf.apps.googleusercontent.com';
+
+        // =====================================================================
+        // PETKO · MODO OSCURO + IDIOMA (comparte petko_dark / petko_lang con el home)
+        // =====================================================================
+        const petkoGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+        const petkoSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+
+        const loginI18n = {
+            'Inicio': 'Home',
+            'Volver al inicio': 'Back to home',
+            'Veterinaria & Farmacia': 'Veterinary & Pharmacy',
+            'Vet & Agropecuario': 'Vet & Livestock',
+            'Iniciar sesión': 'Sign in',
+            'Correo electrónico': 'Email',
+            'Contraseña': 'Password',
+            'Tu contraseña': 'Your password',
+            '¿Olvidaste tu contraseña?': 'Forgot your password?',
+            'Recordarme': 'Remember me',
+            'o continúa con': 'or continue with',
+            'Continuar con Google': 'Continue with Google',
+            '¿No tienes cuenta?': "Don't have an account?",
+            'Regístrate': 'Sign up',
+            'Seleccionar rol (demostración)': 'Select role (demo)',
+            'Recuperar contraseña': 'Reset password',
+            'Escribe el correo asociado a tu cuenta y te indicaremos cómo continuar.': "Enter the email linked to your account and we'll tell you how to continue.",
+            'Cancelar': 'Cancel',
+            'Enviar instrucciones': 'Send instructions',
+            'Cerrar': 'Close',
+            'Mostrar contraseña': 'Show password',
+            'Ocultar contraseña': 'Hide password',
+            'Cambiar a modo claro': 'Switch to light mode',
+            'Cambiar a modo oscuro': 'Switch to dark mode',
+            'Cambiar a español': 'Switch to Spanish',
+            'Switch to English': 'Switch to English',
+            'PETKO | Iniciar sesión': 'PETKO | Sign in',
+            // Selector de rol (demo)
+            '← Volver': '← Back',
+            'Seleccionar rol': 'Select role',
+            'Acceso rápido para la exposición de avances.': 'Quick access for the progress presentation.',
+            'Administrador General': 'General Administrator',
+            'Gerente': 'Manager',
+            'Cajero': 'Cashier',
+            'Usuario / Cliente': 'User / Customer',
+            'Usuarios': 'Users',
+            'Selecciona la cuenta con la que deseas ingresar.': 'Select the account you want to sign in with.',
+            'Cargando usuarios...': 'Loading users...',
+            'No se encontraron usuarios activos en este rol.': 'No active users found for this role.',
+            'Error de conexión.': 'Connection error.',
+            // Mensajes
+            'Escribe un correo electrónico válido.': 'Enter a valid email address.',
+            'Escribe tu contraseña.': 'Enter your password.',
+            'No fue posible completar la solicitud.': 'We could not complete the request.',
+            'Solicitud completada.': 'Request completed.',
+            'No fue posible conectar con el servidor. Inténtalo de nuevo.': 'Could not connect to the server. Please try again.',
+            'No fue posible iniciar sesión con Google.': 'Could not sign in with Google.',
+            'No fue posible conectar con Google.': 'Could not connect to Google.',
+            'Inicio de sesión correcto.': 'Signed in successfully.',
+            'Acceso de prueba correcto.': 'Demo access granted.',
+            'Error de conexión con el servidor.': 'Server connection error.',
+            'Demasiados intentos fallidos. Inténtalo en 15 minutos.': 'Too many failed attempts. Try again in 15 minutes.',
+            'El usuario seleccionado no existe en la base de datos.': 'The selected user does not exist in the database.',
+            'Error de BD al procesar rol de prueba.': 'Database error while processing the demo role.',
+            'Esta cuenta se encuentra inactiva.': 'This account is inactive.',
+            'La contraseña o correo electrónico no son correctos.': 'The email or password is incorrect.',
+            'La solicitud expiró o no es válida. Recarga la página e inténtalo de nuevo.': 'The request expired or is not valid. Reload the page and try again.',
+            'No fue posible completar el inicio de sesión. Inténtalo de nuevo.': 'Could not complete sign in. Please try again.',
+            'No fue posible procesar la solicitud. Inténtalo de nuevo.': 'Could not process the request. Please try again.',
+            'No fue posible conectar con la base de datos.': 'Could not connect to the database.',
+            'Si el correo está registrado, recibirás un enlace de recuperación en tu bandeja de entrada.': 'If the email is registered, you will receive a recovery link in your inbox.'
+        };
+        let loginEN = petkoGet('petko_lang') === 'en';
+        const t = (es) => (loginEN && Object.prototype.hasOwnProperty.call(loginI18n, es)) ? loginI18n[es] : es;
+        const origTexts = new Map();
+
+        function applyLoginLanguage() {
+            // Textos
+            document.querySelectorAll('body *:not(script):not(style)').forEach((el) => {
+                if (el.closest('[data-no-i18n]')) return;
+                el.childNodes.forEach((node) => {
+                    if (node.nodeType !== Node.TEXT_NODE) return;
+                    if (!origTexts.has(node)) origTexts.set(node, node.textContent);
+                    const original = origTexts.get(node);
+                    const key = original.trim().replace(/\s+/g, ' ');
+                    if (!key) return;
+                    const lead = original.match(/^\s*/)[0], trail = original.match(/\s*$/)[0];
+                    node.textContent = lead + t(key) + trail;
+                });
+            });
+            // Atributos
+            [['placeholder', 'esPh'], ['aria-label', 'esAria'], ['title', 'esTitle']].forEach(([attr, key]) => {
+                document.querySelectorAll('[' + attr + ']').forEach((el) => {
+                    if (el.hasAttribute('data-no-i18n')) return;
+                    if (el.dataset[key] === undefined) el.dataset[key] = el.getAttribute(attr);
+                    el.setAttribute(attr, t(el.dataset[key]));
+                });
+            });
+            // Avisos ya mostrados
+            document.querySelectorAll('.notice[data-es]').forEach((n) => { n.textContent = t(n.dataset.es); });
+            // Selector de rol
+            if (typeof renderRoleHeader === 'function') renderRoleHeader();
+            // Barra superior
+            document.documentElement.lang = loginEN ? 'en' : 'es';
+            document.title = t('PETKO | Iniciar sesión');
+            const langBtn = document.getElementById('languageToggle');
+            const lt = loginEN ? 'Cambiar a español' : 'Switch to English';
+            langBtn.textContent = loginEN ? 'ES' : 'EN';
+            langBtn.title = lt; langBtn.setAttribute('aria-label', lt);
+            updateDarkLabels();
+        }
+
+        function updateDarkLabels() {
+            const btn = document.getElementById('darkModeBtn');
+            const dark = document.body.classList.contains('dark-mode');
+            const label = t(dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+            btn.textContent = dark ? '☀️' : '🌙';
+            btn.title = label; btn.setAttribute('aria-label', label);
+            btn.setAttribute('aria-pressed', String(dark));
+        }
+
+        document.getElementById('darkModeBtn').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            petkoSet('petko_dark', document.body.classList.contains('dark-mode') ? '1' : '0');
+            updateDarkLabels();
+            renderGoogleButton();
+        });
+        document.getElementById('languageToggle').addEventListener('click', () => {
+            loginEN = !loginEN;
+            petkoSet('petko_lang', loginEN ? 'en' : 'es');
+            applyLoginLanguage();
+            renderGoogleButton();
+        });
+
+
+
         function showNotice(element, message, type) {
-            const translations = I18N[currentLang];
-            element.textContent = currentLang === 'en'
-                ? (translations.messages[message] || translations[message] || message)
-                : message;
+            element.dataset.es = message;
+            element.textContent = t(message);
             element.className = `notice visible ${type}`;
         }
 
@@ -868,13 +925,13 @@ if ($metodoPost) {
                 });
                 const result = await response.json();
                 if (!result.ok) {
-                    showNotice(notice, result.message || I18N[currentLang].requestFailed, 'error');
+                    showNotice(notice, result.message || 'No fue posible completar la solicitud.', 'error');
                     return;
                 }
-                showNotice(notice, result.message || I18N[currentLang].requestComplete, 'success');
+                showNotice(notice, result.message || 'Solicitud completada.', 'success');
                 if (result.redirect) window.setTimeout(() => { window.location.href = result.redirect; }, successDelay);
             } catch (error) {
-                showNotice(notice, I18N[currentLang].connectionFailed, 'error');
+                showNotice(notice, 'No fue posible conectar con el servidor. Inténtalo de nuevo.', 'error');
             } finally {
                 if (button) button.disabled = false;
             }
@@ -885,8 +942,8 @@ if ($metodoPost) {
                 const input = button.parentElement.querySelector('input');
                 const show = input.type === 'password';
                 input.type = show ? 'text' : 'password';
-                button.dataset.i18nAria = show ? 'hidePassword' : 'showPassword';
-                button.setAttribute('aria-label', I18N[currentLang][button.dataset.i18nAria]);
+                button.dataset.esAria = show ? 'Ocultar contraseña' : 'Mostrar contraseña';
+                button.setAttribute('aria-label', t(button.dataset.esAria));
                 button.setAttribute('aria-pressed', String(show));
             });
         });
@@ -896,11 +953,11 @@ if ($metodoPost) {
             const email = loginForm.elements.correo.value.trim();
             const password = loginForm.elements.contrasena.value;
             if (!email || !loginForm.elements.correo.validity.valid) {
-                showNotice(loginNotice, I18N[currentLang].invalidEmail, 'error');
+                showNotice(loginNotice, 'Escribe un correo electrónico válido.', 'error');
                 return;
             }
             if (!password) {
-                showNotice(loginNotice, I18N[currentLang].enterPassword, 'error');
+                showNotice(loginNotice, 'Escribe tu contraseña.', 'error');
                 return;
             }
             sendForm(loginForm, loginNotice);
@@ -926,39 +983,42 @@ if ($metodoPost) {
             event.preventDefault();
             const emailInput = recoveryForm.elements.correo_recuperacion;
             if (!emailInput.value.trim() || !emailInput.validity.valid) {
-                showNotice(recoveryNotice, I18N[currentLang].invalidEmail, 'error');
+                showNotice(recoveryNotice, 'Escribe un correo electrónico válido.', 'error');
                 return;
             }
             sendForm(recoveryForm, recoveryNotice, 0);
         });
 
-        window.procesarRespuestaGoogle = async function procesarRespuestaGoogle(response) {
-            if (!response || typeof response.credential !== 'string' || response.credential === '') {
-                showNotice(loginNotice, I18N[currentLang].googleFailed, 'error');
-                return;
-            }
-
-            const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-            const body = new FormData();
-            body.append('credential', response.credential);
-            body.append('csrf_token', csrfToken);
-
-            try {
-                const serverResponse = await fetch('login-google.php', {
-                    method: 'POST',
-                    body
-                });
-                const result = await serverResponse.json();
-                if (!result.ok) {
-                    showNotice(loginNotice, result.message || I18N[currentLang].googleFailed, 'error');
-                    return;
-                }
-                showNotice(loginNotice, I18N[currentLang].loginSuccess, 'success');
-                window.setTimeout(() => { window.location.href = result.redirect || 'index.php'; }, 800);
-            } catch (error) {
-                showNotice(loginNotice, I18N[currentLang].googleConnectionFailed, 'error');
-            }
-        };
+        function handleGoogleCredential(response) {
+            const body = new URLSearchParams({ credential: response.credential });
+            fetch('google-callback.php', { method: 'POST', body })
+                .then((response) => response.json())
+                .then((result) => {
+                    if (!result.ok) {
+                        showNotice(loginNotice, result.message || 'No fue posible iniciar sesión con Google.', 'error');
+                        return;
+                    }
+                    showNotice(loginNotice, 'Inicio de sesión correcto.', 'success');
+                    window.setTimeout(() => { window.location.href = result.redirect; }, 1500);
+                })
+                .catch(() => showNotice(loginNotice, 'No fue posible conectar con Google.', 'error'));
+        }
+        let googleReady = false;
+        function renderGoogleButton() {
+            if (!googleReady) return;
+            const dark = document.body.classList.contains('dark-mode');
+            const box = document.getElementById('googleLoginButton');
+            box.innerHTML = '';
+            google.accounts.id.renderButton(box, {
+                theme: dark ? 'filled_black' : 'outline', size: 'medium', width: Math.min(290, box.clientWidth || 290), text: 'continue_with', shape: 'rectangular', locale: loginEN ? 'en' : 'es'
+            });
+        }
+        window.addEventListener('load', () => {
+            if (!window.google?.accounts?.id) return;
+            google.accounts.id.initialize({ client_id: googleClientId, callback: handleGoogleCredential });
+            googleReady = true;
+            renderGoogleButton();
+        });
 
         // =====================================================================
         // LÓGICA DE ROLES: 2 PASOS (JS)
@@ -983,12 +1043,23 @@ if ($metodoPost) {
             if (event.target === roleOverlay) roleOverlay.classList.remove('visible');
         });
 
+        let roleStepState = 'roles', roleCatLabel = '';
+        function renderRoleHeader() {
+            if (!rolePickerTitle) return;
+            if (roleStepState === 'roles') {
+                rolePickerTitle.textContent = t('Seleccionar rol');
+                rolePickerSub.textContent = t('Acceso rápido para la exposición de avances.');
+            } else {
+                rolePickerTitle.textContent = t('Usuarios') + ': ' + t(roleCatLabel);
+                rolePickerSub.textContent = t('Selecciona la cuenta con la que deseas ingresar.');
+            }
+        }
         function mostrarPasoRoles() {
             stepRoles.style.display = 'grid';
             stepUsuarios.style.display = 'none';
             btnVolverRoles.style.display = 'none';
-            rolePickerTitle.textContent = I18N[currentLang].selectRole;
-            rolePickerSub.textContent = I18N[currentLang].demoAccess;
+            roleStepState = 'roles';
+            renderRoleHeader();
         }
 
         btnVolverRoles.addEventListener('click', mostrarPasoRoles);
@@ -998,19 +1069,20 @@ if ($metodoPost) {
                 evento.preventDefault();
                 const rol = btn.dataset.rol;
 
-                stepUsuarios.innerHTML = `<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:10px;">${I18N[currentLang].loadingUsers}</p>`;
+                stepUsuarios.innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:10px;">' + t('Cargando usuarios...') + '</p>';
                 stepRoles.style.display = 'none';
                 stepUsuarios.style.display = 'grid';
                 btnVolverRoles.style.display = 'inline-block';
 
-                rolePickerTitle.textContent = `${I18N[currentLang].roleUsers}: ${btn.textContent}`;
-                rolePickerSub.textContent = I18N[currentLang].selectAccount;
+                roleStepState = 'users';
+                roleCatLabel = btn.dataset.label;
+                renderRoleHeader();
 
                 fetch(`?action=get_usuarios_por_rol&rol=${rol}`)
                     .then(res => res.json())
                     .then(res => {
                         if (!res.ok || !res.data || res.data.length === 0) {
-                            stepUsuarios.innerHTML = `<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:10px;">${I18N[currentLang].noUsers}</p>`;
+                            stepUsuarios.innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:10px;">' + t('No se encontraron usuarios activos en este rol.') + '</p>';
                             return;
                         }
 
@@ -1024,7 +1096,7 @@ if ($metodoPost) {
                         `).join('');
                     })
                     .catch(() => {
-                        stepUsuarios.innerHTML = `<p style="text-align:center; color:var(--error-red); font-size:12px; padding:10px;">${I18N[currentLang].connectionError}</p>`;
+                        stepUsuarios.innerHTML = '<p style="text-align:center; color:var(--error-red); font-size:12px; padding:10px;">' + t('Error de conexión.') + '</p>';
                     });
             });
         });
@@ -1061,9 +1133,11 @@ if ($metodoPost) {
                     showNotice(loginNotice, resultado.message, 'error');
                 }
             })
-            .catch(() => showNotice(loginNotice, I18N[currentLang].serverConnectionError, 'error'));
+            .catch(() => showNotice(loginNotice, 'Error de conexión con el servidor.', 'error'));
         });
         <?php endif; ?>
+
+        applyLoginLanguage();
 
         document.querySelectorAll('a[href="registro.php"]').forEach((link) => {
             link.addEventListener('click', (event) => {
@@ -1073,6 +1147,6 @@ if ($metodoPost) {
             });
         });
     </script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://accounts.google.com/gsi/client?hl=es" async defer></script>
 </body>
 </html>
