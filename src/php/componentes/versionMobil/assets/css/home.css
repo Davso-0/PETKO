@@ -1,0 +1,95 @@
+/* ==========================================================================
+   KION · VERSIÓN MÓVIL · home.css
+   Página de inicio: encabezado compacto, secciones en bloques/tarjetas,
+   carruseles para las listas largas y navegación inferior.
+   ========================================================================== */
+.km-home [hidden] { display: none !important; }
+
+/* ---------- Encabezado compacto ---------- */
+.km-home .navbar {
+  height: calc(var(--km-top-h) + var(--km-safe-t)) !important;
+  padding: var(--km-safe-t) calc(var(--km-gut) + var(--km-safe-r)) 0 calc(var(--km-gut) + var(--km-safe-l)) !important;
+  display: flex !important; align-items: center; justify-content: space-between;
+}
+.km-home .navbar .logo img { height: 34px !important; width: auto !important; }
+.km-home .menu { display: flex !important; align-items: center; gap: 8px !important; }
+.km-home .menu > a, .km-home .menu > .logout-form { display: none !important; }
+.km-home .dark-mode-btn, .km-home .language-btn {
+  display: grid !important; place-items: center; width: 38px !important; height: 38px !important; min-height: 0; padding: 0 !important;
+  border-radius: 50% !important; font-size: 16px !important;
+}
+
+/* ---------- Hero con desplazamiento (más corto en móvil) ---------- */
+.km-home .ps-wrap { height: 300vh !important; }
+.km-home .ps-sticky { height: 100dvh !important; min-height: 0 !important; padding-top: calc(var(--km-top-h) + var(--km-safe-t) + 8px) !important; padding-bottom: calc(var(--km-nav-h) + var(--km-safe-b) + 8px) !important; box-sizing: border-box; }
+@media (prefers-reduced-motion: reduce) { .km-home .ps-wrap { height: auto !important; } .km-home .ps-sticky { height: auto !important; min-height: 100dvh !important; } }
+
+.km-home .intro { padding: 28px var(--km-gut) !important; font-size: clamp(16px, 4.8vw, 20px) !important; line-height: 1.4; }
+
+/* ---------- Secciones en bloques ---------- */
+.km-home .sec { padding: 44px var(--km-gut) !important; scroll-margin-top: calc(var(--km-top-h) + var(--km-safe-t)); }
+.km-home .label { font-size: 11px !important; letter-spacing: .12em; }
+.km-home .sec .title { font-size: clamp(23px, 6.8vw, 30px) !important; line-height: 1.15 !important; letter-spacing: -.02em; margin-bottom: 10px !important; }
+.km-home .sec .desc { font-size: 14.5px !important; line-height: 1.6 !important; margin-bottom: 20px !important; }
+
+/* Tarjetas: cuadrícula compacta de 2 columnas (funciones, beneficios) */
+.km-home .grid { display: grid !important; gap: 10px !important; }
+.km-home .g4, .km-home .g6 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+.km-home .card, .km-home .benefit { padding: 16px 14px !important; border-radius: 18px !important; transform: none !important; }
+.km-home .card h3, .km-home .benefit strong { font-size: 14.5px !important; line-height: 1.25; margin-bottom: 6px !important; display: block; }
+.km-home .card p, .km-home .benefit p { font-size: 12.5px !important; line-height: 1.5 !important; }
+.km-home .card .ico { font-size: 26px !important; margin-bottom: 8px !important; }
+.km-home .card .num { font-size: 22px !important; }
+
+/* Listas de 3 elementos (sucursales, pasos): carrusel con snap */
+.km-home .g3 {
+  display: flex !important; flex-wrap: nowrap; gap: 12px !important; overflow-x: auto; scroll-snap-type: x mandatory;
+  margin-inline: calc(var(--km-gut) * -1); padding: 2px var(--km-gut) 12px; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.km-home .g3::-webkit-scrollbar { display: none; }
+.km-home .g3 > .card { flex: 0 0 min(76%, 300px); scroll-snap-align: center; }
+
+/* Mascotas: pestañas desplazables + panel apilado */
+.km-home .ptabs { display: flex !important; flex-wrap: nowrap !important; overflow-x: auto; gap: 8px !important; margin-inline: calc(var(--km-gut) * -1); padding: 4px var(--km-gut) 10px; scrollbar-width: none; justify-content: flex-start !important; }
+.km-home .ptabs::-webkit-scrollbar { display: none; }
+.km-home .ptabs button { flex: none; min-height: 44px; }
+.km-home .ppanel.on { display: flex !important; flex-direction: column; gap: 18px !important; }
+.km-home .pgal { max-width: 100%; }
+.km-home .ptxt h3 { font-size: 20px !important; }
+.km-home .ptxt p, .km-home .ptxt li { font-size: 14px !important; }
+
+/* Galería de polaroids */
+.km-home .pols { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 10px !important; margin-top: 10px; }
+.km-home .pols .pol { width: 100% !important; max-width: 100%; margin: 0 !important; }
+
+/* Bloques con texto + imagen */
+.km-home .split { flex-direction: column !important; gap: 22px !important; }
+.km-home .split h2 { font-size: clamp(23px, 6.8vw, 30px) !important; margin-bottom: 12px !important; }
+.km-home .split p { font-size: 14.5px !important; line-height: 1.65 !important; margin-bottom: 16px !important; }
+
+/* Llamado final y pie */
+.km-home .cta { padding: 48px var(--km-gut) !important; }
+.km-home .cta h2 { font-size: clamp(24px, 7vw, 30px) !important; }
+.km-home .cta p { font-size: 14.5px !important; }
+.km-home .cta .fl { font-size: 30px !important; }
+.km-home .cta a, .km-home .ps-b1 { min-height: 50px; display: inline-flex; align-items: center; justify-content: center; }
+.km-home footer { padding: 24px var(--km-gut) 8px !important; flex-direction: column; gap: 10px; text-align: center; font-size: 12px; }
+
+/* ---------- Hoja "Cuenta / Más" (usa los nodos originales de login/logout) ---------- */
+.km-home .km-sheet .btn-login {
+  display: flex; align-items: center; justify-content: center; min-height: 50px; padding: 12px 18px; border-radius: 999px;
+  background: #5cc8ff; color: #04142e; font-weight: 800; font-size: 15px; text-decoration: none;
+}
+.km-home .km-sheet .logout-form { margin: 0; display: block; }
+.km-home .km-sheet .logout-link {
+  width: 100%; min-height: 48px; border-radius: 999px; border: 1.5px solid var(--km-line); background: transparent;
+  color: var(--km-danger); font: inherit; font-weight: 800; font-size: 14px; cursor: pointer;
+}
+.km-home .km-sheet .km-link-desk { display: block; text-align: center; font-size: 13px; font-weight: 700; color: var(--km-faint); padding: 10px; text-decoration: none; }
+.km-home .km-sheet h3.km-sec { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--km-faint); margin: 14px 2px 8px; }
+
+/* Tablets */
+@media (min-width: 700px) {
+  .km-home .g4 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .km-home .g3 > .card { flex-basis: 44%; }
+}

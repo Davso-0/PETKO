@@ -1,0 +1,205 @@
+/* ==========================================================================
+   KION · VERSIÓN MÓVIL · usuario.css
+   Panel del cliente: apartados/compras, ticket y configuración de cuenta.
+   (Conserva la paleta "café" propia de este panel.)
+   ========================================================================== */
+.km-usuario {
+  --km-accent: var(--coffee-main);
+  --km-accent-2: var(--coffee-main);
+  --km-grad: var(--coffee-gradient);
+  --km-on-grad: #fff;
+  --km-shadow: 0 4px 14px rgba(0, 0, 0, .07);
+}
+
+/* Encabezado: este panel usa un título simple */
+.km-usuario #topbarTitle { font-size: 17px !important; }
+.km-usuario .role-chip { display: none !important; }
+
+/* ---------- Lista de apartados / compras ---------- */
+.km-usuario .compras-lista { display: grid; gap: 12px; }
+.km-usuario .compra-card {
+  display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden; border-radius: var(--km-r) !important;
+  box-shadow: var(--km-shadow) !important; transform: none !important;
+}
+.km-usuario .compra-card__header {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  padding: 10px 14px !important; font-size: 12.5px;
+}
+.km-usuario .compra-card__fecha { gap: 6px !important; min-width: 0; }
+.km-usuario .compra-card__folio-wrap { gap: 6px !important; }
+.km-usuario .folio-tag { font-size: 11.5px !important; }
+.km-usuario .btn-copy-folio { width: 34px !important; height: 34px !important; }
+.km-usuario .compra-card__body {
+  display: grid !important; grid-template-columns: 76px minmax(0, 1fr) !important; gap: 12px !important; padding: 14px !important; align-items: start;
+}
+.km-usuario .compra-card__thumb { width: 76px !important; height: 76px !important; border-radius: 14px !important; }
+.km-usuario .compra-card__thumb img { width: 100%; height: 100%; object-fit: cover; }
+.km-usuario .compra-card__info { min-width: 0; gap: 6px; }
+.km-usuario .compra-card__badges { gap: 6px !important; flex-wrap: wrap; }
+.km-usuario .compra-card__titulo { font-size: 15px !important; line-height: 1.3 !important; overflow-wrap: anywhere; }
+.km-usuario .compra-card__detalles { font-size: 12.5px !important; gap: 4px 6px !important; flex-wrap: wrap; }
+.km-usuario .compra-card__total { font-size: 15px !important; }
+.km-usuario .compra-card__vigencia { font-size: 12px !important; }
+.km-usuario .compra-card__side {
+  grid-column: 1 / -1; display: flex !important; flex-direction: row !important; align-items: center; justify-content: space-between; gap: 12px;
+  width: auto !important; padding: 12px 0 0 !important; margin: 4px 0 0 !important; border: 0 !important; border-top: 1px dashed var(--km-line) !important;
+}
+.km-usuario .compra-card__sucursal-val { font-size: 13px !important; }
+.km-usuario .btn-card-action { flex: none; min-height: 42px; padding: 10px 16px !important; border-radius: 999px !important; font-size: 13px !important; }
+.km-usuario .compras-empty { padding: 32px 16px !important; border-radius: var(--km-r); }
+
+/* ---------- Configuración de cuenta ---------- */
+.km-usuario #view-config .panel { display: flex !important; flex-direction: column; gap: 22px !important; }
+.km-usuario #view-config .panel > div { flex: 1 1 100% !important; min-width: 0 !important; }
+.km-usuario #view-config .panel h3 { margin-bottom: 14px !important; font-size: 15px !important; }
+.km-usuario .form-group { margin-bottom: 14px; }
+.km-usuario .form-group label { display: block; margin-bottom: 6px; font-size: 12.5px; font-weight: 700; color: var(--km-soft); }
+.km-usuario #btnSolicitarCambioPass { width: 100% !important; max-width: 100% !important; }
+.km-usuario [style*="min-width: 300px"] { min-width: 0 !important; }
+
+/* ---------- Ticket (diálogo) → hoja inferior ---------- */
+.km-usuario dialog.ticket-dialog {
+  margin: auto 0 0 0 !important; width: 100% !important; max-width: none !important; max-height: 94dvh !important; padding: 0 !important;
+  border: 0 !important; background: transparent !important; overflow: visible;
+}
+.km-usuario dialog.ticket-dialog[open] { animation: km-sheet-in .38s var(--km-ease) both; }
+.km-usuario dialog.ticket-dialog::backdrop { background: rgba(7, 26, 50, .55); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.km-usuario .tk-box {
+  width: 100% !important; max-width: 560px !important; margin-inline: auto; max-height: 94dvh; overflow-y: auto; overscroll-behavior: contain;
+  border-radius: 24px 24px 0 0 !important; padding-bottom: calc(18px + var(--km-safe-b)) !important;
+}
+.km-usuario .tk-meta { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+.km-usuario .tk-close { top: 10px !important; right: 10px !important; width: 38px; height: 38px; }
+.km-usuario .tk-done-btn { width: 100%; min-height: 48px; }
+@keyframes km-sheet-in { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Tablets */
+@media (min-width: 640px) {
+  .km-usuario .compras-lista { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .km-usuario #view-config .panel { flex-direction: row; }
+}
+
+/* ============================================================
+   Consultas Veterinarias  (#view-consultas)
+   ============================================================ */
+
+/* Grid de paneles → columna en móvil */
+.km-usuario #view-consultas .vet-grid,
+.km-usuario #view-consultas .row,
+.km-usuario #view-consultas [class*="col-"] {
+  display: flex !important;
+  flex-direction: column;
+  gap: 14px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-inline: 0 !important;
+  padding-inline: 0 !important;
+  float: none !important;
+  flex: 1 1 100% !important;
+}
+
+/* Tarjetas / paneles individuales */
+.km-usuario #view-consultas .panel,
+.km-usuario #view-consultas .card {
+  margin-bottom: 0 !important;
+  width: 100% !important;
+}
+
+/* Lista de mascotas */
+.km-usuario .pet-list,
+.km-usuario #view-consultas .pet-list {
+  display: flex !important;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.km-usuario .pet-item,
+.km-usuario #view-consultas .pet-item {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px !important;
+  border-radius: 14px !important;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+.km-usuario .pet-icon { width: 38px !important; height: 38px !important; border-radius: 10px !important; font-size: 20px !important; flex: none; }
+.km-usuario .pet-name { font-size: 15px !important; overflow-wrap: anywhere; flex: 1 1 0; }
+.km-usuario .pet-actions { flex: none; gap: 6px !important; display: flex; }
+.km-usuario .pet-actions button { min-width: 34px; min-height: 34px; padding: 6px !important; }
+.km-usuario .pet-empty { text-align: center; padding: 24px 16px !important; }
+
+/* Formulario de consulta → campo por renglón */
+.km-usuario #view-consultas .form-row,
+.km-usuario #view-consultas .form-grid {
+  grid-template-columns: 1fr !important;
+  display: grid;
+  gap: 12px;
+}
+.km-usuario #view-consultas .vet-form .btn-primary,
+.km-usuario #view-consultas [type="submit"] {
+  width: 100% !important;
+  min-height: 48px;
+}
+
+/* Tabla de historial de citas → tarjetas */
+.km-usuario #view-consultas .vet-table,
+.km-usuario #view-consultas table { width: 100% !important; }
+
+/* Botón colapsar/expandir historial */
+.km-usuario #btnToggleCitas {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px !important;
+  padding: 8px 14px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--km-line);
+  background: var(--km-panel);
+  color: var(--km-soft);
+  min-height: 36px;
+}
+.km-usuario .citas-colapsable.is-collapsed { max-height: 0; overflow: hidden; }
+
+/* Tarjeta de ticket de mascota / mi-cuenta (dialog → hoja) */
+.km-usuario .mc-ticket-dialog {
+  margin: auto 0 0 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: 94dvh !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+.km-usuario .mc-ticket-dialog[open] { animation: km-sheet-in .38s var(--km-ease) both; }
+.km-usuario .mc-card-body {
+  grid-template-columns: 72px minmax(0, 1fr) !important;
+  gap: 12px !important;
+  padding: 14px !important;
+}
+.km-usuario .mc-card-thumb { width: 72px !important; height: 72px !important; }
+.km-usuario .mc-card-side {
+  grid-column: 1 / -1 !important;
+  flex-direction: row !important;
+  align-items: center;
+  padding-left: 0 !important;
+  padding-top: 12px !important;
+  border-left: none !important;
+  border-top: 1px dashed var(--km-line) !important;
+}
+
+/* Tablets: paneles lado a lado */
+@media (min-width: 640px) {
+  .km-usuario #view-consultas .vet-grid {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+  .km-usuario #view-consultas .vet-grid .panel,
+  .km-usuario #view-consultas .vet-grid .card {
+    flex: 1 1 0;
+  }
+  .km-usuario #view-consultas .form-row,
+  .km-usuario #view-consultas .form-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}

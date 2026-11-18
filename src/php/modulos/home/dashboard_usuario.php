@@ -1,6 +1,30 @@
 <?php
 declare(strict_types=1);
 
+/* =====================================================
+   DETECCIÓN AUTOMÁTICA DE VERSIÓN MÓVIL
+   Solo en peticiones GET directas (no AJAX ni action params)
+===================================================== */
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !isset($_GET['action'])) {
+    $__kion_movil = false;
+    if (isset($_COOKIE['kion_vista'])) {
+        $__kion_movil = $_COOKIE['kion_vista'] === 'movil';
+    } elseif (isset($_SERVER['HTTP_SEC_CH_UA_MOBILE'])) {
+        $__kion_movil = trim((string)$_SERVER['HTTP_SEC_CH_UA_MOBILE']) === '?1';
+    } else {
+        $__kion_movil = (bool)preg_match(
+            '/Android.+Mobile|iPhone|iPod|Windows Phone|Mobile Safari|Opera Mini/i',
+            (string)($_SERVER['HTTP_USER_AGENT'] ?? '')
+        );
+    }
+    if ($__kion_movil) {
+        header('Accept-CH: Sec-CH-UA-Mobile');
+        header('Vary: Sec-CH-UA-Mobile, Cookie');
+        header('Location: ../../componentes/versionmobil/dashboard_usuario.php');
+        exit;
+    }
+}
+
 ob_start();
 require_once __DIR__ . '/../../config/conexion_BD.php';
 require_once __DIR__ . '/../../config/auth_guard.php';

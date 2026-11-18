@@ -5,6 +5,30 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+/* =====================================================
+   DETECCIÓN AUTOMÁTICA DE VERSIÓN MÓVIL
+   Solo en peticiones GET directas (no AJAX)
+===================================================== */
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($_GET['action'] ?? '') === '') {
+    $__kion_movil = false;
+    if (isset($_COOKIE['kion_vista'])) {
+        $__kion_movil = $_COOKIE['kion_vista'] === 'movil';
+    } elseif (isset($_SERVER['HTTP_SEC_CH_UA_MOBILE'])) {
+        $__kion_movil = trim((string)$_SERVER['HTTP_SEC_CH_UA_MOBILE']) === '?1';
+    } else {
+        $__kion_movil = (bool)preg_match(
+            '/Android.+Mobile|iPhone|iPod|Windows Phone|Mobile Safari|Opera Mini/i',
+            (string)($_SERVER['HTTP_USER_AGENT'] ?? '')
+        );
+    }
+    if ($__kion_movil) {
+        header('Accept-CH: Sec-CH-UA-Mobile');
+        header('Vary: Sec-CH-UA-Mobile, Cookie');
+        header('Location: versionmobil/catalogo.php');
+        exit;
+    }
+}
+
 // Token CSRF para proteger peticiones POST de apartados y compras
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));

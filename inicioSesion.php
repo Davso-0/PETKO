@@ -1,6 +1,28 @@
 <?php
 declare(strict_types=1);
 
+/* =====================================================
+   DETECCIÓN AUTOMÁTICA DE VERSIÓN MÓVIL
+   Solo en peticiones GET directas (carga inicial de la página de login)
+===================================================== */
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !isset($_GET['action'])) {
+    $__kion_movil = false;
+    if (isset($_COOKIE['kion_vista'])) {
+        $__kion_movil = $_COOKIE['kion_vista'] === 'movil';
+    } elseif (isset($_SERVER['HTTP_SEC_CH_UA_MOBILE'])) {
+        $__kion_movil = trim((string)$_SERVER['HTTP_SEC_CH_UA_MOBILE']) === '?1';
+    } else {
+        $__kion_movil = (bool)preg_match(
+            '/Android.+Mobile|iPhone|iPod|Windows Phone|Mobile Safari|Opera Mini/i',
+            (string)($_SERVER['HTTP_USER_AGENT'] ?? '')
+        );
+    }
+    if ($__kion_movil) {
+        header('Location: src/php/componentes/versionmobil/pagina.php?p=inicioSesion');
+        exit;
+    }
+}
+
 function cookieSegura(): bool
 {
     $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';

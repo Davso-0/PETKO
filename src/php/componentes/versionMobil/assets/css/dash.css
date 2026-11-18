@@ -1,0 +1,94 @@
+/* ==========================================================================
+   KION · VERSIÓN MÓVIL · dash.css
+   Dashboard del administrador y del gerente (incluye Punto de Venta).
+   ========================================================================== */
+
+/* ---------- KPIs en tarjetas compactas (2 columnas) ---------- */
+.km-dash .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; margin-bottom: 14px !important; }
+.km-dash .kpi-card {
+  padding: 14px !important; border-radius: 16px !important; border-width: 1px !important;
+  box-shadow: var(--km-shadow) !important; display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.km-dash .kpi-top { margin-bottom: 8px; align-items: center !important; }
+.km-dash .kpi-card i.kpi-icon { font-size: 18px !important; padding: 9px !important; border-radius: 12px !important; animation: none !important; }
+.km-dash .kpi-tag { font-size: 9.5px !important; padding: 4px 8px !important; letter-spacing: .05em !important; }
+.km-dash .kpi-val { font-size: clamp(18px, 5.6vw, 25px) !important; line-height: 1.15; overflow-wrap: anywhere; }
+.km-dash .kpi-label { font-size: 12px !important; line-height: 1.3; }
+
+/* Primer KPI de ingresos a ancho completo cuando hay número impar */
+.km-dash .kpi-grid > .kpi-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+/* ---------- Gráficas ---------- */
+.km-dash .chart-box { height: 210px !important; }
+.km-dash .donut-wrap { height: 200px !important; }
+.km-dash .donut-center .num { font-size: 24px !important; }
+
+/* ---------- Listas de stock / información ---------- */
+.km-dash .stock-row { grid-template-columns: auto minmax(0, 1fr) auto !important; gap: 12px !important; padding: 12px 4px !important; }
+.km-dash .stock-thumb { width: 42px !important; height: 42px !important; border-radius: 14px !important; font-size: 19px !important; }
+.km-dash .stock-name { font-size: 14px !important; overflow-wrap: anywhere; }
+.km-dash .stock-meta { font-size: 12px !important; }
+.km-dash .stock-qty { font-size: 15px !important; }
+.km-dash .info-strip { flex-direction: row; gap: 10px; padding-bottom: 14px !important; margin-bottom: 14px !important; }
+.km-dash .info-strip .kpi-val { font-size: 22px !important; }
+.km-dash .info-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+.km-dash .info-grid > * { min-width: 0; overflow-wrap: anywhere; }
+
+/* ---------- Catálogo de productos del panel (tarjetas) ---------- */
+.km-dash .prod-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+.km-dash .prod-card { padding: 8px !important; border-radius: 18px !important; border-width: 1px !important; box-shadow: var(--km-shadow) !important; min-width: 0; }
+.km-dash .prod-card-img-wrap { border-radius: 12px !important; }
+.km-dash .prod-card-body { padding: 10px 4px 4px !important; }
+.km-dash .prod-meta { font-size: 9.5px !important; letter-spacing: .06em !important; margin-bottom: 6px !important; gap: 6px; flex-wrap: wrap; }
+.km-dash .prod-title { font-size: 14px !important; line-height: 1.25 !important; margin-bottom: 8px !important; }
+.km-dash .prod-price-row { flex-direction: column; align-items: flex-start !important; gap: 6px; margin-bottom: 10px !important; }
+.km-dash .prod-price { font-size: 19px !important; }
+.km-dash .tarjeta__stock { font-size: 10.5px !important; padding: 4px 10px !important; }
+.km-dash .prod-actions { gap: 6px !important; padding-top: 10px !important; }
+.km-dash .btn-card { padding: 9px 4px !important; font-size: 12px !important; min-height: 38px; box-shadow: none; }
+@media (max-width: 340px) { .km-dash .prod-grid { grid-template-columns: minmax(0, 1fr) !important; } }
+
+/* ---------- Pestañas Visual / Técnico ---------- */
+.km-dash .form-inline > .form-inline:last-child { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.km-dash .chip-btn.active { background: var(--km-accent); border-color: var(--km-accent); color: #fff; }
+
+/* ---------- Punto de venta (gerente) ---------- */
+.km-dash .pos-layout { grid-template-columns: minmax(0, 1fr) !important; gap: 12px !important; }
+.km-dash .pos-scanner { padding: 12px !important; border-radius: var(--km-r) !important; }
+.km-dash .pos-scanner > div { flex-wrap: wrap; gap: 10px !important; }
+.km-dash .pos-scanner > div > i { display: none; }
+.km-dash .pos-scanner > div > div { flex: 1 1 100% !important; min-width: 0; }
+.km-dash #btnStartCameraScan { width: 100%; justify-content: center; min-height: 46px; padding: 11px 14px !important; }
+.km-dash .pos-search-dropdown { max-height: 38dvh; overflow-y: auto; border-radius: 14px; }
+.km-dash .pos-cart.panel { padding: 10px !important; background: transparent !important; border: 0 !important; box-shadow: none !important; }
+.km-dash .pos-cart table.km-ct tr { grid-template-columns: minmax(0, 1fr) auto; }
+.km-dash .pos-cart table.km-ct td:first-child { grid-column: 1 / -1; }
+.km-dash .pos-cart table.km-ct td { align-items: flex-start; }
+.km-dash .qty-ctrl { padding: 2px !important; gap: 4px !important; }
+.km-dash .qty-ctrl button { min-width: 34px; min-height: 34px !important; }
+.km-dash .pos-summary {
+  position: static !important; padding: 16px !important; border-radius: var(--km-r) !important; gap: 10px !important;
+}
+.km-dash .pos-summary h2 { font-size: 19px !important; }
+.km-dash .pos-summary .pay-select { min-height: 46px; width: 100%; }
+.km-dash .summary-total { font-size: clamp(28px, 9vw, 36px) !important; }
+.km-dash .pay-btn {
+  position: sticky; bottom: calc(var(--km-nav-h) + var(--km-safe-b) + 10px); z-index: 5; width: 100%; min-height: 52px;
+  font-size: 15px !important; border-radius: 999px !important; box-shadow: 0 10px 26px rgba(0, 0, 0, .28) !important;
+}
+.km-dash #lblCajaActual { font-size: inherit; }
+
+/* ---------- Ajustes menores ---------- */
+.km-dash .wave { display: inline-block; }
+.km-dash .badge { font-size: 10.5px !important; padding: 5px 10px !important; }
+.km-dash .icon-x { width: 40px; height: 40px; }
+.km-dash .row-actions { gap: 8px !important; }
+.km-dash #tblAlertas { margin-top: 4px !important; }
+
+/* Tablets: 3 columnas de KPI y 3 de productos */
+@media (min-width: 640px) {
+  .km-dash .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  .km-dash .prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .km-dash .grid-2col { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) !important; gap: 14px !important; }
+  .km-dash .nav-menu { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
