@@ -119,15 +119,15 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
 <section id="view-apartados-consultas" class="view-section">
     <div class="header-row">
         <div>
-            <h1 class="title"><i class="ph-fill ph-clipboard-text"></i> <span>Gestión de Apartados y Consultas</span></h1>
-            <p class="subtitle">
+            <h1 class="title"><i class="ph-fill ph-clipboard-text"></i> <span data-ac-i18n="ac_title">Gestión de Apartados y Consultas</span></h1>
+            <p class="subtitle" data-ac-i18n="<?= $acEsAdmin ? 'ac_sub_admin' : 'ac_sub_branch' ?>">
                 <?= $acEsAdmin
                     ? 'Control centralizado de apartados de productos y citas veterinarias en todas las sucursales.'
                     : 'Administra los apartados de productos y consultas veterinarias programadas en tu sucursal.' ?>
             </p>
         </div>
         <button class="chip-btn" type="button" onclick="acRecargarTodo()">
-            <i class="ph ph-arrows-clockwise"></i> Sincronizar ahora
+            <i class="ph ph-arrows-clockwise"></i> <span data-ac-i18n="ac_sync">Sincronizar ahora</span>
         </button>
     </div>
 
@@ -136,34 +136,34 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
     <!-- KPIs -->
     <div class="kpi-grid" style="margin-bottom: 24px;">
         <div class="kpi-card">
-            <div class="kpi-top"><i class="ph-fill ph-shopping-bag kpi-icon"></i><span class="kpi-tag">Apartados</span></div>
+            <div class="kpi-top"><i class="ph-fill ph-shopping-bag kpi-icon"></i><span class="kpi-tag" data-ac-i18n="kpi_ap_tag">Apartados</span></div>
             <div class="kpi-val" id="acKpiApActivos">0</div>
-            <div class="kpi-label">Activos (<span id="acKpiApListos">0</span> listos para entrega)</div>
+            <div class="kpi-label"><span data-ac-i18n="kpi_ap_activos">Activos</span> (<span id="acKpiApListos">0</span> <span data-ac-i18n="kpi_ap_listos">listos para entrega</span>)</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-top"><i class="ph-fill ph-currency-dollar kpi-icon" style="color:var(--warning); background:var(--warning-bg);"></i><span class="kpi-tag" style="background:var(--warning-bg); color:var(--warning);">Saldos</span></div>
+            <div class="kpi-top"><i class="ph-fill ph-currency-dollar kpi-icon" style="color:var(--warning); background:var(--warning-bg);"></i><span class="kpi-tag" style="background:var(--warning-bg); color:var(--warning);" data-ac-i18n="kpi_saldos_tag">Saldos</span></div>
             <div class="kpi-val" id="acKpiApPendPago">0</div>
-            <div class="kpi-label">Pendientes de pago</div>
+            <div class="kpi-label" data-ac-i18n="kpi_pend_pago">Pendientes de pago</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-top"><i class="ph-fill ph-stethoscope kpi-icon"></i><span class="kpi-tag">Consultas</span></div>
+            <div class="kpi-top"><i class="ph-fill ph-stethoscope kpi-icon"></i><span class="kpi-tag" data-ac-i18n="kpi_con_tag">Consultas</span></div>
             <div class="kpi-val" id="acKpiConProximas">0</div>
-            <div class="kpi-label">Próximas (<span id="acKpiConPend">0</span> por confirmar)</div>
+            <div class="kpi-label"><span data-ac-i18n="kpi_con_prox">Próximas</span> (<span id="acKpiConPend">0</span> <span data-ac-i18n="kpi_con_pend">por confirmar</span>)</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-top"><i class="ph-fill ph-clock-countdown kpi-icon" style="color:var(--danger); background:var(--danger-bg);"></i><span class="kpi-tag" style="background:var(--danger-bg); color:var(--danger);">Vencidos</span></div>
+            <div class="kpi-top"><i class="ph-fill ph-clock-countdown kpi-icon" style="color:var(--danger); background:var(--danger-bg);"></i><span class="kpi-tag" style="background:var(--danger-bg); color:var(--danger);" data-ac-i18n="kpi_venc_tag">Vencidos</span></div>
             <div class="kpi-val" id="acKpiVencidosTotal">0</div>
-            <div class="kpi-label"><span id="acKpiApVenc">0</span> apartados · <span id="acKpiConVenc">0</span> consultas</div>
+            <div class="kpi-label"><span id="acKpiApVenc">0</span> <span data-ac-i18n="kpi_venc_ap">apartados</span> · <span id="acKpiConVenc">0</span> <span data-ac-i18n="kpi_venc_con">consultas</span></div>
         </div>
     </div>
 
     <!-- TABS -->
     <div class="ac-tabs">
         <button type="button" class="ac-tab-btn active" data-ac-tab="tab-apartados">
-            <i class="ph-bold ph-shopping-bag"></i> Apartados de Productos
+            <i class="ph-bold ph-shopping-bag"></i> <span data-ac-i18n="tab_apartados">Apartados de Productos</span>
         </button>
         <button type="button" class="ac-tab-btn" data-ac-tab="tab-consultas">
-            <i class="ph-bold ph-stethoscope"></i> Consultas Veterinarias
+            <i class="ph-bold ph-stethoscope"></i> <span data-ac-i18n="tab_consultas">Consultas Veterinarias</span>
         </button>
     </div>
 
@@ -173,25 +173,25 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
     <div id="tab-apartados" class="ac-subpanel active">
         <div class="panel">
             <div class="form-inline" style="margin-bottom: 18px;">
-                <input type="text" class="search-input" id="acApSearch" placeholder="Buscar por folio, cliente, teléfono o producto...">
+                <input type="text" class="search-input" id="acApSearch" data-ac-i18n-placeholder="ph_search_ap" placeholder="Buscar por folio, cliente, teléfono o producto...">
                 <?php if ($acEsAdmin): ?>
-                    <select class="select-input" id="acApSucursal"><option value="">Todas las sucursales</option></select>
+                    <select class="select-input" id="acApSucursal"><option value="" data-ac-i18n="opt_all_branches">Todas las sucursales</option></select>
                 <?php endif; ?>
                 <select class="select-input" id="acApEstado">
-                    <option value="">Todos los estados</option>
-                    <option value="PENDIENTE_RECOGER">Pendiente de recoger</option>
-                    <option value="ENTREGADO">Entregado</option>
-                    <option value="VENCIDO">Vencido</option>
-                    <option value="CANCELADO">Cancelado</option>
+                    <option value="" data-ac-i18n="opt_all_states">Todos los estados</option>
+                    <option value="PENDIENTE_RECOGER" data-ac-i18n="st_pend_pickup">Pendiente de recoger</option>
+                    <option value="ENTREGADO" data-ac-i18n="st_delivered">Entregado</option>
+                    <option value="VENCIDO" data-ac-i18n="st_expired">Vencido</option>
+                    <option value="CANCELADO" data-ac-i18n="st_canceled">Cancelado</option>
                 </select>
                 <select class="select-input" id="acApEstadoPago">
-                    <option value="">Cualquier pago</option>
-                    <option value="PENDIENTE_PAGO">Pendiente de pago</option>
-                    <option value="PAGADO">Pagado</option>
+                    <option value="" data-ac-i18n="opt_any_pay">Cualquier pago</option>
+                    <option value="PENDIENTE_PAGO" data-ac-i18n="st_pend_pay">Pendiente de pago</option>
+                    <option value="PAGADO" data-ac-i18n="st_paid">Pagado</option>
                 </select>
-                <input type="date" class="search-input" id="acApFecha" title="Filtrar por fecha">
+                <input type="date" class="search-input" id="acApFecha">
                 <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; cursor:pointer;">
-                    <input type="checkbox" id="acApProxVencer"> Próximos a vencer (24h)
+                    <input type="checkbox" id="acApProxVencer"> <span data-ac-i18n="chk_expiring">Próximos a vencer (24h)</span>
                 </label>
             </div>
 
@@ -199,13 +199,13 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
                 <table class="ac-table">
                     <thead>
                         <tr>
-                            <th>Folio</th>
-                            <th>Cliente</th>
-                            <th>Producto</th>
-                            <th>Total</th>
-                            <th>Estado</th>
-                            <th>Fechas / Sucursal</th>
-                            <th style="text-align:center;">Acciones</th>
+                            <th data-ac-i18n="th_folio">Folio</th>
+                            <th data-ac-i18n="th_client">Cliente</th>
+                            <th data-ac-i18n="th_product">Producto</th>
+                            <th data-ac-i18n="th_total">Total</th>
+                            <th data-ac-i18n="th_status">Estado</th>
+                            <th data-ac-i18n="th_dates_branch">Fechas / Sucursal</th>
+                            <th style="text-align:center;" data-ac-i18n="th_actions">Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="acApartadosBody">
@@ -220,23 +220,23 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
             <div class="ac-archive-header">
                 <div class="ac-archive-title">
                     <i class="ph-fill ph-archive" style="font-size:20px;"></i>
-                    <span>Pedidos Archivados</span>
+                    <span data-ac-i18n="arch_ap_title">Pedidos Archivados</span>
                     <span class="ac-archive-count" id="acApArchCount">0</span>
                 </div>
                 <button type="button" class="chip-btn" id="btnToggleApArchivados" onclick="acToggleArchivados('ap')">
-                    <i class="ph ph-eye-slash"></i> <span>Ocultar archivados</span>
+                    <i class="ph ph-eye-slash"></i> <span data-ac-i18n="btn_hide_arch">Ocultar archivados</span>
                 </button>
             </div>
             <div class="ac-archive-body" id="acApArchBodyWrap">
                 <table class="ac-table ac-table-archived">
                     <thead>
                         <tr>
-                            <th>Folio</th>
-                            <th>Cliente</th>
-                            <th>Producto</th>
-                            <th>Total</th>
-                            <th>Estado Final</th>
-                            <th>Fechas / Sucursal</th>
+                            <th data-ac-i18n="th_folio">Folio</th>
+                            <th data-ac-i18n="th_client">Cliente</th>
+                            <th data-ac-i18n="th_product">Producto</th>
+                            <th data-ac-i18n="th_total">Total</th>
+                            <th data-ac-i18n="th_final_status">Estado Final</th>
+                            <th data-ac-i18n="th_dates_branch">Fechas / Sucursal</th>
                         </tr>
                     </thead>
                     <tbody id="acApartadosArchBody">
@@ -253,23 +253,23 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
     <div id="tab-consultas" class="ac-subpanel">
         <div class="panel">
             <div class="form-inline" style="margin-bottom: 18px;">
-                <input type="text" class="search-input" id="acConSearch" placeholder="Buscar por folio, mascota, propietario o motivo...">
+                <input type="text" class="search-input" id="acConSearch" data-ac-i18n-placeholder="ph_search_con" placeholder="Buscar por folio, mascota, propietario o motivo...">
                 <?php if ($acEsAdmin): ?>
-                    <select class="select-input" id="acConSucursal"><option value="">Todas las sucursales</option></select>
+                    <select class="select-input" id="acConSucursal"><option value="" data-ac-i18n="opt_all_branches">Todas las sucursales</option></select>
                 <?php endif; ?>
                 <select class="select-input" id="acConEstado">
-                    <option value="">Todos los estados</option>
-                    <option value="PENDIENTE">Pendiente de confirmación</option>
-                    <option value="CONFIRMADA">Confirmada</option>
-                    <option value="PROGRAMADA">Programada</option>
-                    <option value="ATENDIDA">Atendida</option>
-                    <option value="CANCELADA">Cancelada</option>
-                    <option value="NO_ASISTIO">No asistió</option>
-                    <option value="VENCIDA">Vencida</option>
+                    <option value="" data-ac-i18n="opt_all_states">Todos los estados</option>
+                    <option value="PENDIENTE" data-ac-i18n="st_pend_confirm">Pendiente de confirmación</option>
+                    <option value="CONFIRMADA" data-ac-i18n="st_confirmed">Confirmada</option>
+                    <option value="PROGRAMADA" data-ac-i18n="st_scheduled">Programada</option>
+                    <option value="ATENDIDA" data-ac-i18n="st_attended">Atendida</option>
+                    <option value="CANCELADA" data-ac-i18n="st_canceled">Cancelada</option>
+                    <option value="NO_ASISTIO" data-ac-i18n="st_noshow">No asistió</option>
+                    <option value="VENCIDA" data-ac-i18n="st_expired">Vencida</option>
                 </select>
                 <input type="date" class="search-input" id="acConFecha">
                 <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; cursor:pointer;">
-                    <input type="checkbox" id="acConProximas"> Solo próximas
+                    <input type="checkbox" id="acConProximas"> <span data-ac-i18n="chk_upcoming">Solo próximas</span>
                 </label>
             </div>
 
@@ -277,14 +277,14 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
                 <table class="ac-table">
                     <thead>
                         <tr>
-                            <th>Folio</th>
-                            <th>Propietario</th>
-                            <th>Mascota / Especie</th>
-                            <th>Motivo / Servicio</th>
-                            <th>Fecha y Hora</th>
-                            <th>Sucursal / Vet.</th>
-                            <th>Estado</th>
-                            <th style="text-align:center;">Acciones</th>
+                            <th data-ac-i18n="th_folio">Folio</th>
+                            <th data-ac-i18n="th_owner">Propietario</th>
+                            <th data-ac-i18n="th_pet">Mascota / Especie</th>
+                            <th data-ac-i18n="th_reason">Motivo / Servicio</th>
+                            <th data-ac-i18n="th_datetime">Fecha y Hora</th>
+                            <th data-ac-i18n="th_branch_vet">Sucursal / Vet.</th>
+                            <th data-ac-i18n="th_status">Estado</th>
+                            <th style="text-align:center;" data-ac-i18n="th_actions">Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="acConsultasBody">
@@ -299,24 +299,24 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
             <div class="ac-archive-header">
                 <div class="ac-archive-title">
                     <i class="ph-fill ph-archive" style="font-size:20px;"></i>
-                    <span>Consultas Archivadas</span>
+                    <span data-ac-i18n="arch_con_title">Consultas Archivadas</span>
                     <span class="ac-archive-count" id="acConArchCount">0</span>
                 </div>
                 <button type="button" class="chip-btn" id="btnToggleConArchivados" onclick="acToggleArchivados('con')">
-                    <i class="ph ph-eye-slash"></i> <span>Ocultar archivados</span>
+                    <i class="ph ph-eye-slash"></i> <span data-ac-i18n="btn_hide_arch">Ocultar archivados</span>
                 </button>
             </div>
             <div class="ac-archive-body" id="acConArchBodyWrap">
                 <table class="ac-table ac-table-archived">
                     <thead>
                         <tr>
-                            <th>Folio</th>
-                            <th>Propietario</th>
-                            <th>Mascota / Especie</th>
-                            <th>Motivo / Servicio</th>
-                            <th>Fecha y Hora</th>
-                            <th>Sucursal</th>
-                            <th>Estado Final</th>
+                            <th data-ac-i18n="th_folio">Folio</th>
+                            <th data-ac-i18n="th_owner">Propietario</th>
+                            <th data-ac-i18n="th_pet">Mascota / Especie</th>
+                            <th data-ac-i18n="th_reason">Motivo / Servicio</th>
+                            <th data-ac-i18n="th_datetime">Fecha y Hora</th>
+                            <th data-ac-i18n="th_branch">Sucursal</th>
+                            <th data-ac-i18n="th_final_status">Estado Final</th>
                         </tr>
                     </thead>
                     <tbody id="acConsultasArchBody">
@@ -330,25 +330,128 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
 
 <script>
 (function() {
+    const AC_I18N = {
+        es: {
+            ac_title: 'Gestión de Apartados y Consultas',
+            ac_sub_admin: 'Control centralizado de apartados de productos y citas veterinarias en todas las sucursales.',
+            ac_sub_branch: 'Administra los apartados de productos y consultas veterinarias programadas en tu sucursal.',
+            ac_sync: 'Sincronizar ahora',
+            kpi_ap_tag: 'Apartados', kpi_ap_activos: 'Activos', kpi_ap_listos: 'listos para entrega',
+            kpi_saldos_tag: 'Saldos', kpi_pend_pago: 'Pendientes de pago',
+            kpi_con_tag: 'Consultas', kpi_con_prox: 'Próximas', kpi_con_pend: 'por confirmar',
+            kpi_venc_tag: 'Vencidos', kpi_venc_ap: 'apartados', kpi_venc_con: 'consultas',
+            tab_apartados: 'Apartados de Productos', tab_consultas: 'Consultas Veterinarias',
+            ph_search_ap: 'Buscar por folio, cliente, teléfono o producto...',
+            ph_search_con: 'Buscar por folio, mascota, propietario o motivo...',
+            opt_all_branches: 'Todas las sucursales', opt_all_states: 'Todos los estados', opt_any_pay: 'Cualquier pago',
+            st_pend_pickup: 'Pendiente de recoger', st_delivered: 'Entregado', st_expired: 'Vencido', st_canceled: 'Cancelado',
+            st_pend_pay: 'Pendiente de pago', st_paid: 'Pagado',
+            st_pend_confirm: 'Pendiente de confirmación', st_confirmed: 'Confirmada', st_scheduled: 'Programada',
+            st_attended: 'Atendida', st_noshow: 'No asistió',
+            chk_expiring: 'Próximos a vencer (24h)', chk_upcoming: 'Solo próximas',
+            th_folio: 'Folio', th_client: 'Cliente', th_product: 'Producto', th_total: 'Total',
+            th_status: 'Estado', th_final_status: 'Estado Final', th_dates_branch: 'Fechas / Sucursal', th_actions: 'Acciones',
+            th_owner: 'Propietario', th_pet: 'Mascota / Especie', th_reason: 'Motivo / Servicio',
+            th_datetime: 'Fecha y Hora', th_branch_vet: 'Sucursal / Vet.', th_branch: 'Sucursal',
+            arch_ap_title: 'Pedidos Archivados', arch_con_title: 'Consultas Archivadas',
+            btn_hide_arch: 'Ocultar archivados', btn_show_arch: 'Mostrar archivados',
+            lbl_cod: 'Cód:', lbl_cant: 'Cant:', lbl_apartado: 'Apartado:', lbl_limite: 'Límite (48h):',
+            btn_eliminar: 'Eliminar', btn_archivar: 'Archivar', btn_gestionar: 'Gestionar',
+            empty_ap: 'No se encontraron apartados con los filtros seleccionados.',
+            empty_ap_arch: 'Sin pedidos archivados.',
+            empty_con: 'No se encontraron consultas con los filtros seleccionados.',
+            empty_con_arch: 'Sin consultas archivadas.',
+            alert_expiring: 'apartado(s) próximos a vencer en menos de 24h',
+            alert_expired: 'apartado(s) vencido(s)',
+            alert_con_pend: 'consulta(s) pendiente(s) de confirmar',
+            alert_con_imm: 'consulta(s) en las próximas 2 horas',
+            sw_del_title: 'Eliminar / Cancelar Apartado',
+            sw_del_text: 'Se cancelará el apartado, se devolverán las piezas al inventario y el cliente verá la cancelación en su cuenta.',
+            sw_del_ph: 'Motivo de cancelación (obligatorio)',
+            sw_del_ok: 'Sí, eliminar apartado', sw_del_back: 'Volver',
+            sw_del_val: 'Debes indicar el motivo de cancelación.',
+            sw_con_title: 'Consulta', sw_con_st: 'Estado de la consulta', sw_con_dt: 'Fecha y Hora',
+            sw_con_vet: 'Veterinario asignado', sw_con_vet_ph: 'Nombre del médico veterinario',
+            sw_con_mot: 'Motivo de cancelación (si aplica)', sw_con_mot_ph: 'Solo si el estado es Cancelada',
+            sw_save: 'Guardar cambios', sw_close: 'Cerrar'
+        },
+        en: {
+            ac_title: 'Layaways & Veterinary Appointments',
+            ac_sub_admin: 'Centralized control of product layaways and veterinary appointments across all branches.',
+            ac_sub_branch: 'Manage product layaways and scheduled veterinary appointments at your branch.',
+            ac_sync: 'Sync now',
+            kpi_ap_tag: 'Layaways', kpi_ap_activos: 'Active', kpi_ap_listos: 'ready for pickup',
+            kpi_saldos_tag: 'Balances', kpi_pend_pago: 'Pending payment',
+            kpi_con_tag: 'Appointments', kpi_con_prox: 'Upcoming', kpi_con_pend: 'to confirm',
+            kpi_venc_tag: 'Expired', kpi_venc_ap: 'layaways', kpi_venc_con: 'appointments',
+            tab_apartados: 'Product Layaways', tab_consultas: 'Veterinary Appointments',
+            ph_search_ap: 'Search by folio, customer, phone or product...',
+            ph_search_con: 'Search by folio, pet, owner or reason...',
+            opt_all_branches: 'All branches', opt_all_states: 'All statuses', opt_any_pay: 'Any payment',
+            st_pend_pickup: 'Pending pickup', st_delivered: 'Delivered', st_expired: 'Expired', st_canceled: 'Canceled',
+            st_pend_pay: 'Pending payment', st_paid: 'Paid',
+            st_pend_confirm: 'Pending confirmation', st_confirmed: 'Confirmed', st_scheduled: 'Scheduled',
+            st_attended: 'Attended', st_noshow: 'No-show',
+            chk_expiring: 'Expiring soon (24h)', chk_upcoming: 'Upcoming only',
+            th_folio: 'Folio', th_client: 'Customer', th_product: 'Product', th_total: 'Total',
+            th_status: 'Status', th_final_status: 'Final Status', th_dates_branch: 'Dates / Branch', th_actions: 'Actions',
+            th_owner: 'Owner', th_pet: 'Pet / Species', th_reason: 'Reason / Service',
+            th_datetime: 'Date & Time', th_branch_vet: 'Branch / Vet.', th_branch: 'Branch',
+            arch_ap_title: 'Archived Layaways', arch_con_title: 'Archived Appointments',
+            btn_hide_arch: 'Hide archived', btn_show_arch: 'Show archived',
+            lbl_cod: 'Code:', lbl_cant: 'Qty:', lbl_apartado: 'Reserved:', lbl_limite: 'Deadline (48h):',
+            btn_eliminar: 'Delete', btn_archivar: 'Archive', btn_gestionar: 'Manage',
+            empty_ap: 'No layaways found with the selected filters.',
+            empty_ap_arch: 'No archived layaways.',
+            empty_con: 'No appointments found with the selected filters.',
+            empty_con_arch: 'No archived appointments.',
+            alert_expiring: 'layaway(s) expiring in less than 24h',
+            alert_expired: 'expired layaway(s)',
+            alert_con_pend: 'appointment(s) pending confirmation',
+            alert_con_imm: 'appointment(s) within the next 2 hours',
+            sw_del_title: 'Delete / Cancel Layaway',
+            sw_del_text: 'The layaway will be canceled, items returned to inventory, and the customer will see the cancellation in their account.',
+            sw_del_ph: 'Cancellation reason (required)',
+            sw_del_ok: 'Yes, delete layaway', sw_del_back: 'Back',
+            sw_del_val: 'You must enter a cancellation reason.',
+            sw_con_title: 'Appointment', sw_con_st: 'Appointment status', sw_con_dt: 'Date & Time',
+            sw_con_vet: 'Assigned veterinarian', sw_con_vet_ph: 'Veterinarian name',
+            sw_con_mot: 'Cancellation reason (if applicable)', sw_con_mot_ph: 'Only if status is Canceled',
+            sw_save: 'Save changes', sw_close: 'Close'
+        }
+    };
+
+    const getAcLang = () => (window.PetkoPrefs && typeof PetkoPrefs.lang === 'function')
+        ? PetkoPrefs.lang()
+        : (localStorage.getItem('petko_lang') || 'es');
+    const act = k => (AC_I18N[getAcLang()] && AC_I18N[getAcLang()][k]) || AC_I18N.es[k] || k;
+    const acLocale = () => getAcLang() === 'en' ? 'en-US' : 'es-MX';
+
+    function applyAcLang() {
+        document.querySelectorAll('[data-ac-i18n]').forEach(el => { el.textContent = act(el.dataset.acI18n); });
+        document.querySelectorAll('[data-ac-i18n-placeholder]').forEach(el => { el.placeholder = act(el.dataset.acI18nPlaceholder); });
+    }
+
     const acMoney = v => '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const acEsc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 
-    const badgeApMap = {
-        'PENDIENTE_RECOGER': ['ac-b-blue', 'Pendiente de recoger'],
-        'PENDIENTE':         ['ac-b-blue', 'Pendiente de recoger'],
-        'ENTREGADO':         ['ac-b-green', 'Entregado'],
-        'CANCELADO':         ['ac-b-gray', 'Cancelado'],
-        'VENCIDO':           ['ac-b-red', 'Vencido']
-    };
-    const badgeConMap = {
-        'PENDIENTE':  ['ac-b-yellow', 'Pendiente confirmación'],
-        'CONFIRMADA': ['ac-b-blue', 'Confirmada'],
-        'PROGRAMADA': ['ac-b-blue', 'Programada'],
-        'ATENDIDA':   ['ac-b-green', 'Atendida'],
-        'CANCELADA':  ['ac-b-gray', 'Cancelada'],
-        'NO_ASISTIO': ['ac-b-red', 'No asistió'],
-        'VENCIDA':    ['ac-b-red', 'Vencida']
-    };
+    const getBadgeAp = (est) => ({
+        'PENDIENTE_RECOGER': ['ac-b-blue', act('st_pend_pickup')],
+        'PENDIENTE':         ['ac-b-blue', act('st_pend_pickup')],
+        'ENTREGADO':         ['ac-b-green', act('st_delivered')],
+        'CANCELADO':         ['ac-b-gray', act('st_canceled')],
+        'VENCIDO':           ['ac-b-red', act('st_expired')]
+    }[est] || ['ac-b-blue', est]);
+
+    const getBadgeCon = (est) => ({
+        'PENDIENTE':  ['ac-b-yellow', act('st_pend_confirm')],
+        'CONFIRMADA': ['ac-b-blue', act('st_confirmed')],
+        'PROGRAMADA': ['ac-b-blue', act('st_scheduled')],
+        'ATENDIDA':   ['ac-b-green', act('st_attended')],
+        'CANCELADA':  ['ac-b-gray', act('st_canceled')],
+        'NO_ASISTIO': ['ac-b-red', act('st_noshow')],
+        'VENCIDA':    ['ac-b-red', act('st_expired')]
+    }[est] || ['ac-b-yellow', est]);
 
     document.querySelectorAll('.ac-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -365,25 +468,25 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
         const oculto = wrap.style.display === 'none';
         wrap.style.display = oculto ? 'block' : 'none';
         btn.innerHTML = oculto
-            ? '<i class="ph ph-eye-slash"></i> <span>Ocultar archivados</span>'
-            : '<i class="ph ph-eye"></i> <span>Mostrar archivados</span>';
+            ? `<i class="ph ph-eye-slash"></i> <span>${acEsc(act('btn_hide_arch'))}</span>`
+            : `<i class="ph ph-eye"></i> <span>${acEsc(act('btn_show_arch'))}</span>`;
     };
 
     function calcularFechaLimite48h(ap) {
         const raw = ap.fecha_limite || ap.fecha_apartado;
-        if (!raw) return '48 horas';
+        if (!raw) return '48h';
         const d = new Date(String(raw).replace(' ', 'T'));
-        if (isNaN(d)) return '48 horas';
+        if (isNaN(d)) return '48h';
         if (!ap.fecha_limite) d.setHours(d.getHours() + 48);
-        return d.toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return d.toLocaleString(acLocale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     }
 
     function renderFilaApartado(ap, esArchivado = false) {
-        const [clsA, lblA] = badgeApMap[ap.estado] || ['ac-b-blue', ap.estado];
+        const [clsA, lblA] = getBadgeAp(ap.estado);
         const pagado = ap.estado_pago === 'PAGADO';
         const img = ap.imagen_url ? acEsc(ap.imagen_url) : 'https://placehold.co/80x80?text=PETKO';
         const activo = (ap.estado === 'PENDIENTE_RECOGER' || ap.estado === 'PENDIENTE');
-        const fApartado = ap.fecha_apartado ? new Date(String(ap.fecha_apartado).replace(' ', 'T')).toLocaleDateString('es-MX') : '-';
+        const fApartado = ap.fecha_apartado ? new Date(String(ap.fecha_apartado).replace(' ', 'T')).toLocaleDateString(acLocale()) : '-';
         const fLimite = calcularFechaLimite48h(ap);
 
         return `<tr>
@@ -397,7 +500,7 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
                     <img src="${img}" class="ac-prod-thumb" alt="">
                     <div>
                         <div class="ac-prod-title" title="${acEsc(ap.producto_nombre)}">${acEsc(ap.producto_nombre)}</div>
-                        <small style="color:var(--ink-faint); font-weight:600;">Cód: ${acEsc(ap.producto_codigo)} · Cant: <b>${ap.cantidad}</b></small>
+                        <small style="color:var(--ink-faint); font-weight:600;">${acEsc(act('lbl_cod'))} ${acEsc(ap.producto_codigo)} · ${acEsc(act('lbl_cant'))} <b>${ap.cantidad}</b></small>
                     </div>
                 </div>
             </td>
@@ -406,24 +509,24 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
                     <span class="ac-total-amount">${acMoney(ap.total_apartado)}</span>
                     <span class="ac-badge ${pagado ? 'ac-b-green' : 'ac-b-red'}">
                         <i class="ph-bold ${pagado ? 'ph-check-circle' : 'ph-clock'}"></i>
-                        ${pagado ? 'Pagado' : 'Pendiente de pago'}
+                        ${acEsc(pagado ? act('st_paid') : act('st_pend_pay'))}
                     </span>
                 </div>
             </td>
-            <td><span class="ac-badge ${clsA}">${lblA}</span></td>
+            <td><span class="ac-badge ${clsA}">${acEsc(lblA)}</span></td>
             <td>
-                <small>Apartado: <b>${fApartado}</b></small><br>
-                <small style="color:var(--warning); font-weight:700;">Límite (48h): ${fLimite}</small><br>
+                <small>${acEsc(act('lbl_apartado'))} <b>${fApartado}</b></small><br>
+                <small style="color:var(--warning); font-weight:700;">${acEsc(act('lbl_limite'))} ${fLimite}</small><br>
                 <small style="color:var(--accent); font-weight:800;">${acEsc(ap.sucursal_nombre)}</small>
             </td>
             ${esArchivado ? '' : `
             <td style="text-align:center;">
                 ${activo
                     ? `<button type="button" class="ac-btn-delete" onclick="acCancelarApartado(${ap.id_apartado}, '${acEsc(ap.folio)}')">
-                           <i class="ph-bold ph-trash"></i> Eliminar
+                           <i class="ph-bold ph-trash"></i> ${acEsc(act('btn_eliminar'))}
                        </button>`
                     : `<button type="button" class="ac-btn-archive" onclick="acArchivarApartado(${ap.id_apartado})">
-                           <i class="ph-bold ph-archive"></i> Archivar
+                           <i class="ph-bold ph-archive"></i> ${acEsc(act('btn_archivar'))}
                        </button>`
                 }
             </td>`}
@@ -436,7 +539,7 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
         if (!s1 && !s2) return;
         try {
             const { data } = await request('get_sucursales_simple');
-            const opts = '<option value="">Todas las sucursales</option>' +
+            const opts = `<option value="">${acEsc(act('opt_all_branches'))}</option>` +
                 data.map(s => `<option value="${s.id_sucursal}">${acEsc(s.nombre)}</option>`).join('');
             if (s1) s1.innerHTML = opts;
             if (s2) s2.innerHTML = opts;
@@ -459,10 +562,10 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
             document.getElementById('acKpiVencidosTotal').textContent = (a.vencidos || 0) + (c.vencidas || 0);
 
             const alertas = [];
-            if ((a.por_vencer || 0) > 0) alertas.push(`<span class="ac-alert-pill"><i class="ph-bold ph-warning"></i> ${a.por_vencer} apartado(s) próximos a vencer en menos de 24h</span>`);
-            if ((a.vencidos || 0) > 0) alertas.push(`<span class="ac-alert-pill danger"><i class="ph-bold ph-clock-countdown"></i> ${a.vencidos} apartado(s) vencido(s)</span>`);
-            if ((c.pendientes_confirmacion || 0) > 0) alertas.push(`<span class="ac-alert-pill"><i class="ph-bold ph-bell-ringing"></i> ${c.pendientes_confirmacion} consulta(s) pendiente(s) de confirmar</span>`);
-            if ((c.inminentes || 0) > 0) alertas.push(`<span class="ac-alert-pill"><i class="ph-bold ph-stethoscope"></i> ${c.inminentes} consulta(s) en las próximas 2 horas</span>`);
+            if ((a.por_vencer || 0) > 0) alertas.push(`<span class="ac-alert-pill"><i class="ph-bold ph-warning"></i> ${a.por_vencer} ${acEsc(act('alert_expiring'))}</span>`);
+            if ((a.vencidos || 0) > 0) alertas.push(`<span class="ac-alert-pill danger"><i class="ph-bold ph-clock-countdown"></i> ${a.vencidos} ${acEsc(act('alert_expired'))}</span>`);
+            if ((c.pendientes_confirmacion || 0) > 0) alertas.push(`<span class="ac-alert-pill"><i class="ph-bold ph-bell-ringing"></i> ${c.pendientes_confirmacion} ${acEsc(act('alert_con_pend'))}</span>`);
+            if ((c.inminentes || 0) > 0) alertas.push(`<span class="ac-alert-pill"><i class="ph-bold ph-stethoscope"></i> ${c.inminentes} ${acEsc(act('alert_con_imm'))}</span>`);
             document.getElementById('acAlertBar').innerHTML = alertas.join('');
         } catch (e) {}
     }
@@ -482,18 +585,17 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
             const { data } = await request(`ac_get_apartados&${params}`);
             tbody.innerHTML = data.length
                 ? data.map(ap => renderFilaApartado(ap, false)).join('')
-                : '<tr><td colspan="7" style="text-align:center; padding:32px; color:var(--ink-faint);">No se encontraron apartados con los filtros seleccionados.</td></tr>';
+                : `<tr><td colspan="7" style="text-align:center; padding:32px; color:var(--ink-faint);">${acEsc(act('empty_ap'))}</td></tr>`;
         } catch (e) {
             tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--danger); padding:24px;">${acEsc(e.message)}</td></tr>`;
         }
 
-        // Cargar archivados en gris
         try {
             const { data: arch } = await request('ac_get_apartados_archivados');
             document.getElementById('acApArchCount').textContent = arch.length;
             document.getElementById('acApartadosArchBody').innerHTML = arch.length
                 ? arch.map(ap => renderFilaApartado(ap, true)).join('')
-                : '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--ink-faint);">Sin pedidos archivados.</td></tr>';
+                : `<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--ink-faint);">${acEsc(act('empty_ap_arch'))}</td></tr>`;
         } catch (e) {}
     }
 
@@ -510,7 +612,7 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
         try {
             const { data } = await request(`ac_get_consultas&${params}`);
             tbody.innerHTML = data.length ? data.map(c => {
-                const [clsC, lblC] = badgeConMap[c.estado] || ['ac-b-yellow', c.estado];
+                const [clsC, lblC] = getBadgeCon(c.estado);
                 const esFinal = ['ATENDIDA', 'CANCELADA', 'VENCIDA', 'NO_ASISTIO'].includes(c.estado);
                 return `<tr>
                     <td><span class="ac-folio-pill">${acEsc(c.folio)}</span></td>
@@ -520,52 +622,51 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
                         <small style="font-weight:700; color:var(--ink);">${acEsc(c.servicio)}</small><br>
                         <span style="font-size:12.5px; color:var(--ink-soft);">${acEsc(c.motivo)}</span>
                     </td>
-                    <td><b>${new Date(String(c.fecha_hora).replace(' ', 'T')).toLocaleString('es-MX', {dateStyle:'medium', timeStyle:'short'})}</b></td>
+                    <td><b>${new Date(String(c.fecha_hora).replace(' ', 'T')).toLocaleString(acLocale(), {dateStyle:'medium', timeStyle:'short'})}</b></td>
                     <td><b>${acEsc(c.sucursal_nombre)}</b><br><small style="color:var(--ink-faint);">Vet: ${acEsc(c.veterinario_asignado)}</small></td>
-                    <td><span class="ac-badge ${clsC}">${lblC}</span></td>
+                    <td><span class="ac-badge ${clsC}">${acEsc(lblC)}</span></td>
                     <td style="text-align:center;">
                         <div style="display:inline-flex; gap:8px; align-items:center;">
-                            <button class="chip-btn" onclick='acGestionarConsulta(${JSON.stringify(c).replace(/'/g, "&#39;")})'>Gestionar</button>
-                            ${esFinal ? `<button class="ac-btn-archive" onclick="acArchivarConsulta(${c.id_consulta})"><i class="ph-bold ph-archive"></i> Archivar</button>` : ''}
+                            <button class="chip-btn" onclick='acGestionarConsulta(${JSON.stringify(c).replace(/'/g, "&#39;")})'>${acEsc(act('btn_gestionar'))}</button>
+                            ${esFinal ? `<button class="ac-btn-archive" onclick="acArchivarConsulta(${c.id_consulta})"><i class="ph-bold ph-archive"></i> ${acEsc(act('btn_archivar'))}</button>` : ''}
                         </div>
                     </td>
                 </tr>`;
-            }).join('') : '<tr><td colspan="8" style="text-align:center; padding:32px; color:var(--ink-faint);">No se encontraron consultas con los filtros seleccionados.</td></tr>';
+            }).join('') : `<tr><td colspan="8" style="text-align:center; padding:32px; color:var(--ink-faint);">${acEsc(act('empty_con'))}</td></tr>`;
         } catch (e) {
             tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--danger); padding:24px;">${acEsc(e.message)}</td></tr>`;
         }
 
-        // Cargar consultas archivadas en gris
         try {
             const { data: archC } = await request('ac_get_consultas_archivadas');
             document.getElementById('acConArchCount').textContent = archC.length;
             document.getElementById('acConsultasArchBody').innerHTML = archC.length ? archC.map(c => {
-                const [clsC, lblC] = badgeConMap[c.estado] || ['ac-b-gray', c.estado];
+                const [clsC, lblC] = getBadgeCon(c.estado);
                 return `<tr>
                     <td><span class="ac-folio-pill">${acEsc(c.folio)}</span></td>
                     <td><b>${acEsc(c.cliente_nombre)}</b></td>
                     <td><b>${acEsc(c.mascota_nombre)}</b> (${acEsc(c.tipo_animal)})</td>
                     <td>${acEsc(c.motivo)}</td>
-                    <td>${new Date(String(c.fecha_hora).replace(' ', 'T')).toLocaleString('es-MX', {dateStyle:'medium', timeStyle:'short'})}</td>
+                    <td>${new Date(String(c.fecha_hora).replace(' ', 'T')).toLocaleString(acLocale(), {dateStyle:'medium', timeStyle:'short'})}</td>
                     <td>${acEsc(c.sucursal_nombre)}</td>
-                    <td><span class="ac-badge ${clsC}">${lblC}</span></td>
+                    <td><span class="ac-badge ${clsC}">${acEsc(lblC)}</span></td>
                 </tr>`;
-            }).join('') : '<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--ink-faint);">Sin consultas archivadas.</td></tr>';
+            }).join('') : `<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--ink-faint);">${acEsc(act('empty_con_arch'))}</td></tr>`;
         } catch (e) {}
     }
 
     window.acCancelarApartado = async function(idApartado, folio) {
         const { value: motivo } = await Swal.fire({
-            title: `Eliminar / Cancelar Apartado · ${folio}`,
-            text: 'Se cancelará el apartado, se devolverán las piezas al inventario y el cliente verá la cancelación en su cuenta.',
+            title: `${act('sw_del_title')} · ${folio}`,
+            text: act('sw_del_text'),
             input: 'text',
-            inputPlaceholder: 'Motivo de cancelación (obligatorio)',
+            inputPlaceholder: act('sw_del_ph'),
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: 'var(--danger)',
-            confirmButtonText: 'Sí, eliminar apartado',
-            cancelButtonText: 'Volver',
-            inputValidator: v => !v.trim() && 'Debes indicar el motivo de cancelación.'
+            confirmButtonText: act('sw_del_ok'),
+            cancelButtonText: act('sw_del_back'),
+            inputValidator: v => !v.trim() && act('sw_del_val')
         });
         if (!motivo) return;
         try {
@@ -591,27 +692,27 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
     window.acGestionarConsulta = async function(c) {
         const dtVal = String(c.fecha_hora || '').replace(' ', 'T').slice(0, 16);
         const { value: form } = await Swal.fire({
-            title: `Consulta ${c.folio} · ${c.mascota_nombre}`,
+            title: `${act('sw_con_title')} ${c.folio} · ${c.mascota_nombre}`,
             html: `<div style="text-align:left; font-size:13.5px;">
-                <label style="font-weight:700; display:block; margin-bottom:4px;">Estado de la consulta</label>
+                <label style="font-weight:700; display:block; margin-bottom:4px;">${acEsc(act('sw_con_st'))}</label>
                 <select id="swal-con-est" class="swal2-select" style="width:100%; margin:0 0 12px;">
-                    <option value="PENDIENTE" ${c.estado==='PENDIENTE'?'selected':''}>Pendiente de confirmación</option>
-                    <option value="CONFIRMADA" ${c.estado==='CONFIRMADA'?'selected':''}>Confirmada</option>
-                    <option value="PROGRAMADA" ${c.estado==='PROGRAMADA'?'selected':''}>Programada</option>
-                    <option value="ATENDIDA" ${c.estado==='ATENDIDA'?'selected':''}>Atendida</option>
-                    <option value="NO_ASISTIO" ${c.estado==='NO_ASISTIO'?'selected':''}>No asistió</option>
-                    <option value="CANCELADA" ${c.estado==='CANCELADA'?'selected':''}>Cancelada</option>
+                    <option value="PENDIENTE" ${c.estado==='PENDIENTE'?'selected':''}>${acEsc(act('st_pend_confirm'))}</option>
+                    <option value="CONFIRMADA" ${c.estado==='CONFIRMADA'?'selected':''}>${acEsc(act('st_confirmed'))}</option>
+                    <option value="PROGRAMADA" ${c.estado==='PROGRAMADA'?'selected':''}>${acEsc(act('st_scheduled'))}</option>
+                    <option value="ATENDIDA" ${c.estado==='ATENDIDA'?'selected':''}>${acEsc(act('st_attended'))}</option>
+                    <option value="NO_ASISTIO" ${c.estado==='NO_ASISTIO'?'selected':''}>${acEsc(act('st_noshow'))}</option>
+                    <option value="CANCELADA" ${c.estado==='CANCELADA'?'selected':''}>${acEsc(act('st_canceled'))}</option>
                 </select>
-                <label style="font-weight:700; display:block; margin-bottom:4px;">Fecha y Hora</label>
+                <label style="font-weight:700; display:block; margin-bottom:4px;">${acEsc(act('sw_con_dt'))}</label>
                 <input id="swal-con-fh" type="datetime-local" class="swal2-input" style="width:100%; margin:0 0 12px;" value="${dtVal}">
-                <label style="font-weight:700; display:block; margin-bottom:4px;">Veterinario asignado</label>
-                <input id="swal-con-vet" class="swal2-input" style="width:100%; margin:0 0 12px;" value="${acEsc(c.veterinario_asignado === 'Por asignar' ? '' : c.veterinario_asignado)}" placeholder="Nombre del médico veterinario">
-                <label style="font-weight:700; display:block; margin-bottom:4px;">Motivo de cancelación (si aplica)</label>
-                <input id="swal-con-mot" class="swal2-input" style="width:100%; margin:0;" value="${acEsc(c.motivo_cancelacion || '')}" placeholder="Solo si el estado es Cancelada">
+                <label style="font-weight:700; display:block; margin-bottom:4px;">${acEsc(act('sw_con_vet'))}</label>
+                <input id="swal-con-vet" class="swal2-input" style="width:100%; margin:0 0 12px;" value="${acEsc(c.veterinario_asignado === 'Por asignar' ? '' : c.veterinario_asignado)}" placeholder="${acEsc(act('sw_con_vet_ph'))}">
+                <label style="font-weight:700; display:block; margin-bottom:4px;">${acEsc(act('sw_con_mot'))}</label>
+                <input id="swal-con-mot" class="swal2-input" style="width:100%; margin:0;" value="${acEsc(c.motivo_cancelacion || '')}" placeholder="${acEsc(act('sw_con_mot_ph'))}">
             </div>`,
             showCancelButton: true,
-            confirmButtonText: 'Guardar cambios',
-            cancelButtonText: 'Cerrar',
+            confirmButtonText: act('sw_save'),
+            cancelButtonText: act('sw_close'),
             preConfirm: () => ({
                 estado: document.getElementById('swal-con-est').value,
                 fecha_hora: document.getElementById('swal-con-fh').value,
@@ -641,16 +742,28 @@ $acEsAdmin = isset($esAdmin) && $esAdmin === true;
     };
 
     window.acRecargarTodo = function() {
+        applyAcLang();
         cargarResumen();
         cargarApartados();
         cargarConsultas();
     };
 
     window.initModuloApartadosConsultas = function() {
+        applyAcLang();
         cargarSucursalesSelect();
         acRecargarTodo();
     };
 
+    if (window.PetkoPrefs && typeof PetkoPrefs.onLang === 'function') {
+        PetkoPrefs.onLang(() => {
+            applyAcLang();
+            cargarResumen();
+            cargarApartados();
+            cargarConsultas();
+        });
+    }
+
+    applyAcLang();
     ['acApSearch', 'acApSucursal', 'acApEstado', 'acApEstadoPago', 'acApFecha', 'acApProxVencer'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener(id === 'acApSearch' ? 'input' : 'change', cargarApartados);

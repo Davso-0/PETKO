@@ -69,6 +69,28 @@ declare(strict_types=1);
     const pdfBtn = document.getElementById('petkoDownloadPdf');
     const closeBtn = document.querySelector('[data-close-receipt]');
 
+    const R_I18N = {
+        es: {
+            venta: 'Venta', apartado: 'Apartado', comprobante: 'Comprobante',
+            folio: 'Folio', fecha: 'Fecha', metodo: 'Método', sucursal: 'Sucursal',
+            producto: 'Producto', cant: 'Cant.', subtotal: 'Subtotal',
+            sin_art: 'Sin artículos', total: 'Total', recibido: 'Recibido', cambio: 'Cambio',
+            cajero: 'Cajero:', imprimir: 'Imprimir', pdf: 'Descargar PDF'
+        },
+        en: {
+            venta: 'Sale', apartado: 'Layaway', comprobante: 'Receipt',
+            folio: 'Folio', fecha: 'Date', metodo: 'Method', sucursal: 'Branch',
+            producto: 'Product', cant: 'Qty.', subtotal: 'Subtotal',
+            sin_art: 'No items', total: 'Total', recibido: 'Received', cambio: 'Change',
+            cajero: 'Cashier:', imprimir: 'Print', pdf: 'Download PDF'
+        }
+    };
+
+    const getRLang = () => (window.PetkoPrefs && typeof PetkoPrefs.lang === 'function')
+        ? PetkoPrefs.lang()
+        : (localStorage.getItem('petko_lang') || 'es');
+    const rt = k => (R_I18N[getRLang()] && R_I18N[getRLang()][k]) || R_I18N.es[k] || k;
+
     function money(v) {
         return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(v || 0));
     }
@@ -78,11 +100,14 @@ declare(strict_types=1);
     }
 
     function renderReceipt(tipo, data) {
+        printBtn.textContent = rt('imprimir');
+        pdfBtn.textContent = rt('pdf');
+
         const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data?.items) ? data.data.items : []);
         const total = Number(data?.total ?? data?.data?.total ?? 0);
-        const tipoLabel = tipo === 'venta' ? 'Venta' : (tipo === 'apartado' ? 'Apartado' : 'Comprobante');
+        const tipoLabel = tipo === 'venta' ? rt('venta') : (tipo === 'apartado' ? rt('apartado') : rt('comprobante'));
         const folio = data?.folio ?? data?.data?.folio ?? 'N/A';
-        const fecha = data?.fecha_hora ?? data?.fecha ?? new Date().toLocaleString('es-MX');
+        const fecha = data?.fecha_hora ?? data?.fecha ?? new Date().toLocaleString(getRLang() === 'en' ? 'en-US' : 'es-MX');
         const metodo = data?.metodo_pago ?? data?.data?.metodo_pago ?? '—';
         const sucursal = data?.sucursal?.nombre ?? data?.sucursal ?? data?.data?.sucursal ?? '—';
         const cajero = data?.cajero ?? data?.data?.cajero ?? '—';
@@ -95,8 +120,8 @@ declare(strict_types=1);
             const qty = Number(item.cantidad ?? item.qty ?? 1);
             const unit = Number(item.precio_unitario ?? item.precio ?? 0);
             const subtotal = Number(item.subtotal ?? (unit * qty));
-            return `<tr><td>${safeText(item.nombre || item.producto || 'Producto')}</td><td>${qty}</td><td>${money(subtotal)}</td></tr>`;
-        }).join('') : '<tr><td colspan="3">Sin artículos</td></tr>';
+            return `<tr><td>${safeText(item.nombre || item.producto || rt('producto'))}</td><td>${qty}</td><td>${money(subtotal)}</td></tr>`;
+        }).join('') : `<tr><td colspan="3">${safeText(rt('sin_art'))}</td></tr>`;
 
         content.innerHTML = `
             <div style="font-family:Arial, sans-serif; color:#0a1f3d;">
@@ -105,21 +130,21 @@ declare(strict_types=1);
                     <div style="font-size:11px; color:#567296; letter-spacing:0.12em; text-transform:uppercase; margin-top:4px;">${safeText(tipoLabel)}</div>
                 </div>
                 <div class="receipt-kv">
-                    <div class="receipt-box"><small>Folio</small><strong>${safeText(folio)}</strong></div>
-                    <div class="receipt-box"><small>Fecha</small><strong>${safeText(fecha)}</strong></div>
-                    <div class="receipt-box"><small>Método</small><strong>${safeText(metodo)}</strong></div>
-                    <div class="receipt-box"><small>Sucursal</small><strong>${safeText(sucursal)}</strong></div>
+                    <div class="receipt-box"><small>${safeText(rt('folio'))}</small><strong>${safeText(folio)}</strong></div>
+                    <div class="receipt-box"><small>${safeText(rt('fecha'))}</small><strong>${safeText(fecha)}</strong></div>
+                    <div class="receipt-box"><small>${safeText(rt('metodo'))}</small><strong>${safeText(metodo)}</strong></div>
+                    <div class="receipt-box"><small>${safeText(rt('sucursal'))}</small><strong>${safeText(sucursal)}</strong></div>
                 </div>
                 <div class="receipt-items">
                     <table>
-                        <thead><tr><th>Producto</th><th>Cant.</th><th>Subtotal</th></tr></thead>
+                        <thead><tr><th>${safeText(rt('producto'))}</th><th>${safeText(rt('cant'))}</th><th>${safeText(rt('subtotal'))}</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table>
                 </div>
-                <div class="receipt-total"><span>Total</span><span>${money(total)}</span></div>
-                ${recibido !== null ? `<div class="receipt-total" style="font-size:15px; margin-top:10px;"><span>Recibido</span><span>${money(recibido)}</span></div>` : ''}
-                ${cambio !== null ? `<div class="receipt-total" style="font-size:15px; margin-top:10px;"><span>Cambio</span><span>${money(cambio)}</span></div>` : ''}
-                ${cajero ? `<div style="margin-top:14px; padding-top:12px; border-top:1px solid #edf3fb; font-size:12px; color:#567296;">Cajero: ${safeText(cajero)}</div>` : ''}
+                <div class="receipt-total"><span>${safeText(rt('total'))}</span><span>${money(total)}</span></div>
+                ${recibido !== null ? `<div class="receipt-total" style="font-size:15px; margin-top:10px;"><span>${safeText(rt('recibido'))}</span><span>${money(recibido)}</span></div>` : ''}
+                ${cambio !== null ? `<div class="receipt-total" style="font-size:15px; margin-top:10px;"><span>${safeText(rt('cambio'))}</span><span>${money(cambio)}</span></div>` : ''}
+                ${cajero ? `<div style="margin-top:14px; padding-top:12px; border-top:1px solid #edf3fb; font-size:12px; color:#567296;">${safeText(rt('cajero'))} ${safeText(cajero)}</div>` : ''}
             </div>
         `;
     }

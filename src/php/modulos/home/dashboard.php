@@ -1031,7 +1031,7 @@ const I18N = {
         funcion_csv_desarrollo: 'CSV export feature in development.',
         ajustar_stock_title: 'Adjust Stock', sucursal_destino: 'Target Branch', tipo_movimiento: 'Movement type', cantidad_piezas: 'Quantity',
         mov_entrada: 'Inbound (Add)', mov_salida: 'Outbound (Subtract)', mov_reemplazo: 'Fixed Adjustment (Replace)', aplicar_ajuste: 'Apply Adjustment',
-        nav_section_cuenta: 'My Account', nav_mis_apartados: 'My Reservations', nav_configuracion: 'Settings'
+        nav_section_cuenta: 'My Account', nav_mis_apartados: 'My Layaways', nav_configuracion: 'Settings'
     }
 };
 let currentLang = PetkoPrefs.lang();

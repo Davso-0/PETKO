@@ -75,9 +75,60 @@ if ($tipo === 'consulta') {
 if (!$registro) {
     die('Comprobante no encontrado.');
 }
+
+$lang = (($_GET['lang'] ?? 'es') === 'en') ? 'en' : 'es';
+$tkTxt = $lang === 'en' ? [
+    'doc_title' => 'PETKO Receipt - ',
+    'sub_brand' => 'Veterinary & Agricultural Supply',
+    'branch' => 'Branch ',
+    'folio_con' => 'MEDICAL APPOINTMENT FOLIO',
+    'folio_ap' => 'LAYAWAY FOLIO',
+    'client' => 'Customer:',
+    'res_date' => 'Reservation Date:',
+    'valid_until' => 'Valid until:',
+    'product' => 'Product:',
+    'code' => 'Code:',
+    'qty' => 'Quantity:',
+    'pcs' => 'pc(s)',
+    'unit_price' => 'Unit Price:',
+    'total_ap' => 'Layaway Total:',
+    'paid_amt' => 'Paid Amount:',
+    'balance_due' => 'BALANCE DUE AT STORE:',
+    'appt' => 'Appointment:',
+    'pet' => 'Pet:',
+    'reason' => 'Reason:',
+    'total_con' => 'APPOINTMENT TOTAL:',
+    'qr_hint' => 'Show this folio or QR at checkout to validate and pick up.',
+    'btn_print' => 'Print / Save PDF',
+    'btn_back' => 'Back'
+] : [
+    'doc_title' => 'Comprobante PETKO - ',
+    'sub_brand' => 'Veterinaria & Agropecuaria',
+    'branch' => 'Sucursal ',
+    'folio_con' => 'FOLIO DE CONSULTA MÉDICA',
+    'folio_ap' => 'FOLIO DE APARTADO',
+    'client' => 'Cliente:',
+    'res_date' => 'Fecha Reserva:',
+    'valid_until' => 'Válido hasta:',
+    'product' => 'Producto:',
+    'code' => 'Código:',
+    'qty' => 'Cantidad:',
+    'pcs' => 'pza(s)',
+    'unit_price' => 'Precio Unit.:',
+    'total_ap' => 'Total Apartado:',
+    'paid_amt' => 'Abonado / Pagado:',
+    'balance_due' => 'SALDO EN CAJA:',
+    'appt' => 'Cita:',
+    'pet' => 'Mascota:',
+    'reason' => 'Motivo:',
+    'total_con' => 'TOTAL CONSULTA:',
+    'qr_hint' => 'Presenta este folio o QR en caja para validar y recoger.',
+    'btn_print' => 'Imprimir / Guardar PDF',
+    'btn_back' => 'Volver'
+];
 ?>  
 <!DOCTYPE html>
-<html lang="es">
+<html lang="<?= $lang ?>">
 <head>
 <meta charset="UTF-8">
 <title>Comprobante PETKO - <?= htmlspecialchars($folio) ?></title>
@@ -108,19 +159,29 @@ if (!$registro) {
 </style>
 </head>
 <body>
+<script>
+(function() {
+    const url = new URL(window.location.href);
+    const saved = localStorage.getItem('petko_lang');
+    if (!url.searchParams.has('lang') && saved === 'en') {
+        url.searchParams.set('lang', 'en');
+        window.location.replace(url.toString());
+    }
+})();
+</script>
 
 <div class="ticket">
   <div class="center">
     <h1 class="brand">PETKO</h1>
-    <p class="sub">Veterinaria & Agropecuaria</p>
-    <p class="sub">Sucursal <?= htmlspecialchars($registro['sucursal_nombre']) ?></p>
+    <p class="sub"><?= $tkTxt['sub_brand'] ?></p>
+    <p class="sub"><?= $tkTxt['branch'] . htmlspecialchars($registro['sucursal_nombre']) ?></p>
     <p class="sub"><?= htmlspecialchars($registro['sucursal_dir']) ?> · Tel: <?= htmlspecialchars($registro['sucursal_tel'] ?? '') ?></p>
   </div>
 
   <div class="divider"></div>
 
   <div class="folio-box">
-    <div class="sub">FOLIO DE <?= $tipo === 'consulta' ? 'CONSULTA MÉDICA' : 'APARTADO' ?></div>
+    <div class="sub"><?= $tipo === 'consulta' ? $tkTxt['folio_con'] : $tkTxt['folio_ap'] ?></div>
     <div class="folio-code"><?= htmlspecialchars($folio) ?></div>
     <div style="margin-top:6px;">
       <span class="badge <?= htmlspecialchars($registro['estado']) ?>"><?= htmlspecialchars($registro['estado']) ?></span>
@@ -128,39 +189,39 @@ if (!$registro) {
     </div>
   </div>
 
-  <div class="row"><span>Cliente:</span><strong><?= htmlspecialchars($registro['cliente_nombre']) ?></strong></div>
+  <div class="row"><span><?= $tkTxt['client'] ?></span><strong><?= htmlspecialchars($registro['cliente_nombre']) ?></strong></div>
 
   <?php if ($tipo === 'apartado'): ?>
-    <div class="row"><span>Fecha Reserva:</span><span><?= date('d/m/Y H:i', strtotime($registro['fecha_reserva'])) ?></span></div>
-    <div class="row"><span>Válido hasta:</span><strong><?= date('d/m/Y H:i', strtotime($registro['fecha_limite'])) ?></strong></div>
+    <div class="row"><span><?= $tkTxt['res_date'] ?></span><span><?= date('d/m/Y H:i', strtotime($registro['fecha_reserva'])) ?></span></div>
+    <div class="row"><span><?= $tkTxt['valid_until'] ?></span><strong><?= date('d/m/Y H:i', strtotime($registro['fecha_limite'])) ?></strong></div>
     <div class="divider"></div>
-    <div class="row"><span>Producto:</span><strong><?= htmlspecialchars($registro['producto_nombre']) ?></strong></div>
-    <div class="row"><span>Código:</span><span><?= htmlspecialchars($registro['producto_codigo']) ?></span></div>
-    <div class="row"><span>Cantidad:</span><span><?= (int)$registro['cantidad'] ?> pza(s)</span></div>
-    <div class="row"><span>Precio Unit.:</span><span>$<?= number_format((float)$registro['precio_unitario'], 2) ?></span></div>
+    <div class="row"><span><?= $tkTxt['product'] ?></span><strong><?= htmlspecialchars($registro['producto_nombre']) ?></strong></div>
+    <div class="row"><span><?= $tkTxt['code'] ?></span><span><?= htmlspecialchars($registro['producto_codigo']) ?></span></div>
+    <div class="row"><span><?= $tkTxt['qty'] ?></span><span><?= (int)$registro['cantidad'] ?> <?= $tkTxt['pcs'] ?></span></div>
+    <div class="row"><span><?= $tkTxt['unit_price'] ?></span><span>$<?= number_format((float)$registro['precio_unitario'], 2) ?></span></div>
     <div class="divider"></div>
-    <div class="row"><span>Total Apartado:</span><strong>$<?= number_format((float)$registro['total_apartado'], 2) ?></strong></div>
-    <div class="row"><span>Abonado / Pagado:</span><span>$<?= number_format((float)$registro['monto_pagado'], 2) ?></span></div>
-    <div class="row" style="font-size:15px;"><span>SALDO EN CAJA:</span><strong>$<?= number_format((float)$registro['saldo_pendiente'], 2) ?></strong></div>
+    <div class="row"><span><?= $tkTxt['total_ap'] ?></span><strong>$<?= number_format((float)$registro['total_apartado'], 2) ?></strong></div>
+    <div class="row"><span><?= $tkTxt['paid_amt'] ?></span><span>$<?= number_format((float)$registro['monto_pagado'], 2) ?></span></div>
+    <div class="row" style="font-size:15px;"><span><?= $tkTxt['balance_due'] ?></span><strong>$<?= number_format((float)$registro['saldo_pendiente'], 2) ?></strong></div>
   <?php else: ?>
-    <div class="row"><span>Cita:</span><strong><?= date('d/m/Y H:i', strtotime($registro['fecha_hora'])) ?></strong></div>
-    <div class="row"><span>Mascota:</span><strong><?= htmlspecialchars($registro['mascota_nombre']) ?> (<?= htmlspecialchars($registro['especie']) ?>)</strong></div>
-    <div class="row"><span>Motivo:</span><span><?= htmlspecialchars($registro['motivo']) ?></span></div>
+    <div class="row"><span><?= $tkTxt['appt'] ?></span><strong><?= date('d/m/Y H:i', strtotime($registro['fecha_hora'])) ?></strong></div>
+    <div class="row"><span><?= $tkTxt['pet'] ?></span><strong><?= htmlspecialchars($registro['mascota_nombre']) ?> (<?= htmlspecialchars($registro['especie']) ?>)</strong></div>
+    <div class="row"><span><?= $tkTxt['reason'] ?></span><span><?= htmlspecialchars($registro['motivo']) ?></span></div>
     <div class="divider"></div>
-    <div class="row" style="font-size:15px;"><span>TOTAL CONSULTA:</span><strong>$<?= number_format((float)$registro['costo_consulta'], 2) ?></strong></div>
+    <div class="row" style="font-size:15px;"><span><?= $tkTxt['total_con'] ?></span><strong>$<?= number_format((float)$registro['costo_consulta'], 2) ?></strong></div>
   <?php endif; ?>
 
   <div class="divider"></div>
 
   <div class="qr-wrap">
     <img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=<?= urlencode($folio) ?>" alt="QR Folio">
-    <p class="sub" style="margin-top:6px;">Presenta este folio o QR en caja para validar y recoger.</p>
+    <p class="sub" style="margin-top:6px;"><?= $tkTxt['qr_hint'] ?></p>
   </div>
 </div>
 
 <div class="actions">
-  <button class="btn btn-print" onclick="window.print()">Imprimir / Guardar PDF</button>
-  <a class="btn btn-back" href="javascript:history.back()">Volver</a>
+  <button class="btn btn-print" onclick="window.print()"><?= $tkTxt['btn_print'] ?></button>
+  <a class="btn btn-back" href="javascript:history.back()"><?= $tkTxt['btn_back'] ?></a>
 </div>
 
 </body>

@@ -849,7 +849,7 @@ const I18N_USR = {
     en: {
         collapse_menu: 'Collapse menu',
         sec_activity: 'My Activity',
-        nav_apartados: 'My Reservations',
+        nav_apartados: 'My Layaways',
         nav_consultas: 'Vet Appointments',
         sec_settings: 'Settings',
         nav_config: 'Settings',

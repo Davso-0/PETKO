@@ -2021,7 +2021,7 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
             <button class="nav-btn" data-target="view-ventas"><i class="ph ph-chart-line-up"></i><span class="nav-label" data-i18n="nav_ventas">Ventas</span></button>
             <button class="nav-btn" data-target="view-apartados-consultas">
                 <i class="ph ph-clipboard-text"></i>
-                <span class="nav-label">Apartados y Consultas</span>
+                <span class="nav-label" data-i18n="nav_apartados_consultas">Apartados y Consultas</span>
             </button>
             <button class="nav-btn" data-target="view-cortes"><i class="ph ph-calculator"></i><span class="nav-label" data-i18n="nav_cortes">Cortes de Caja</span></button>
             <div class="nav-section-title" data-i18n="nav_section_caja">Caja</div>
@@ -2196,9 +2196,9 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
                                     <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
                                     <div id="posSearchResults" class="pos-search-dropdown"></div>
                                 </div>
-                                <button type="button" class="chip-btn" id="btnStartCameraScan" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
+                                <button type="button" class="chip-btn" id="btnStartCameraScan" data-i18n-title="pos_scan_cam_title" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
                                     <i class="ph ph-barcode" style="font-size:20px;"></i>
-                                    <span style="font-weight:700;">Escanear</span>
+                                    <span style="font-weight:700;" data-i18n="pos_btn_scan">Escanear</span>
                                 </button>
                             </div>
                         </div>
@@ -2244,15 +2244,17 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
                         <div>
                             <h3 style="margin:0; font-size:17px; color:var(--ink); display:flex; align-items:center; gap:8px;">
-                                <i class="ph-fill ph-shopping-bag" style="color:var(--accent);"></i> Apartados pendientes de entrega (Sucursal)
+                                <i class="ph-fill ph-shopping-bag" style="color:var(--accent);"></i>
+                                <span data-i18n="caja_ap_title">Apartados pendientes de entrega (Sucursal)</span>
                             </h3>
-                            <small style="color:var(--ink-faint);">Busca por folio, ticket, nombre del cliente, teléfono o código de producto</small>
+                            <small style="color:var(--ink-faint);" data-i18n="caja_ap_sub">Busca por folio o ticket</small>
                         </div>
                         <div style="display:flex; gap:8px; flex:1; max-width:480px;">
                             <input type="text" id="inputFolioCaja" class="search-input" style="min-width:0;"
+                                   data-i18n-placeholder="caja_ap_placeholder"
                                    placeholder="Folio, ticket, cliente o código..."
                                    onkeydown="if(event.key==='Enter') buscarFolioEnCaja()">
-                            <button type="button" class="btn-primary" onclick="buscarFolioEnCaja()">Buscar</button>
+                            <button type="button" class="btn-primary" onclick="buscarFolioEnCaja()" data-i18n="caja_ap_btn_buscar">Buscar</button>
                         </div>
                     </div>
                     <div id="resultadoFolioCaja" style="display:none; background:var(--bg-panel); border:1.5px solid var(--border-soft); border-radius:14px; padding:16px;"></div>
@@ -2264,7 +2266,7 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
                     const normalized = String(fechaStr).replace(' ', 'T');
                     const dt = new Date(normalized);
                     if (isNaN(dt.getTime())) return fechaStr;
-                    return dt.toLocaleString('es-MX', {
+                    return dt.toLocaleString(currentLang === 'en' ? 'en-US' : 'es-MX', {
                         day: '2-digit',
                         month: '2-digit',
                         year: 'numeric',
@@ -2274,17 +2276,40 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
                     });
                 }
 
+                function traducirEstadoApartado(estado) {
+                    const est = String(estado || '').toUpperCase();
+                    if (est === 'PENDIENTE_RECOGER' || est === 'PENDIENTE') return t('caja_ap_est_pendiente');
+                    if (est === 'ENTREGADO') return t('caja_ap_est_entregado');
+                    if (est === 'CANCELADO') return t('caja_ap_est_cancelado');
+                    if (est === 'VENCIDO' || est === 'EXPIRADO') return t('caja_ap_est_vencido');
+                    return estado;
+                }
+
+                function traducirErrorApartadoCaja(msg) {
+                    if (currentLang !== 'en') return msg;
+                    const txt = String(msg || '');
+                    if (/no se encontraron apartados en esta sucursal/i.test(txt)) {
+                        return t('caja_ap_no_encontrado');
+                    }
+                    return txt;
+                }
+
                 async function buscarFolioEnCaja() {
                     const q = document.getElementById('inputFolioCaja').value.trim();
                     const box = document.getElementById('resultadoFolioCaja');
                     if (!q) return;
 
                     box.style.display = 'block';
-                    box.innerHTML = '<p style="margin:0; color:var(--ink-soft);">Consultando apartados de la sucursal...</p>';
+                    box.innerHTML = `<p style="margin:0; color:var(--ink-soft);">${escapeHtml(t('caja_ap_consultando'))}</p>`;
 
                     try {
                         const json = await request(`ac_buscar_folio_pdv&q=${encodeURIComponent(q)}`);
-                        const lista = json.lista || [json.data];
+                        const lista = json.lista || (json.data ? [json.data] : []);
+
+                        if (!lista.length) {
+                            box.innerHTML = `<p style="margin:0; color:var(--danger); font-weight:700;">${escapeHtml(t('caja_ap_no_encontrado'))}</p>`;
+                            return;
+                        }
 
                         box.innerHTML = lista.map(d => {
                             const activo = (d.estado === 'PENDIENTE_RECOGER' || d.estado === 'PENDIENTE');
@@ -2295,52 +2320,52 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
                             return `
                                 <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-soft);">
                                     <div>
-                                        <span style="background:${badgeColor}; color:#fff; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:800;">${escapeHtml(d.estado)}</span>
+                                        <span style="background:${badgeColor}; color:#fff; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:800;">${escapeHtml(traducirEstadoApartado(d.estado))}</span>
                                         <strong style="margin-left:8px;">${escapeHtml(d.folio)}</strong>
-                                        <h4 style="margin:6px 0 2px; font-size:15px;">${escapeHtml(d.producto_nombre)} (${d.cantidad} pza) · Cód: ${escapeHtml(d.producto_codigo)}</h4>
+                                        <h4 style="margin:6px 0 2px; font-size:15px;">${escapeHtml(d.producto_nombre)} (${d.cantidad} ${escapeHtml(t('caja_ap_pza'))}) · ${escapeHtml(t('caja_ap_cod'))} ${escapeHtml(d.producto_codigo)}</h4>
                                         <p style="margin:0; font-size:13px; color:var(--ink-soft);">
-                                            Cliente: <strong>${escapeHtml(d.cliente_nombre)}</strong> ${d.telefono ? '· Tel: ' + escapeHtml(d.telefono) : ''} · Límite: <strong>${escapeHtml(fechaLimiteFmt)}</strong>
+                                            ${escapeHtml(t('caja_ap_cliente'))} <strong>${escapeHtml(d.cliente_nombre)}</strong> ${d.telefono ? '· ' + escapeHtml(t('caja_ap_tel')) + ' ' + escapeHtml(d.telefono) : ''} · ${escapeHtml(t('caja_ap_limite'))} <strong>${escapeHtml(fechaLimiteFmt)}</strong>
                                         </p>
                                         <p style="margin:6px 0 0; font-size:14px;">
-                                            Total: <strong style="color:var(--accent); font-size:15px;">${money(totalAp)}</strong>
+                                            ${escapeHtml(t('caja_ap_total'))} <strong style="color:var(--accent); font-size:15px;">${money(totalAp)}</strong>
                                         </p>
                                     </div>
                                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                         ${activo ? `
                                             <select id="metodoPagoApartado_${d.id_apartado}" class="select-input" style="min-width:130px; padding:9px 14px;">
-                                                <option value="1">Efectivo</option>
-                                                <option value="2">Tarjeta</option>
-                                                <option value="3">Transferencia</option>
+                                                <option value="1">${escapeHtml(t('metodo_efectivo'))}</option>
+                                                <option value="2">${escapeHtml(t('metodo_tarjeta'))}</option>
+                                                <option value="3">${escapeHtml(t('metodo_transferencia'))}</option>
                                             </select>
                                             <button type="button" class="btn-primary" style="background:var(--success); color:#fff;" onclick="confirmarEntregaApartadoCaja(${d.id_apartado}, ${totalAp})">
-                                                Confirmar Entrega
+                                                ${escapeHtml(t('caja_ap_btn_confirmar'))}
                                             </button>
                                         ` : ''}
-                                        <a href="../../componentes/comprobante_ticket.php?tipo=apartado&folio=${encodeURIComponent(d.folio)}" target="_blank" class="chip-btn">
-                                            Ver Ticket
+                                        <a href="../../componentes/comprobante_ticket.php?tipo=apartado&folio=${encodeURIComponent(d.folio)}&lang=${encodeURIComponent(currentLang)}" target="_blank" class="chip-btn">
+                                            ${escapeHtml(t('caja_ap_btn_ticket'))}
                                         </a>
                                     </div>
                                 </div>
                             `;
                         }).join('');
                     } catch (err) {
-                        box.innerHTML = `<p style="margin:0; color:var(--danger); font-weight:700;">${escapeHtml(err.message)}</p>`;
+                        box.innerHTML = `<p style="margin:0; color:var(--danger); font-weight:700;">${escapeHtml(traducirErrorApartadoCaja(err.message))}</p>`;
                     }
                 }
 
                 async function confirmarEntregaApartadoCaja(idApartado, totalApartado) {
                     const metodoEl = document.getElementById(`metodoPagoApartado_${idApartado}`);
                     const idMetodo = metodoEl ? metodoEl.value : '1';
-                    const metodoTexto = metodoEl ? (metodoEl.options[metodoEl.selectedIndex]?.text || 'Efectivo') : 'Efectivo';
+                    const metodoTexto = metodoEl ? (metodoEl.options[metodoEl.selectedIndex]?.text || t('metodo_efectivo')) : t('metodo_efectivo');
 
                     const conf = await Swal.fire({
-                        title: 'Confirmar Entrega de Apartado',
-                        html: `Total a registrar en caja: <b style="color:var(--accent); font-size:18px;">${money(totalApartado)}</b><br><small>Método de pago: <b>${escapeHtml(metodoTexto)}</b></small>`,
+                        title: t('caja_ap_modal_title'),
+                        html: `${escapeHtml(t('caja_ap_modal_total'))} <b style="color:var(--accent); font-size:18px;">${money(totalApartado)}</b><br><small>${escapeHtml(t('caja_ap_modal_metodo'))} <b>${escapeHtml(metodoTexto)}</b></small>`,
                         icon: 'question',
                         showCancelButton: true,
                         confirmButtonColor: 'var(--success)',
-                        confirmButtonText: 'Confirmar y Registrar en Caja',
-                        cancelButtonText: 'Cancelar'
+                        confirmButtonText: t('caja_ap_modal_confirm'),
+                        cancelButtonText: t('cancelar')
                     });
                     if (!conf.isConfirmed) return;
 
@@ -2352,9 +2377,9 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
                         fd.append('id_turno', currentTurnoId);
                     }
 
-                   try {
+                    try {
                         const json = await request('ac_entregar_apartado', { method: 'POST', body: fd });
-                        notify(json.msg);
+                        notify(currentLang === 'en' ? t('caja_ap_entregado_ok') : json.msg);
                         buscarFolioEnCaja();
                         if (typeof refrescarEsperado === 'function') await refrescarEsperado();
                         if (typeof loadDashboard === 'function') loadDashboard();
@@ -2500,7 +2525,26 @@ const I18N = {
         modal_prod_new: 'Nuevo Producto', modal_prod_edit: 'Editar Producto', img_url: 'Imagen del Producto (URL)', desc_lbl: 'Descripción', asign_suc: 'Stock Inicial y Mínimo',
         todas_categorias: 'Todas las categorías', cualquier_stock: 'Cualquier nivel de stock', stock_bajo: 'Stock Bajo', stock_agotado: 'Agotados',
         title_eliminar_prod: '¿Eliminar producto?', desc_eliminar_prod: 'Solo procederá si el stock global es 0.',
-        nav_section_cuenta: 'Mi Cuenta', nav_mis_apartados: 'Mis Apartados', nav_configuracion: 'Configuración'
+        nav_section_cuenta: 'Mi Cuenta', nav_mis_apartados: 'Mis Apartados', nav_configuracion: 'Configuración',
+        nav_apartados_consultas: 'Apartados y Consultas',
+        pos_btn_scan: 'Escanear', pos_scan_cam_title: 'Escanear con cámara', pos_scan_modal_title: 'Escanear Código de Barras o QR',
+        caja_ap_title: 'Apartados pendientes de entrega (Sucursal)',
+        caja_ap_sub: 'Busca por folio o ticket',
+        caja_ap_placeholder: 'Folio, ticket, cliente o código...',
+        caja_ap_btn_buscar: 'Buscar',
+        caja_ap_consultando: 'Consultando apartados de la sucursal...',
+        caja_ap_no_encontrado: 'No se encontraron apartados en esta sucursal con ese criterio.',
+        caja_ap_pza: 'pza', caja_ap_cod: 'Cód:', caja_ap_cliente: 'Cliente:', caja_ap_tel: 'Tel:', caja_ap_limite: 'Límite:', caja_ap_total: 'Total:',
+        caja_ap_est_pendiente: 'PENDIENTE DE RECOGER', caja_ap_est_entregado: 'ENTREGADO', caja_ap_est_cancelado: 'CANCELADO', caja_ap_est_vencido: 'VENCIDO',
+        metodo_efectivo: 'Efectivo', metodo_tarjeta: 'Tarjeta', metodo_transferencia: 'Transferencia',
+        caja_ap_btn_confirmar: 'Confirmar Entrega', caja_ap_btn_ticket: 'Ver Ticket',
+        caja_ap_modal_title: 'Confirmar Entrega de Apartado', caja_ap_modal_total: 'Total a registrar en caja:',
+        caja_ap_modal_metodo: 'Método de pago:', caja_ap_modal_confirm: 'Confirmar y Registrar en Caja',
+        caja_ap_entregado_ok: 'Apartado entregado y registrado en caja.',
+        pos_cobro_ef_title: 'Cobro en Efectivo', pos_cobro_total_lbl: 'TOTAL DE LA VENTA',
+        pos_cobro_recibido_lbl: 'Cantidad recibida del cliente (MXN)', pos_cobro_cambio_lbl: 'CAMBIO A DEVOLVER',
+        pos_cobro_invalido: 'IMPORTE INVÁLIDO', pos_cobro_insuficiente: 'IMPORTE INSUFICIENTE (FALTA)',
+        pos_cobro_confirmar: 'Confirmar Pago', pos_cobro_proc_title: 'Procesar Cobro', pos_cobro_proc_text: 'Total a cobrar:'
     },
     en: {
         brand_sub: 'Branch Management', role_chip: 'Manager', branch_prefix: 'Branch',
@@ -2534,7 +2578,27 @@ const I18N = {
         btn_registrar_retiro: '+ Register withdrawal', agotado_label: 'Out of stock',
         modal_prod_new: 'New Product', modal_prod_edit: 'Edit Product', img_url: 'Product Image (URL)', desc_lbl: 'Description', asign_suc: 'Initial and Minimum Stock',
         todas_categorias: 'All categories', cualquier_stock: 'Any stock level', stock_bajo: 'Low Stock', stock_agotado: 'Out of stock',
-        title_eliminar_prod: 'Delete product?', desc_eliminar_prod: 'Will only proceed if global stock is 0.', nav_section_cuenta: 'My Account', nav_mis_apartados: 'My Reservations', nav_configuracion: 'Settings'
+        title_eliminar_prod: 'Delete product?', desc_eliminar_prod: 'Will only proceed if global stock is 0.',
+        nav_section_cuenta: 'My Account', nav_mis_apartados: 'My Layaways', nav_configuracion: 'Settings',
+        nav_apartados_consultas: 'Layaways & Appointments',
+        pos_btn_scan: 'Scan', pos_scan_cam_title: 'Scan with camera', pos_scan_modal_title: 'Scan Barcode or QR Code',
+        caja_ap_title: 'Pending Layaways for Pickup (Branch)',
+        caja_ap_sub: 'Search by folio or ticket',
+        caja_ap_placeholder: 'Folio, ticket, customer or code...',
+        caja_ap_btn_buscar: 'Search',
+        caja_ap_consultando: 'Checking branch layaways...',
+        caja_ap_no_encontrado: 'No layaways found in this branch matching that criteria.',
+        caja_ap_pza: 'pcs', caja_ap_cod: 'Code:', caja_ap_cliente: 'Customer:', caja_ap_tel: 'Phone:', caja_ap_limite: 'Deadline:', caja_ap_total: 'Total:',
+        caja_ap_est_pendiente: 'PENDING PICKUP', caja_ap_est_entregado: 'DELIVERED', caja_ap_est_cancelado: 'CANCELED', caja_ap_est_vencido: 'EXPIRED',
+        metodo_efectivo: 'Cash', metodo_tarjeta: 'Card', metodo_transferencia: 'Transfer',
+        caja_ap_btn_confirmar: 'Confirm Pickup', caja_ap_btn_ticket: 'View Ticket',
+        caja_ap_modal_title: 'Confirm Layaway Pickup', caja_ap_modal_total: 'Total to register in cash drawer:',
+        caja_ap_modal_metodo: 'Payment method:', caja_ap_modal_confirm: 'Confirm & Register in Drawer',
+        caja_ap_entregado_ok: 'Layaway delivered and registered in drawer.',
+        pos_cobro_ef_title: 'Cash Payment', pos_cobro_total_lbl: 'SALE TOTAL',
+        pos_cobro_recibido_lbl: 'Amount received from customer (MXN)', pos_cobro_cambio_lbl: 'CHANGE DUE',
+        pos_cobro_invalido: 'INVALID AMOUNT', pos_cobro_insuficiente: 'INSUFFICIENT AMOUNT (DUE)',
+        pos_cobro_confirmar: 'Confirm Payment', pos_cobro_proc_title: 'Process Payment', pos_cobro_proc_text: 'Total due:'
     }
 };
 let currentLang = (window.PetkoPrefs ? PetkoPrefs.lang() : null) || localStorage.getItem('petko_lang') || 'es';
@@ -2543,6 +2607,7 @@ function applyLanguage() {
     document.documentElement.lang = currentLang;
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
     document.querySelectorAll('.nav-btn').forEach(btn => {
         const lbl = btn.querySelector('.nav-label');
         if (lbl) btn.setAttribute('data-tooltip', lbl.textContent.trim());
@@ -2553,7 +2618,16 @@ if (window.PetkoPrefs) {
         currentLang = l;
         applyLanguage();
         const activeView = document.querySelector('.view-section.active');
-        if (activeView) switchView(activeView.id);
+        if (activeView) {
+            switchView(activeView.id);
+            if (activeView.id === 'view-pos') {
+                const box = document.getElementById('resultadoFolioCaja');
+                const inp = document.getElementById('inputFolioCaja');
+                if (box && box.style.display !== 'none' && inp && inp.value.trim() !== '') {
+                    buscarFolioEnCaja();
+                }
+            }
+        }
     });
 }
 applyLanguage();
@@ -3441,30 +3515,30 @@ $('#btnCobrar').addEventListener('click', async () => {
 
     if (esEfectivo) {
         const resEfectivo = await Swal.fire({
-            title: 'Cobro en Efectivo',
+            title: t('pos_cobro_ef_title'),
             html: `
                 <div style="text-align:left; font-family:var(--font-body);">
                     <div style="background:var(--bg-panel); border:1.5px solid var(--border-soft); border-radius:16px; padding:16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:14px; font-weight:700; color:var(--ink-soft);">TOTAL DE LA VENTA</span>
+                        <span style="font-size:14px; font-weight:700; color:var(--ink-soft);">${escapeHtml(t('pos_cobro_total_lbl'))}</span>
                         <span style="font-size:26px; font-weight:800; color:var(--accent);">${formatMXN(totalExacto)}</span>
                     </div>
 
                     <label for="swal-recibido" style="display:block; font-size:13px; font-weight:700; color:var(--ink); margin-bottom:6px;">
-                        Cantidad recibida del cliente (MXN)
+                        ${escapeHtml(t('pos_cobro_recibido_lbl'))}
                     </label>
                     <input id="swal-recibido" type="number" step="0.01" min="0" value="${totalExacto.toFixed(2)}"
                            class="swal2-input"
                            style="width:100%; margin:0 0 14px; font-size:24px; font-weight:800; text-align:right; color:var(--ink); height:54px;">
 
                     <div id="box-cambio" style="background:var(--success-bg); border:1.5px solid var(--success); border-radius:16px; padding:16px; display:flex; justify-content:space-between; align-items:center; transition:all .2s ease;">
-                        <span id="lbl-cambio-titulo" style="font-size:14px; font-weight:800; color:var(--success);">CAMBIO A DEVOLVER</span>
+                        <span id="lbl-cambio-titulo" style="font-size:14px; font-weight:800; color:var(--success);">${escapeHtml(t('pos_cobro_cambio_lbl'))}</span>
                         <span id="lbl-cambio-valor" style="font-size:26px; font-weight:800; color:var(--success);">$0.00</span>
                     </div>
                 </div>
             `,
             showCancelButton: true,
-            confirmButtonText: '<i class="ph-bold ph-check"></i> Confirmar Pago',
-            cancelButtonText: 'Cancelar',
+            confirmButtonText: `<i class="ph-bold ph-check"></i> ${t('pos_cobro_confirmar')}`,
+            cancelButtonText: t('cancelar'),
             confirmButtonColor: '#0d734c',
             allowOutsideClick: false,
             didOpen: () => {
@@ -3486,7 +3560,7 @@ $('#btnCobrar').addEventListener('click', async () => {
                         boxCambio.style.borderColor = 'var(--danger)';
                         lblTitulo.style.color = 'var(--danger)';
                         lblValor.style.color = 'var(--danger)';
-                        lblTitulo.textContent = 'IMPORTE INVÁLIDO';
+                        lblTitulo.textContent = t('pos_cobro_invalido');
                         lblValor.textContent = '---';
                         return;
                     }
@@ -3500,7 +3574,7 @@ $('#btnCobrar').addEventListener('click', async () => {
                         boxCambio.style.borderColor = 'var(--danger)';
                         lblTitulo.style.color = 'var(--danger)';
                         lblValor.style.color = 'var(--danger)';
-                        lblTitulo.textContent = 'IMPORTE INSUFICIENTE (FALTA)';
+                        lblTitulo.textContent = t('pos_cobro_insuficiente');
                         lblValor.textContent = formatMXN(Math.abs(diffCents) / 100);
                     } else {
                         btnConfirm.disabled = false;
@@ -3508,7 +3582,7 @@ $('#btnCobrar').addEventListener('click', async () => {
                         boxCambio.style.borderColor = 'var(--success)';
                         lblTitulo.style.color = 'var(--success)';
                         lblValor.style.color = 'var(--success)';
-                        lblTitulo.textContent = 'CAMBIO A DEVOLVER';
+                        lblTitulo.textContent = t('pos_cobro_cambio_lbl');
                         lblValor.textContent = formatMXN(diffCents / 100);
                     }
                 };
@@ -3540,12 +3614,12 @@ $('#btnCobrar').addEventListener('click', async () => {
         montoRecibidoFinal = resEfectivo.value;
     } else {
         const conf = await Swal.fire({
-            title: 'Procesar Cobro',
-            text: `Total a cobrar: ${formatMXN(totalExacto)}`,
+            title: t('pos_cobro_proc_title'),
+            text: `${t('pos_cobro_proc_text')} ${formatMXN(totalExacto)}`,
             icon: 'info',
             showCancelButton: true,
             confirmButtonColor: 'var(--accent)',
-            confirmButtonText: 'Confirmar Pago',
+            confirmButtonText: t('pos_cobro_confirmar'),
             cancelButtonText: t('cancelar')
         });
         if (!conf.isConfirmed) return;
@@ -3628,7 +3702,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function abrirEscanerCamara() {
     procesandoEscaneo = false;
     Swal.fire({
-        title: 'Escanear Código de Barras o QR',
+        title: t('pos_scan_modal_title'),
         html: `
             <style>
                 #reader { width: 100% !important; max-width: 350px !important; margin: 0 auto !important; border-radius: 12px !important; overflow: hidden !important; background: #000 !important; }

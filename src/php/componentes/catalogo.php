@@ -1093,13 +1093,22 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
         const totalEl = document.getElementById('ticket-total');
         const codigoEl = document.getElementById('ticket-codigo');
 
+        const isEn = (window.PetkoPrefs && PetkoPrefs.lang() === 'en');
         const esPago = data.modo === 'pagar';
-        if (titulo) titulo.textContent = esPago ? '¡Compra y apartado confirmados!' : '¡Apartado confirmado por 48 h!';
-        if (sub) sub.textContent = data.msg;
+        if (titulo) titulo.textContent = isEn
+            ? (esPago ? 'Purchase & reservation confirmed!' : 'Reservation confirmed for 48 hrs!')
+            : (esPago ? '¡Compra y apartado confirmados!' : '¡Apartado confirmado por 48 h!');
+        if (sub) sub.textContent = isEn
+            ? (esPago ? 'Payment verified and product(s) reserved for 48 hours.' : 'Product(s) reserved for 48 hours for in-branch payment.')
+            : data.msg;
         if (folio) folio.textContent = data.folio;
         if (fecha) fecha.textContent = data.fecha;
-        if (metodo) metodo.textContent = esPago ? 'Pago en línea' : 'Pago en sucursal (Efectivo)';
-        if (estado) estado.textContent = esPago ? 'PAGADO · APARTADO 48H' : 'PENDIENTE DE PAGO (48H)';
+        if (metodo) metodo.textContent = isEn
+            ? (esPago ? 'Online payment' : 'In-branch payment (Cash)')
+            : (esPago ? 'Pago en línea' : 'Pago en sucursal (Efectivo)');
+        if (estado) estado.textContent = isEn
+            ? (esPago ? 'PAID · RESERVED 48H' : 'PENDING PAYMENT (48H)')
+            : (esPago ? 'PAGADO · APARTADO 48H' : 'PENDIENTE DE PAGO (48H)');
         if (totalEl) totalEl.textContent = '$' + Number(data.total || 0).toFixed(2);
         if (codigoEl) codigoEl.textContent = data.folio;
 
@@ -1153,14 +1162,17 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
         try {
             // Si eligió "Pagar ahora", mostrar confirmación encima del modal de checkout
             if (modo === 'pagar') {
+                const isEn = (window.PetkoPrefs && PetkoPrefs.lang() === 'en');
                 const conf = await Swal.fire({
                     target: (modalCheckoutEl && modalCheckoutEl.open) ? modalCheckoutEl : 'body',
                     icon: 'question',
-                    title: 'Confirmar pago en línea',
-                    text: 'Se verificará el cargo y tus productos quedarán apartados por 48 horas como YA PAGADOS.',
+                    title: isEn ? 'Confirm online payment' : 'Confirmar pago en línea',
+                    text: isEn
+                        ? 'Your payment will be verified and your products will be reserved for 48 hours as PAID.'
+                        : 'Se verificará el cargo y tus productos quedarán apartados por 48 horas como YA PAGADOS.',
                     showCancelButton: true,
-                    confirmButtonText: 'Confirmar pago',
-                    cancelButtonText: 'Cancelar'
+                    confirmButtonText: isEn ? 'Confirm payment' : 'Confirmar pago',
+                    cancelButtonText: isEn ? 'Cancel' : 'Cancelar'
                 });
                 if (!conf.isConfirmed) return;
             }
