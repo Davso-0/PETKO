@@ -83,7 +83,7 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
         .terms-content::-webkit-scrollbar { width: 6px; }
         .terms-content::-webkit-scrollbar-thumb { background: var(--green-primary); border-radius: 10px; }
         .terms-content::-webkit-scrollbar-track { background: #f1f5f9; }
-        .terms-content section { margin: 0 0 22px; }
+        .terms-content section { margin: 0 0 22px; scroll-margin-block-start: 14px; }
         .terms-content h3 { margin: 0 0 8px; color: var(--green-hover); font-size: 15px; line-height: 1.45; }
         .terms-content p { margin: 0 0 9px; }
         .terms-content ul { margin: 0 0 10px; padding-left: 22px; }
@@ -114,7 +114,7 @@ $esActivacion = ($_GET['origen'] ?? '') === 'activacion' && $tokenActivacion !==
             *, *::before, *::after { scroll-behavior: auto !important; }
         }
     
-/* ===== PETKO · TEMA AZUL DE MARCA (solo estilos) ===== */
+
 :root{--green-primary:#3966B3;--green-hover:#294980;--green-glow:rgba(82,146,255,.35);--bg-gradient:linear-gradient(135deg,#EEF4FF 0%,#BAD3FF 55%,#86B3FF 100%);--bg-main:#EEF4FF;--field-border:#BAD3FF;--text-main:#14284a;--text-muted:#4f678c}
 .bg-viewport::before{background:radial-gradient(circle,#BAD3FF 0%,rgba(186,211,255,.6) 35%,transparent 70%)}
 .bg-viewport::after{background:radial-gradient(circle,#86B3FF 0%,rgba(134,179,255,.5) 35%,transparent 70%)}
@@ -138,8 +138,6 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .dialog-backdrop,.role-overlay{background:rgba(12,26,53,.6)}
 @media(max-width:480px){.auth-card{border-radius:20px}input[type="email"],input[type="password"],input[type="text"]{font-size:16px}}
 
-
-/* ===== PETKO · MODO OSCURO (términos) ===== */
 body.dark-mode{background:linear-gradient(135deg,#030710 0%,#071225 55%,#0b1d3a 100%);--text-main:#eaf3ff;--text-muted:#a3b8d6;--green-primary:#5cc8ff;--green-hover:#8fd6ff;color-scheme:dark}
 body.dark-mode .terms-card{border-color:rgba(92,200,255,.2);background:rgba(11,29,58,.92);color:#eaf3ff;box-shadow:0 24px 60px rgba(0,0,0,.6)}
 body.dark-mode .brand-logo{color:#eaf3ff}
@@ -176,7 +174,7 @@ body.dark-mode .terms-button{background:linear-gradient(135deg,#5cc8ff 0%,#2f80e
         <?php endif; ?>
 
         <div class="terms-content" tabindex="0" aria-label="Términos, condiciones y política de privacidad">
-            <section>
+            <section id="terminos-y-condiciones">
                 <h3>1. Aceptación y alcance de los servicios</h3>
                 <p>PETKO es una plataforma de gestión y comercio orientada a actividades veterinarias y agropecuarias. Sus funciones pueden incluir un catálogo digital de productos, consulta de información y herramientas de gestión para usuarios, cajeros, gerentes y administradores.</p>
                 <p>Al crear una cuenta, marcar la casilla de aceptación o utilizar las funciones de PETKO, la persona usuaria declara que ha leído y acepta estos Términos y la Política de Privacidad. Si no está de acuerdo, debe abstenerse de registrarse o utilizar la plataforma.</p>
@@ -197,7 +195,7 @@ body.dark-mode .terms-button{background:linear-gradient(135deg,#5cc8ff 0%,#2f80e
                 <p>La disponibilidad, los precios, las descripciones y las existencias del catálogo pueden cambiar y están sujetos a confirmación al momento de la compra. La publicación de un producto no garantiza su disponibilidad ni constituye una oferta irrevocable.</p>
             </section>
 
-            <section>
+            <section id="aviso-de-privacidad">
                 <h3>4. Política de privacidad y datos personales</h3>
                 <p>Para operar la plataforma, PETKO puede tratar los datos que la persona usuaria proporciona o genera al utilizarla, por ejemplo:</p>
                 <ul>
