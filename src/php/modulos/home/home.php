@@ -191,10 +191,12 @@ a{text-decoration:none}
 
 .navbar{width:100%;height:82px;display:flex;align-items:center;justify-content:space-between;padding:0 6.5%;background:rgba(8,18,38,.96);border-bottom:1px solid rgba(124,196,255,.16);backdrop-filter:blur(18px);position:sticky;top:0;z-index:1000}
 .logo{font-size:30px;font-weight:800;letter-spacing:3px;color:#f2f8ff}.logo span{color:#5cc8ff}
-.menu{display:flex;align-items:center;gap:clamp(12px,1.7vw,27px)}
+.menu{display:flex;align-items:center;gap:clamp(8px,1.2vw,18px)}
+.menu-links{display:flex;align-items:center;gap:clamp(12px,1.7vw,27px);min-width:0}
+.menu-actions{display:flex;align-items:center;gap:clamp(8px,.9vw,14px);flex:0 0 auto}
 .menu a{color:#d6e6fb;font-size:13px;transition:color .25s}.menu a:hover{color:#5cc8ff}
-.menu>a:not(.btn-login):not(.profile-link){display:inline-flex;align-items:center;gap:7px;padding:10px 2px}
-.menu>a:not(.btn-login):not(.profile-link) i{font-size:12px;color:#75ceff}
+.menu-links>a:not(.btn-login):not(.profile-link){display:inline-flex;align-items:center;gap:7px;padding:10px 2px}
+.menu-links>a:not(.btn-login):not(.profile-link) i{font-size:12px;color:#75ceff}
 .profile-link{width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(200,225,255,.36);border-radius:50%;background:linear-gradient(145deg,#5cc8ff,#2f80ed);color:#fff!important;font-size:21px;transition:transform .2s,box-shadow .2s}
 .profile-link:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(47,128,237,.35)}
 .menu .btn-login{background:#5cc8ff;color:#04142e;border-radius:999px;padding:12px 19px;font-weight:800;transition:.25s}
@@ -666,12 +668,29 @@ body.dark-mode .product-image{background:linear-gradient(135deg,#10264a,#071225)
 .navbar .logo{display:flex;align-items:center;flex:0 0 auto;min-width:0}
 .navbar .logo img{height:clamp(36px,3vw,50px);width:auto;max-width:min(17vw,220px);object-fit:contain}
 .navbar .menu{display:flex;flex:1 1 auto;min-width:0;flex-wrap:nowrap;align-items:center;justify-content:flex-end;gap:clamp(7px,.9vw,16px);white-space:nowrap}
-.navbar .menu>a:not(.btn-login):not(.profile-link){padding:8px 0;font-size:clamp(12px,.82vw,15px)}
-.navbar .menu>a:not(.btn-login):not(.profile-link) i{font-size:12px}
+.navbar .menu-links{display:flex;flex:1 1 auto;min-width:0;flex-wrap:nowrap;align-items:center;justify-content:flex-end;gap:clamp(7px,.9vw,16px);white-space:nowrap}
+.navbar .menu-actions{display:flex;flex:0 0 auto;align-items:center;justify-content:flex-end;gap:clamp(7px,.9vw,16px);white-space:nowrap}
+.navbar .menu-links>a:not(.btn-login):not(.profile-link){padding:8px 0;font-size:clamp(12px,.82vw,15px)}
+.navbar .menu-links>a:not(.btn-login):not(.profile-link) i{font-size:12px}
 .navbar .profile-link,.navbar .dark-mode-btn,.navbar .language-btn,.navbar .logout-link{flex:0 0 40px;width:40px;min-width:40px;height:40px}
 .navbar .logout-form{display:flex;flex:0 0 auto;align-items:center;margin:0}
-@media(max-width:1100px){.navbar .menu>a:not(.btn-login):not(.profile-link){display:none}}
+@media(max-width:1100px){.navbar .menu-links>a:not(.btn-login):not(.profile-link){display:none}}
 @media(max-width:650px){.navbar{padding-inline:12px!important;gap:8px}.navbar .logo img{height:38px;max-width:128px}.navbar .menu{gap:7px}.navbar .profile-link,.navbar .dark-mode-btn,.navbar .language-btn,.navbar .logout-link{flex-basis:36px;width:36px;min-width:36px;height:36px}.navbar .menu .logout-form{display:flex}.navbar .language-btn{padding:0;font-size:12px}}
+@media(min-width:700px) and (max-width:1100px){
+  .navbar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:40px 32px;align-content:center;height:96px!important;min-height:96px!important;padding:6px 4%!important;gap:0 12px}
+  .navbar .logo{grid-column:1;grid-row:1;align-self:center;z-index:2}
+  .navbar .logo img{height:36px!important;max-width:160px}
+  .navbar .menu{display:grid;grid-column:1/-1;grid-row:1/3;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:40px 32px;align-items:center;min-width:0;width:100%;gap:0 12px;pointer-events:none}
+  .navbar .menu-links{grid-column:1/-1;grid-row:2;display:flex!important;align-items:center;justify-content:space-between;gap:clamp(3px,.5vw,7px);min-width:0;width:100%;white-space:nowrap;pointer-events:auto}
+  .navbar .menu-links>a:not(.btn-login):not(.profile-link){display:inline-flex!important;align-items:center;gap:4px;padding:4px 0;font-size:clamp(10px,1.45vw,13px);flex:none}
+  .navbar .menu-links>a:not(.btn-login):not(.profile-link) i{font-size:11px}
+  .navbar .menu-actions{grid-column:2;grid-row:1;display:flex;align-items:center;justify-content:flex-end;gap:6px;pointer-events:auto}
+  .navbar .menu-actions .btn-login{padding:8px 12px;font-size:12px}
+  .navbar .profile-link,.navbar .dark-mode-btn,.navbar .language-btn,.navbar .logout-link{flex-basis:36px;width:36px;min-width:36px;height:36px}
+  .navbar .menu-actions .logout-form{display:flex}
+  .ps-sticky{padding-top:96px!important}
+  .sec,.petko-footer{scroll-margin-top:96px}
+}
 .petko-footer{display:block;width:100%;box-sizing:border-box;padding:clamp(44px,6vw,72px) clamp(20px,7vw,100px) 28px;background:linear-gradient(125deg,#06152f 0%,#0d3972 55%,#1268ad 100%);color:#f2f8ff;border-top:5px solid #5cc8ff;box-shadow:0 -16px 45px rgba(7,35,76,.12)}
 .petko-footer .footer-grid{width:min(100%,1240px);margin:0 auto;display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:clamp(24px,4vw,52px);align-items:start}
 .petko-footer .logo{display:inline-flex;align-items:center;justify-content:center;margin:0 0 16px;padding:0;background:transparent;border-radius:0;line-height:0}
@@ -714,26 +733,29 @@ body:not(.dark-mode) .petko-footer .footer-bottom{border-color:rgba(30,90,200,.2
 <header class="navbar">
     <a class="logo" href="#inicio" aria-label="PETKO"><img src="../../../img/petko/logo_amarillo.png" alt="PETKO Veterinaria y Ganadería"></a>
     <nav class="menu">
-        <a href="#inicio"><i class="fa-solid fa-house" aria-hidden="true"></i>Inicio</a>
-        <a href="#funciones"><i class="fa-solid fa-grip" aria-hidden="true"></i>Funciones</a>
-        <a href="#mascotas"><i class="fa-solid fa-paw" aria-hidden="true"></i>Mascotas</a>
-        <a href="#ventas"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>Ventas</a>
-        <a href="#inventario"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>Inventario</a>
-        <a href="#sucursales"><i class="fa-solid fa-location-dot" aria-hidden="true"></i>Sucursales</a>
-        <a href="#nosotros"><i class="fa-solid fa-heart" aria-hidden="true"></i>Nosotros</a>
-        <?php if ($logueado): ?>
-            <a href="<?= e($rutaDashboard) ?>" class="profile-link" title="Ir al dashboard de <?= e($nombre) ?>" aria-label="Ir al dashboard de <?= e($nombre) ?>"><i class="fa-solid fa-circle-user" aria-hidden="true"></i></a>
-            
-            <form method="post" action="<?= e(basename((string)($_SERVER['SCRIPT_NAME'] ?? 'home.php'))) ?>" class="logout-form">
-                <input type="hidden" name="accion" value="cerrar_sesion">
-                <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-                <button type="submit" class="logout-link" title="Cerrar sesión" aria-label="Cerrar sesión"><i class="fa-solid fa-door-open" aria-hidden="true"></i><span class="sr-only">Cerrar sesión</span></button>
-            </form>
-        <?php else: ?>
-            <a href="<?= e($rutaLogin) ?>" class="btn-login">Iniciar sesión</a>
-        <?php endif; ?>
-        <button id="darkModeBtn" class="dark-mode-btn" title="Cambiar modo" aria-label="Cambiar modo"><i id="darkModeIcon" class="fa-solid fa-moon" aria-hidden="true"></i></button>
-        <button id="languageToggle" class="language-btn" type="button" aria-label="Cambiar idioma">EN</button>
+        <div class="menu-links">
+            <a href="#inicio"><i class="fa-solid fa-house" aria-hidden="true"></i>Inicio</a>
+            <a href="#funciones"><i class="fa-solid fa-grip" aria-hidden="true"></i>Funciones</a>
+            <a href="#mascotas"><i class="fa-solid fa-paw" aria-hidden="true"></i>Mascotas</a>
+            <a href="#ventas"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>Ventas</a>
+            <a href="#inventario"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>Inventario</a>
+            <a href="#sucursales"><i class="fa-solid fa-location-dot" aria-hidden="true"></i>Sucursales</a>
+            <a href="#nosotros"><i class="fa-solid fa-heart" aria-hidden="true"></i>Nosotros</a>
+        </div>
+        <div class="menu-actions">
+            <?php if ($logueado): ?>
+                <a href="<?= e($rutaDashboard) ?>" class="profile-link" title="Ir al dashboard de <?= e($nombre) ?>" aria-label="Ir al dashboard de <?= e($nombre) ?>"><i class="fa-solid fa-circle-user" aria-hidden="true"></i></a>
+                <form method="post" action="<?= e(basename((string)($_SERVER['SCRIPT_NAME'] ?? 'home.php'))) ?>" class="logout-form">
+                    <input type="hidden" name="accion" value="cerrar_sesion">
+                    <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+                    <button type="submit" class="logout-link" title="Cerrar sesión" aria-label="Cerrar sesión"><i class="fa-solid fa-door-open" aria-hidden="true"></i><span class="sr-only">Cerrar sesión</span></button>
+                </form>
+            <?php else: ?>
+                <a href="<?= e($rutaLogin) ?>" class="btn-login">Iniciar sesión</a>
+            <?php endif; ?>
+            <button id="darkModeBtn" class="dark-mode-btn" title="Cambiar modo" aria-label="Cambiar modo"><i id="darkModeIcon" class="fa-solid fa-moon" aria-hidden="true"></i></button>
+            <button id="languageToggle" class="language-btn" type="button" aria-label="Cambiar idioma">EN</button>
+        </div>
     </nav>
 </header>
 

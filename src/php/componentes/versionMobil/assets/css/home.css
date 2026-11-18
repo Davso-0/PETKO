@@ -13,7 +13,8 @@
 }
 .km-home .navbar .logo img { height: 34px !important; width: auto !important; }
 .km-home .menu { display: flex !important; align-items: center; gap: 8px !important; }
-.km-home .menu > a, .km-home .menu > .logout-form { display: none !important; }
+.km-home .menu-links { display: none !important; }
+.km-home .menu-actions > .btn-login, .km-home .menu-actions > .profile-link, .km-home .menu-actions > .logout-form { display: none !important; }
 .km-home .dark-mode-btn, .km-home .language-btn {
   display: grid !important; place-items: center; width: 38px !important; height: 38px !important; min-height: 0; padding: 0 !important;
   border-radius: 50% !important; font-size: 16px !important;
