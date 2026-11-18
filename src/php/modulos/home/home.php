@@ -1,23 +1,13 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/../../componentes/versionMobil/core/Movil.php';
 
 /* =====================================================
    DETECCIÓN AUTOMÁTICA DE VERSIÓN MÓVIL
    Solo en peticiones GET directas (no AJAX ni POST)
 ===================================================== */
 if (empty($GLOBALS['KION_MOBILE_RENDER']) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !isset($_GET['action'])) {
-    $__kion_movil = false;
-    if (isset($_COOKIE['kion_vista'])) {
-        $__kion_movil = $_COOKIE['kion_vista'] === 'movil';
-    } elseif (isset($_SERVER['HTTP_SEC_CH_UA_MOBILE'])) {
-        $__kion_movil = trim((string)$_SERVER['HTTP_SEC_CH_UA_MOBILE']) === '?1';
-    } else {
-        $__kion_movil = (bool)preg_match(
-            '/Android.+Mobile|iPhone|iPod|Windows Phone|Mobile Safari|Opera Mini/i',
-            (string)($_SERVER['HTTP_USER_AGENT'] ?? '')
-        );
-    }
-    if ($__kion_movil) {
+    if (KionMovil::usarVersionMovil()) {
         header('Accept-CH: Sec-CH-UA-Mobile');
         header('Vary: Sec-CH-UA-Mobile, Cookie');
         header('Location: ../../componentes/versionmobil/home.php');
@@ -180,9 +170,10 @@ if ($petkoProjectRoot && $petkoDocumentRoot) {
 $rutaCatalogo = $appBaseUrl . '/src/php/componentes/catalogo.php';
 $rutaLogin = $appBaseUrl . '/inicioSesion.php';
 $rutaTerminos = $appBaseUrl . '/terminos.php';
-$rutaAccesoCatalogo = $logueado ? $rutaCatalogo : $rutaLogin;
+$rutaAccesoCatalogo = $rutaCatalogo;
 
 $ctaHref = $logueado ? $rutaDashboard : $rutaLogin;
+$rutaAgendarCita = $logueado ? $rutaDashboard : $rutaLogin . '?continuar=agendar';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -764,8 +755,8 @@ body:not(.dark-mode) .petko-footer .footer-bottom{border-color:rgba(30,90,200,.2
                 <h1>Cuida a quienes <em>más quieres.</em></h1>
                 <p>Encuentra productos veterinarios y agropecuarios, elige tu sucursal y solicita una cita para tu mascota. Todo lo que necesitas, más cerca de ti.</p>
                 <div class="ps-btns">
-                    <a href="#productos" class="ps-b1">Explorar catálogo</a>
-                    <a href="#citas" class="ps-b2">Agendar una cita</a>
+                    <a href="<?= e($rutaCatalogo) ?>" class="ps-b1">Explorar catálogo</a>
+                    <a href="<?= e($rutaAgendarCita) ?>" class="ps-b2">Agendar una cita</a>
                 </div>
                 <div class="ps-chips">
                     <button data-go="1"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Punto de venta</button><button data-go="2"><i class="fa-solid fa-box" aria-hidden="true"></i> Inventario</button>

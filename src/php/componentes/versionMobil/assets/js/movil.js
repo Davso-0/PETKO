@@ -56,7 +56,7 @@
     if (o.href) el.href = o.href; else el.type = 'button';
     el.innerHTML = `<span class="km-nav__ic">${o.svg ? svg(o.svg) : `<i class="ph ${o.ph}"></i>`}<b class="km-nav__badge" hidden></b></span><span class="km-nav__lb"></span>`;
     const lb = $('.km-nav__lb', el);
-    const setLb = () => { lb.textContent = (o.src && o.src.textContent.trim()) || (typeof o.label === 'function' ? o.label() : o.label) || ''; el.setAttribute('aria-label', lb.textContent); };
+    const setLb = () => { lb.textContent = (typeof o.label === 'function' ? o.label() : o.label) || (o.src && o.src.textContent.trim()) || ''; el.setAttribute('aria-label', lb.textContent); };
     setLb();
     if (o.src) new MutationObserver(setLb).observe(o.src, { childList: true, characterData: true, subtree: true });
     el._set = setLb; el._o = o;
@@ -111,13 +111,23 @@
 
   /* ---------- Dashboards (admin / gerente / usuario) ---------- */
   const DASH = {
-    dashboard: [{ t: 'view-general', ph: 'ph-squares-four' }, { t: 'view-gestion-productos', ph: 'ph-package' }, { t: 'view-ventas', ph: 'ph-chart-line-up' }, { t: 'view-sucursales', ph: 'ph-storefront' }],
-    dashboard_gerente: [{ t: 'view-dash', ph: 'ph-squares-four' }, { t: 'view-inventario', ph: 'ph-package' }, { sel: '#btnIrPOS', view: 'view-pos', ph: 'ph-monitor' }, { t: 'view-ventas', ph: 'ph-chart-line-up' }],
+    dashboard: [
+      { t: 'view-general', ph: 'ph-squares-four', label: ['Resumen', 'Summary'] },
+      { t: 'view-gestion-productos', ph: 'ph-package', label: ['Productos', 'Products'] },
+      { t: 'view-ventas', ph: 'ph-chart-line-up', label: ['Ventas', 'Sales'] },
+      { t: 'view-sucursales', ph: 'ph-storefront', label: ['Sucurs.', 'Branch'] }
+    ],
+    dashboard_gerente: [
+      { t: 'view-dash', ph: 'ph-squares-four', label: ['Panel', 'Home'] },
+      { t: 'view-inventario', ph: 'ph-package', label: ['Inventario', 'Inventory'] },
+      { sel: '#btnIrPOS', view: 'view-pos', ph: 'ph-monitor', label: ['Caja', 'POS'] },
+      { t: 'view-ventas', ph: 'ph-chart-line-up', label: ['Ventas', 'Sales'] }
+    ],
     dashboard_usuario: [
-      { t: 'view-mi-cuenta',       ph: 'ph-shopping-bag'  },
-      { t: 'view-consultas',       ph: 'ph-stethoscope'   },
-      { t: 'view-mi-cuenta-config', ph: 'ph-gear'         },
-      { sel: 'a.nav-btn[href*="catalogo"]', ph: 'ph-storefront', link: true }
+      { t: 'view-mi-cuenta', ph: 'ph-shopping-bag', label: ['Apartados', 'Orders'] },
+      { t: 'view-consultas', ph: 'ph-stethoscope', label: ['Citas', 'Visits'] },
+      { t: 'view-mi-cuenta-config', ph: 'ph-gear', label: ['Ajustes', 'Settings'] },
+      { sel: 'a.nav-btn[href*="catalogo"]', ph: 'ph-storefront', label: ['Catálogo', 'Catalog'], link: true }
     ]
   };
   function initDash() {
@@ -129,7 +139,7 @@
       if (!src) return;
       const lab = $('.nav-label', src) || src;
       items.push(navItem({
-        ph: c.ph, src: lab, view: c.view || c.t, srcBtn: src,
+        ph: c.ph, src: lab, label: () => tr(c.label[0], c.label[1]), view: c.view || c.t, srcBtn: src,
         href: c.link ? src.href : null,
         onClick: c.link ? null : () => src.click()
       }));
@@ -189,12 +199,14 @@
   function initHome() {
     const menu = $('.menu'); if (!menu) return;
     const anchors = $$('a[href^="#"]', menu);
-    const pick = ['#inicio', '#funciones', '#mascotas', '#sucursales'];
-    const ico = { '#inicio': 'home', '#funciones': 'grid', '#mascotas': 'paw', '#sucursales': 'pin' };
-    const items = pick.map(h => { const a = anchors.find(x => x.getAttribute('href') === h); return a && navItem({ svg: ico[h], src: a, href: h, key: h }); }).filter(Boolean);
+    const home = anchors.find(a => a.getAttribute('href') === '#inicio');
+    const catalog = $('.ps-btns .ps-b1');
+    const items = [];
+    if (home) items.push(navItem({ svg: 'home', src: home, href: '#inicio', key: '#inicio' }));
+    if (catalog) items.push(navItem({ svg: 'grid', label: () => tr('Catálogo', 'Catalog'), href: catalog.href, key: '#productos' }));
 
-    const sheet = makeSheet(tr('Menú', 'Menu'));
-    const rest = anchors.filter(a => !pick.includes(a.getAttribute('href')));
+    const sheet = makeSheet(tr('Cuenta', 'Account'));
+    const rest = anchors.filter(a => a !== home);
     if (rest.length) {
       const g = document.createElement('div'); g.className = 'km-sheet__grid';
       rest.forEach(a => { const t = document.createElement('a'); t.className = 'km-tile'; t.href = a.getAttribute('href'); t.innerHTML = svg('grid'); t.append(a.textContent.trim()); g.appendChild(t); });

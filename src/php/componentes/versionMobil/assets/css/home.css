@@ -120,3 +120,88 @@
   .km-home .ps-btns .ps-b1, .km-home .ps-btns .ps-b2 { min-height: 44px; padding: 10px 10px; font-size: 12px; white-space: nowrap; }
   .km-home .ps-set .pol.main { --w: min(36vw, 22vh) !important; }
 }
+
+/* ---------- Funciones nuevas del home: sucursales, catálogo y footer ---------- */
+@media (max-width: 650px) {
+  .km-home .branches-section {
+    padding: 38px var(--km-gut) 26px !important;
+    gap: 18px;
+    scroll-margin-top: calc(var(--km-top-h) + var(--km-safe-t) + 8px);
+  }
+  .km-home .branches-copy .title {
+    margin: 8px 0 10px !important;
+    font-size: clamp(24px, 6.8vw, 30px) !important;
+    line-height: 1.15 !important;
+    letter-spacing: -.02em;
+  }
+  .km-home .branches-copy .desc { font-size: 14px; line-height: 1.55; }
+  .km-home .branch-counter { gap: 10px; margin-top: 16px; padding: 12px 14px; }
+  .km-home .counter-icon { width: 42px; height: 42px; border-radius: 13px; font-size: 22px; }
+  .km-home .branch-counter strong { font-size: 24px; }
+  .km-home .branch-hint { margin-top: 10px; line-height: 1.5; }
+
+  .km-home .map-shell { padding: 8px; border-radius: 18px; }
+  .km-home .map-toolbar { top: 14px; left: 14px; right: 14px; gap: 8px; }
+  .km-home .map-search {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: 44px;
+    padding: 0 12px;
+    gap: 8px;
+    border-radius: 14px;
+  }
+  .km-home .map-search input { min-width: 0; font-size: 13px; }
+  .km-home .map-locate {
+    flex: 0 0 44px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+  }
+  .km-home #petkoMap { height: clamp(320px, 92vw, 380px); border-radius: 14px; }
+  .km-home .map-legend { bottom: 12px; left: 12px; padding: 8px 10px; border-radius: 12px; font-size: 11px; }
+  .km-home .leaflet-control-zoom a { width: 34px !important; height: 34px !important; line-height: 34px !important; }
+
+  .km-home .quick-access { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 24px var(--km-gut); }
+  .km-home .quick-access a { min-height: 64px; gap: 12px; padding: 12px 14px; }
+  .km-home .quick-access .qa-icon { flex: 0 0 40px; width: 40px; height: 40px; font-size: 19px; }
+  .km-home .quick-access strong { font-size: 14px; line-height: 1.3; }
+  .km-home .quick-access small { font-size: 12px; line-height: 1.4; }
+
+  .km-home .products-section { padding: 38px var(--km-gut) 28px !important; scroll-margin-top: calc(var(--km-top-h) + var(--km-safe-t) + 8px); }
+  .km-home .product-head { align-items: stretch; gap: 16px; }
+  .km-home .product-head .title {
+    margin: 8px 0 !important;
+    font-size: clamp(23px, 6.6vw, 29px) !important;
+    line-height: 1.15 !important;
+  }
+  .km-home .product-head .desc { font-size: 13px; line-height: 1.5; }
+  .km-home .product-head > .ps-b1 { align-self: flex-start; min-height: 44px; padding: 10px 16px; font-size: 13px; }
+  .km-home .carousel-controls { margin-top: 16px; }
+  .km-home .carousel-arrow { flex: 0 0 40px; width: 40px; height: 40px; font-size: 24px; }
+  .km-home .products-section .product-track { gap: 12px; margin-top: 12px; padding: 4px 2px 14px; }
+  .km-home .products-section .product-card { flex: 0 0 min(82%, 280px); min-width: 0; max-width: 280px; }
+  .km-home .products-section .product-image { height: 150px; min-height: 150px; }
+  .km-home .products-section .product-info { padding: 14px; }
+  .km-home .products-section .product-info h3 { margin-bottom: 6px; font-size: 15px; line-height: 1.35; }
+  .km-home .products-section .product-info p { min-height: 36px; font-size: 12px; }
+  .km-home .products-section .product-bottom { margin-top: 12px; }
+  .km-home .products-section .product-price { font-size: 17px; }
+  .km-home .products-section .product-link { min-height: 40px; display: inline-flex; align-items: center; padding: 8px 12px; }
+  .km-home .products-section .section-note { font-size: 11.5px; line-height: 1.5; }
+
+  .km-home footer.petko-footer {
+    display: block;
+    padding: 36px var(--km-gut) calc(20px + var(--km-safe-b)) !important;
+    border-top: 4px solid #5cc8ff;
+  }
+  .km-home .petko-footer .footer-grid { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .km-home .petko-footer .footer-bottom { margin-top: 24px; padding-top: 16px; gap: 8px; font-size: 11px; }
+  .km-home .petko-footer .footer-links { gap: 7px; }
+  .km-home .petko-footer .footer-links a { min-height: 40px; display: flex; align-items: center; }
+}

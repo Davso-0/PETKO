@@ -65,7 +65,23 @@ try {
 
     session_regenerate_id(true);
     $_SESSION['usuario'] = ['id_usuario' => $usuario['id_usuario'], 'nombre' => $usuario['nombre'], 'apellido' => $usuario['apellido'], 'correo' => $usuario['correo'], 'id_rol' => $usuario['id_rol'], 'id_sucursal' => $usuario['id_sucursal'], 'rol' => $usuario['rol']];
-    $destino = 'src/php/modulos/home/home.php';
+    $baseMovil = $_SESSION['kion_mobile_auth_base'] ?? '';
+    $baseMovil = is_string($baseMovil) ? rtrim($baseMovil, '/') : '';
+    $destino = $baseMovil !== ''
+        ? $baseMovil . '/home.php'
+        : 'src/php/modulos/home/home.php';
+    if (($_SESSION['kion_after_auth'] ?? null) === 'dashboard_usuario') {
+        unset($_SESSION['kion_after_auth']);
+        $rolNombre = strtolower(trim((string)($usuario['rol'] ?? '')));
+        if (strpos($rolNombre, 'admin') === false
+            && strpos($rolNombre, 'gerente') === false
+            && strpos($rolNombre, 'cajero') === false) {
+            $destino = $baseMovil !== ''
+                ? $baseMovil . '/dashboard_usuario.php'
+                : 'src/php/modulos/home/dashboard_usuario.php';
+        }
+    }
+    unset($_SESSION['kion_mobile_auth_base']);
     echo json_encode(['ok' => true, 'redirect' => $destino]);
 } catch (Throwable $e) {
     http_response_code(401);

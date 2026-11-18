@@ -1,24 +1,18 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/src/php/componentes/versionMobil/core/Movil.php';
 
 /* =====================================================
    DETECCIÓN AUTOMÁTICA DE VERSIÓN MÓVIL
    Solo en peticiones GET directas (carga inicial de la página de login)
 ===================================================== */
 if (empty($GLOBALS['KION_MOBILE_RENDER']) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !isset($_GET['action'])) {
-    $__kion_movil = false;
-    if (isset($_COOKIE['kion_vista'])) {
-        $__kion_movil = $_COOKIE['kion_vista'] === 'movil';
-    } elseif (isset($_SERVER['HTTP_SEC_CH_UA_MOBILE'])) {
-        $__kion_movil = trim((string)$_SERVER['HTTP_SEC_CH_UA_MOBILE']) === '?1';
-    } else {
-        $__kion_movil = (bool)preg_match(
-            '/Android.+Mobile|iPhone|iPod|Windows Phone|Mobile Safari|Opera Mini/i',
-            (string)($_SERVER['HTTP_USER_AGENT'] ?? '')
-        );
-    }
-    if ($__kion_movil) {
-        header('Location: src/php/componentes/versionmobil/pagina.php?p=inicioSesion');
+    if (KionMovil::usarVersionMovil()) {
+        $rutaLoginMovil = 'src/php/componentes/versionmobil/pagina.php?p=inicioSesion';
+        if (($_GET['continuar'] ?? null) === 'agendar') {
+            $rutaLoginMovil .= '&continuar=agendar';
+        }
+        header('Location: ' . $rutaLoginMovil);
         exit;
     }
 }
@@ -41,6 +35,19 @@ session_set_cookie_params([
 ]);
 
 session_start();
+
+if (!empty($GLOBALS['KION_MOBILE_RENDER'])) {
+    $_SESSION['kion_mobile_auth_base'] = rtrim(
+        str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? ''))),
+        '/'
+    );
+} elseif (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+    unset($_SESSION['kion_mobile_auth_base']);
+}
+
+if (($_GET['continuar'] ?? null) === 'agendar') {
+    $_SESSION['kion_after_auth'] = 'dashboard_usuario';
+}
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -65,6 +72,22 @@ function responderInicioSesion(bool $ok, string $message, ?string $redirect = nu
     exit;
 }   
 
+function destinoDespuesDeAutenticacion(string $modulo, string $destinoEscritorio): string
+{
+    if (!empty($GLOBALS['KION_MOBILE_RENDER'])) {
+        unset($_SESSION['kion_mobile_auth_base']);
+        return KionMovil::urlModulo($modulo);
+    }
+
+    $baseMovil = $_SESSION['kion_mobile_auth_base'] ?? '';
+    if (is_string($baseMovil) && $baseMovil !== '') {
+        unset($_SESSION['kion_mobile_auth_base']);
+        return rtrim($baseMovil, '/') . '/' . $modulo . '.php';
+    }
+
+    return $destinoEscritorio;
+}
+
 function obtenerDestinoUsuario(array $usuario): string
 {
     $_SESSION['usuario'] = [
@@ -82,12 +105,18 @@ function obtenerDestinoUsuario(array $usuario): string
     $_SESSION['created_at'] = time();
 
     $rolNombre = strtolower(trim($usuario['rol'] ?? ''));
+    $continuarAlDashboardUsuario = ($_SESSION['kion_after_auth'] ?? null) === 'dashboard_usuario';
+    unset($_SESSION['kion_after_auth']);
+
     if (strpos($rolNombre, 'admin') !== false) {
-        return 'src/php/modulos/home/dashboard.php';
+        return destinoDespuesDeAutenticacion('dashboard', 'src/php/modulos/home/dashboard.php');
     } elseif (strpos($rolNombre, 'gerente') !== false || strpos($rolNombre, 'cajero') !== false) {
-        return 'src/php/modulos/home/dashboard_gerente.php'; // Ajusta esto si el gerente/cajero tienen otro panel
+        return destinoDespuesDeAutenticacion('dashboard_gerente', 'src/php/modulos/home/dashboard_gerente.php');
     }
-    return 'src/php/componentes/catalogo.php';
+    if ($continuarAlDashboardUsuario) {
+        return destinoDespuesDeAutenticacion('dashboard_usuario', 'src/php/modulos/home/dashboard_usuario.php');
+    }
+    return destinoDespuesDeAutenticacion('catalogo', 'src/php/componentes/catalogo.php');
 }
 
 function borrarCookieRecordarme(): void

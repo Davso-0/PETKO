@@ -1,16 +1,9 @@
 <?php
 // Detección automática de dispositivo móvil → versión móvil dedicada
+require_once __DIR__ . '/src/php/componentes/versionMobil/core/Movil.php';
+
 function kionEsMovil(): bool {
-    if (isset($_COOKIE['kion_vista'])) {
-        return $_COOKIE['kion_vista'] === 'movil';
-    }
-    if (isset($_SERVER['HTTP_SEC_CH_UA_MOBILE'])) {
-        return trim((string)$_SERVER['HTTP_SEC_CH_UA_MOBILE']) === '?1';
-    }
-    return (bool)preg_match(
-        '/Android.+Mobile|iPhone|iPod|Windows Phone|Mobile Safari|Opera Mini/i',
-        (string)($_SERVER['HTTP_USER_AGENT'] ?? '')
-    );
+    return KionMovil::usarVersionMovil();
 }
 header('Accept-CH: Sec-CH-UA-Mobile');
 header('Vary: Sec-CH-UA-Mobile, Cookie');

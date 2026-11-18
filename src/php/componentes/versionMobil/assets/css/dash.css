@@ -92,3 +92,49 @@
   .km-dash .grid-2col { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) !important; gap: 14px !important; }
   .km-dash .nav-menu { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+@media (max-width: 639px) {
+  .km-dash .content { padding: 12px var(--km-gut) 4px !important; }
+  .km-dash #topbarTitle { font-size: 15px !important; }
+  .km-dash .header-row { gap: 10px !important; margin-bottom: 12px !important; }
+  .km-dash .kpi-grid { gap: 8px !important; margin-bottom: 12px !important; }
+  .km-dash .kpi-card { padding: 12px !important; border-radius: 14px !important; }
+  .km-dash .kpi-top { margin-bottom: 6px; }
+  .km-dash .kpi-card i.kpi-icon { font-size: 16px !important; padding: 8px !important; border-radius: 10px !important; }
+  .km-dash .kpi-val { font-size: clamp(17px, 5vw, 23px) !important; }
+  .km-dash .kpi-label { font-size: 11.5px !important; }
+
+  .km-dash .panel { padding: 13px !important; margin-bottom: 11px !important; border-radius: 16px !important; }
+  .km-dash .panel-head { margin-bottom: 9px !important; }
+  .km-dash .panel-title { font-size: 15.5px !important; }
+  .km-dash .panel-sub { font-size: 11px !important; }
+  .km-dash .chart-box { height: 178px !important; }
+  .km-dash .donut-wrap { height: 172px !important; }
+  .km-dash .donut-center .num { font-size: 22px !important; }
+
+  .km-dash .stock-row { gap: 9px !important; padding: 9px 2px !important; }
+  .km-dash .stock-thumb { width: 36px !important; height: 36px !important; border-radius: 11px !important; font-size: 16px !important; }
+  .km-dash .stock-name { font-size: 12.5px !important; }
+  .km-dash .stock-meta { font-size: 11px !important; }
+  .km-dash .stock-qty { font-size: 13px !important; }
+  .km-dash .info-grid { gap: 8px !important; }
+  .km-dash .info-item { min-width: 0; }
+  .km-dash .info-item:last-child { grid-column: 1 / -1; }
+  .km-dash .info-item span { font-size: 9.5px !important; }
+  .km-dash .info-item b { font-size: 13px !important; overflow-wrap: anywhere; }
+
+  .km-dash .prod-card-img-wrap { height: clamp(120px, 40vw, 155px); aspect-ratio: auto; }
+  .km-dash #view-sucursales > .panel,
+  .km-dash #view-personal > .panel { padding: 0 !important; background: transparent !important; border: 0 !important; box-shadow: none !important; }
+
+  .km-dash table.km-ct tr { gap: 8px 10px; padding: 11px; margin-bottom: 8px; border-radius: 14px; }
+  .km-dash table.km-ct td { font-size: 12.5px !important; line-height: 1.35; }
+  .km-dash table.km-ct td[data-label]::before { font-size: 9.5px; }
+  .km-dash table.km-ct td:first-child { font-size: 14px !important; }
+  .km-dash .nav-btn { min-height: 70px; padding: 9px 5px !important; }
+}
+
+@media (max-width: 360px) {
+  .km-dash #topbarTitle { font-size: 13px !important; }
+  .km-dash .info-grid { grid-template-columns: minmax(0, 1fr) !important; }
+}

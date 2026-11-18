@@ -44,6 +44,26 @@ final class KionMovil
         return self::$cfg;
     }
 
+    public static function usarVersionMovil(): bool
+    {
+        if (($_COOKIE['kion_vista'] ?? '') === 'escritorio') {
+            return false;
+        }
+
+        $userAgent = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+        if (preg_match('/iPad|Tablet|PlayBook/i', $userAgent) === 1) {
+            return false;
+        }
+
+        // Una preferencia móvil guardada no convierte una tablet o computadora en teléfono.
+        $mobileHint = $_SERVER['HTTP_SEC_CH_UA_MOBILE'] ?? null;
+        if (is_string($mobileHint) && trim($mobileHint) !== '') {
+            return trim($mobileHint) === '?1';
+        }
+
+        return preg_match('/Android.+Mobile|iPhone|iPod|Windows Phone|IEMobile/i', $userAgent) === 1;
+    }
+
     public static function dirMovil(): string
     {
         return str_replace('\\', '/', (string) realpath(dirname(__DIR__)));
@@ -229,6 +249,17 @@ final class KionMovil
         }
         $extra = ($sufijo !== '' && $sufijo[0] === '?') ? '&' . substr($sufijo, 1) : $sufijo;
         return $base . '/pagina.php?p=' . rawurlencode($nombre) . $extra;
+    }
+
+    public static function urlModulo(string $nombre): string
+    {
+        if (!isset(self::MODULOS[$nombre])) {
+            throw new InvalidArgumentException('Módulo móvil no disponible: ' . $nombre);
+        }
+        if (!isset(self::$ctx['movilUrl'])) {
+            throw new LogicException('La URL móvil no está inicializada.');
+        }
+        return self::urlMovil($nombre);
     }
 
     private static function nombreConocido(string $base): ?string
