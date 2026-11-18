@@ -8,7 +8,7 @@ function kionEsMovil(): bool {
 header('Accept-CH: Sec-CH-UA-Mobile');
 header('Vary: Sec-CH-UA-Mobile, Cookie');
 if (kionEsMovil()) {
-    header('Location: src/php/componentes/versionmobil/entrada.php?m=home');
+    header('Location: src/php/componentes/versionMobil/entrada.php?m=home');
 } else {
     header('Location: src/php/modulos/home/home.php');
 }

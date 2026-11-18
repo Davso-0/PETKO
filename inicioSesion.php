@@ -8,7 +8,7 @@ require_once __DIR__ . '/src/php/componentes/versionMobil/core/Movil.php';
 ===================================================== */
 if (empty($GLOBALS['KION_MOBILE_RENDER']) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !isset($_GET['action'])) {
     if (KionMovil::usarVersionMovil()) {
-        $rutaLoginMovil = 'src/php/componentes/versionmobil/pagina.php?p=inicioSesion';
+        $rutaLoginMovil = 'src/php/componentes/versionMobil/pagina.php?p=inicioSesion';
         if (($_GET['continuar'] ?? null) === 'agendar') {
             $rutaLoginMovil .= '&continuar=agendar';
         }

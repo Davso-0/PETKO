@@ -14,7 +14,7 @@ if (empty($GLOBALS['KION_MOBILE_RENDER']) && ($_SERVER['REQUEST_METHOD'] ?? 'GET
     if (KionMovil::usarVersionMovil()) {
         header('Accept-CH: Sec-CH-UA-Mobile');
         header('Vary: Sec-CH-UA-Mobile, Cookie');
-        header('Location: versionmobil/catalogo.php');
+        header('Location: versionMobil/catalogo.php');
         exit;
     }
 }
