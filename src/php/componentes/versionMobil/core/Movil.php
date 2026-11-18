@@ -52,8 +52,15 @@ final class KionMovil
     /** Busca el archivo original: configuración -> carpetas habituales -> búsqueda acotada. */
     public static function localizar(string $archivo): ?string
     {
+        $rutaNormalizada = str_replace('\\', '/', $archivo);
+        $nombreArchivo = basename($rutaNormalizada);
+        if ($nombreArchivo !== $rutaNormalizada && is_file($archivo)) {
+            $real = realpath($archivo);
+            return $real === false ? null : str_replace('\\', '/', $real);
+        }
+
         $cfg   = self::config();
-        $clave = pathinfo($archivo, PATHINFO_FILENAME);
+        $clave = pathinfo($nombreArchivo, PATHINFO_FILENAME);
         $ruta  = $cfg['rutas'][$clave] ?? null;
         if (is_string($ruta) && is_file($ruta)) {
             return str_replace('\\', '/', (string) realpath($ruta));
@@ -66,7 +73,7 @@ final class KionMovil
 
         for ($i = 0, $d = $dir; $i < $max; $i++) {
             foreach ($subs as $s) {
-                $c = $d . '/' . $s . $archivo;
+                $c = $d . '/' . $s . $nombreArchivo;
                 if (is_file($c)) {
                     return str_replace('\\', '/', (string) realpath($c));
                 }
@@ -81,7 +88,7 @@ final class KionMovil
         $raiz = $dir;
         for ($i = 0; $i < 2 && dirname($raiz) !== $raiz; $i++) {
             $raiz = dirname($raiz);
-            $r = self::buscarRecursivo($raiz, $archivo, 0, $movil);
+            $r = self::buscarRecursivo($raiz, $nombreArchivo, 0, $movil);
             if ($r !== null) {
                 return $r;
             }
@@ -106,7 +113,7 @@ final class KionMovil
             }
         }
         foreach ($items as $it) {
-            if ($it === '.' || $it === '..' || in_array($it, ['node_modules', 'vendor', '.git', 'version mobil', 'versionmobil'], true)) {
+            if ($it === '.' || $it === '..' || in_array(strtolower($it), ['node_modules', 'vendor', '.git', 'version mobil', 'versionmobil'], true)) {
                 continue;
             }
             $p = $dir . '/' . $it;
@@ -187,7 +194,8 @@ final class KionMovil
         if ($origen === null) {
             http_response_code(500);
             header('Content-Type: text/plain; charset=utf-8');
-            exit("KION móvil: no se encontró «{$archivo}». Define su ruta en version mobil/config/kion_movil.php (clave 'rutas').");
+            $seccionRuta = $generica ? 'genericas' : 'rutas';
+            exit("KION móvil: no se encontró «{$archivo}». Define una ruta válida en versionMobil/config/kion_movil.php (clave '{$seccionRuta}', entrada '{$slug}').");
         }
 
         $script   = rawurldecode((string) ($_SERVER['SCRIPT_NAME'] ?? '/'));
@@ -204,6 +212,7 @@ final class KionMovil
             'selfPath' => $script,
         ];
 
+        $GLOBALS['KION_MOBILE_RENDER'] = true;
         header_register_callback([self::class, 'cabeceras']);
         ob_start([self::class, 'filtrar']);
         return $origen;

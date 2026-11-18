@@ -5,7 +5,7 @@ declare(strict_types=1);
    DETECCIÓN AUTOMÁTICA DE VERSIÓN MÓVIL
    Solo en peticiones GET directas (no AJAX ni action params)
 ===================================================== */
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !isset($_GET['action'])) {
+if (empty($GLOBALS['KION_MOBILE_RENDER']) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !isset($_GET['action'])) {
     $__kion_movil = false;
     if (isset($_COOKIE['kion_vista'])) {
         $__kion_movil = $_COOKIE['kion_vista'] === 'movil';

@@ -6,7 +6,7 @@
  * Criterio: preferencia guardada > Client Hints (Sec-CH-UA-Mobile) > agente de usuario (respaldo).
  */
 declare(strict_types=1);
-require __DIR__ . '/core/Movil.php';
+require_once __DIR__ . '/core/Movil.php';
 
 $m = (string) ($_GET['m'] ?? 'home');
 if (!isset(KionMovil::MODULOS[$m])) {
