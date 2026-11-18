@@ -2,44 +2,18 @@
 declare(strict_types=1);
 
 ob_start();
+require_once __DIR__ . '/../../config/conexion_BD.php';
 require_once __DIR__ . '/../../config/auth_guard.php';
 
-header("Cache-Control: no-cache, no-store, must-revalidate");
-header("Pragma: no-cache");
-header("Expires: 0");
+// Control de acceso RBAC estricto: solo roles usuario o cliente
+$usuario_data = exigirAcceso($pdo, ['usuario', 'cliente'], '../../../../inicioSesion.php');
 
-if (!isset($_SESSION['usuario']) && !isset($_GET['action'])) {
-    header('Location: ../../../../inicioSesion.php');
-    exit;
-}
-
-if (file_exists(__DIR__ . '/../../config/conexion_BD.php')) {
-    require_once __DIR__ . '/../../config/conexion_BD.php';
-} elseif (file_exists(__DIR__ . '/../../config/conexion.php')) {
-    require_once __DIR__ . '/../../config/conexion.php';
-}
-
-require_once __DIR__ . '/../../componentes/mi_cuenta_api.php';
-
-$id_usuario_actual = 0;
-if (is_array($_SESSION['usuario'] ?? null)) {
-    $id_usuario_actual = (int)($_SESSION['usuario']['id_usuario'] ?? $_SESSION['usuario']['id'] ?? 0);
-} else {
-    $id_usuario_actual = (int)($_SESSION['usuario'] ?? 0);
-}
-
-$usuario_data = null;
-if (isset($pdo) && $pdo instanceof PDO && $id_usuario_actual > 0) {
-    $st = $pdo->prepare("SELECT u.nombre, u.apellido, u.correo, r.nombre AS rol FROM usuarios u LEFT JOIN roles r ON r.id_rol = u.id_rol WHERE u.id_usuario = ?");
-    $st->execute([$id_usuario_actual]);
-    $usuario_data = $st->fetch(PDO::FETCH_ASSOC);
-}
+$id_usuario_actual = (int)$usuario_data['id_usuario'];
 $nombreCompleto = trim(($usuario_data['nombre'] ?? 'Usuario') . ' ' . ($usuario_data['apellido'] ?? ''));
+if ($nombreCompleto === '') $nombreCompleto = 'Usuario';
 $correoUsuario  = $usuario_data['correo'] ?? '';
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
+require_once __DIR__ . '/../../componentes/mi_cuenta_api.php';
 
 // =========================================================================
 // REGLAS Y EXCEPCIONES DEL MÓDULO DE CONSULTAS VETERINARIAS
@@ -743,6 +717,13 @@ if (isset($_GET['action'])) {
 </div>
 
 <script>
+// Protección estricta anti-bfcache: si la página se recupera del caché del navegador tras cerrar sesión, fuerza recarga
+window.addEventListener('pageshow', function (event) {
+    if (event.persisted || (window.performance && window.performance.navigation && window.performance.navigation.type === 2) || (window.performance && window.performance.getEntriesByType && window.performance.getEntriesByType('navigation')[0] && window.performance.getEntriesByType('navigation')[0].type === 'back_forward')) {
+        window.location.reload();
+    }
+});
+
 const $ = s => document.querySelector(s);
 const appLayout = $('#appLayout');
 $('#btnCollapse').addEventListener('click', () => appLayout.classList.toggle('is-collapsed'));

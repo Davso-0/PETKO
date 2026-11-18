@@ -44,7 +44,7 @@ if (ini_get("session.use_cookies")) {
 
 session_destroy();
 
-header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Pragma: no-cache");
 header("Expires: 0");
 

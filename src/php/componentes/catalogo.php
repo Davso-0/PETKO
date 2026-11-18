@@ -21,37 +21,9 @@ if (is_array($_SESSION['usuario'] ?? null)) {
 $usuarioAutenticado = $idUsuarioSesion > 0;
 $rutaLogin = '../../../inicioSesion.php';
 
-// Conexión centralizada con respaldo local
-if (file_exists(__DIR__ . '/../config/conexion_BD.php')) {
-    require_once __DIR__ . '/../config/conexion_BD.php';
-} elseif (file_exists(__DIR__ . '/../config/conexion.php')) {
-    require_once __DIR__ . '/../config/conexion.php';
-}
-
-if (!isset($pdo) || !($pdo instanceof PDO)) {
-    $dbHost = 'localhost';
-    $dbName = 'kion';
-    $dbUser = 'root';
-    $dbPass = '';
-    $pdo = null;
-    $errorConsulta = null;
-
-    try {
-        $pdo = new PDO(
-            "mysql:host={$dbHost};dbname={$dbName};charset=utf8mb4",
-            $dbUser,
-            $dbPass,
-            [
-                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            ]
-        );
-    } catch (PDOException $e) {
-        $errorConsulta = 'Fallo al conectar con la base de datos.';
-    }
-} else {
-    $errorConsulta = $errorConexion ?? null;
-}
+// Conexión centralizada y segura
+require_once __DIR__ . '/../config/conexion_BD.php';
+$errorConsulta = $errorConexion ?? null;
 
 // -------------------------------------------------------------------------
 // ENDPOINT AJAX SEGURO (POST): Guardar apartado / compra en BD por 48 horas

@@ -3,13 +3,11 @@ declare(strict_types=1);
 
 ob_start();
 
+require_once __DIR__ . '/../../config/conexion_BD.php';
 require_once __DIR__ . '/../../config/auth_guard.php';
 
-if (file_exists(__DIR__ . '/../../config/conexion_BD.php')) {
-    require_once __DIR__ . '/../../config/conexion_BD.php';
-} elseif (file_exists(__DIR__ . '/../../config/conexion.php')) {
-    require_once __DIR__ . '/../../config/conexion.php';
-}
+// Control de Acceso Estricto por Rol (Exclusivamente Administrador y Gerente)
+$gerente = exigirAcceso($pdo, ['admin', 'gerente'], '../../../../inicioSesion.php', true);
 
 if (isset($_GET['action'])) {
     verificarCsrf();
@@ -18,43 +16,18 @@ require_once __DIR__ . '/../../componentes/mi_cuenta_api.php';
 require_once __DIR__ . '/../../componentes/apartados_consultas_api.php';
 
 // --------------------------------------------------------------
-// Resolver el usuario/gerente en sesión y su sucursal asignada
+// Resolver el usuario/gerente en sesión y su sucursal asignada (Anti-IDOR)
 // --------------------------------------------------------------
-$id_usuario_actual = 0;
-if (is_array($_SESSION['usuario'] ?? null)) {
-    $id_usuario_actual = (int)($_SESSION['usuario']['id_usuario'] ?? $_SESSION['usuario']['id'] ?? 0);
-} else {
-    $id_usuario_actual = (int)($_SESSION['usuario'] ?? 0);
-}
+$id_usuario_actual = (int)$gerente['id_usuario'];
+$rolDB             = (string)($gerente['rol'] ?? '');
+$esGerente         = stripos($rolDB, 'gerente') !== false || stripos($rolDB, 'cajero') !== false;
+$esAdmin           = stripos($rolDB, 'admin') !== false;
 
-$gerente = null;
-if (isset($pdo) && $pdo instanceof PDO && $id_usuario_actual > 0) {
-    $stG = $pdo->prepare("SELECT u.id_usuario, u.nombre, u.apellido, u.correo, u.estado, u.id_sucursal, r.nombre AS rol
-                       FROM usuarios u LEFT JOIN roles r ON r.id_rol = u.id_rol
-                       WHERE u.id_usuario = ?");
-    $stG->execute([$id_usuario_actual]);
-    $gerente = $stG->fetch(PDO::FETCH_ASSOC) ?: null;
-}
+// Anti-IDOR: Para el Gerente la sucursal proviene ESTRICTAMENTE de su registro oficial en la BD
+$id_sucursal = (int)($gerente['id_sucursal'] ?? 0);
 
-if (strtoupper(trim((string)($gerente['estado'] ?? ''))) === 'INACTIVO') {
-    session_unset();
-    session_destroy();
-    if (isset($_GET['action'])) {
-        responderJsonError('[ACCESO DENEGADO] Tu cuenta está inactiva. Inicia sesión nuevamente.', 403);
-    }
-    header('Location: ../../../../inicioSesion.php?error=inactivo');
-    exit;
-}
-
-// Determinar rol: Admin o Gerente
-$rolDB       = (string)($gerente['rol'] ?? $_SESSION['usuario']['rol'] ?? '');
-$esGerente   = stripos($rolDB, 'gerente') !== false;
-$esAdmin     = stripos($rolDB, 'admin') !== false;
-
-$id_sucursal = (int)($gerente['id_sucursal'] ?? $_SESSION['usuario']['id_sucursal'] ?? 0);
-
-// Si es Admin sin sucursal asignada, tomar la primera sucursal activa disponible
-if (($esAdmin || ($id_sucursal <= 0)) && isset($pdo) && $pdo instanceof PDO) {
+// Solo el Administrador general puede conmutar sucursal vía sesión o fallback
+if ($esAdmin && isset($pdo) && $pdo instanceof PDO) {
     $sucursalForzada = (int)($_SESSION['sucursal_gerente'] ?? 0);
     if ($sucursalForzada > 0) {
         $id_sucursal = $sucursalForzada;
@@ -64,7 +37,7 @@ if (($esAdmin || ($id_sucursal <= 0)) && isset($pdo) && $pdo instanceof PDO) {
     }
 }
 
-$nombreGerente = trim(($gerente['nombre'] ?? $_SESSION['usuario']['nombre'] ?? 'Usuario') . ' ' . ($gerente['apellido'] ?? $_SESSION['usuario']['apellido'] ?? ''));
+$nombreGerente = trim(($gerente['nombre'] ?? 'Gerente') . ' ' . ($gerente['apellido'] ?? ''));
 if ($nombreGerente === '') $nombreGerente = 'Gerente';
 $correoUsuario = $gerente['correo'] ?? '';
 
@@ -2405,6 +2378,13 @@ const money = n => Number(n || 0).toLocaleString('es-MX', { style: 'currency', c
 
 const notify = (msg, icon='success') => Swal.fire({ toast:true, position:'top-end', icon, title: msg, showConfirmButton:false, timer:2500, background: 'var(--bg-surface)', color: 'var(--ink)' });
 const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+// Protección estricta anti-bfcache: si la página se recupera del caché del navegador tras cerrar sesión, fuerza recarga
+window.addEventListener('pageshow', function (event) {
+    if (event.persisted || (window.performance && window.performance.navigation && window.performance.navigation.type === 2) || (window.performance && window.performance.getEntriesByType && window.performance.getEntriesByType('navigation')[0] && window.performance.getEntriesByType('navigation')[0].type === 'back_forward')) {
+        window.location.reload();
+    }
+});
 
 async function request(actionStr, options = {}) {
     const method = (options.method || 'GET').toUpperCase();

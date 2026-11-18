@@ -19,6 +19,14 @@ session_set_cookie_params([
 ]);
 
 session_start();
+
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+header('X-Frame-Options: SAMEORIGIN');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+
 $hostSolicitud = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
 $esSolicitudLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)
     && preg_match('/\A(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\z/', $hostSolicitud) === 1;
@@ -46,6 +54,10 @@ function obtenerDestinoUsuario(array $usuario): string
         'id_sucursal' => $usuario['id_sucursal'],
         'rol' => $usuario['rol'],
     ];
+
+    $_SESSION['user_agent_hash'] = hash('sha256', (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    $_SESSION['ultimo_acceso'] = time();
+    $_SESSION['created_at'] = time();
 
     $rolNombre = strtolower(trim($usuario['rol'] ?? ''));
     if (strpos($rolNombre, 'admin') !== false) {
@@ -767,6 +779,13 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
     <?php endif; ?>
 
     <script>
+        // Protección estricta anti-bfcache: si se navega hacia atrás desde una sesión previa, fuerza recarga limpia
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted || (window.performance && window.performance.navigation && window.performance.navigation.type === 2) || (window.performance && window.performance.getEntriesByType && window.performance.getEntriesByType('navigation')[0] && window.performance.getEntriesByType('navigation')[0].type === 'back_forward')) {
+                window.location.reload();
+            }
+        });
+
         const loginForm = document.getElementById('loginForm');
         const loginNotice = document.getElementById('loginNotice');
         const recoveryForm = document.getElementById('recoveryForm');

@@ -3,37 +3,21 @@ declare(strict_types=1);
 
 ob_start();
 
+require_once __DIR__ . '/../../config/conexion_BD.php';
 require_once __DIR__ . '/../../config/auth_guard.php';
-
-if (file_exists(__DIR__ . '/../../config/conexion_BD.php')) {
-    require_once __DIR__ . '/../../config/conexion_BD.php';
-    require_once dirname(__DIR__, 2) . '/servicios/EmailService.php';
-} elseif (file_exists(__DIR__ . '/../../config/conexion.php')) {
-    require_once __DIR__ . '/../../config/conexion.php';
-}
-
+require_once dirname(__DIR__, 2) . '/servicios/EmailService.php';
 require_once __DIR__ . '/../../componentes/mi_cuenta_api.php';
 require_once __DIR__ . '/../../componentes/apartados_consultas_api.php';
+
+// Control de Acceso Estricto por Rol (Solo Administradores)
+$admin = exigirAcceso($pdo, ['admin'], '../../../../inicioSesion.php');
+
 if (isset($_GET['action'])) {
     verificarCsrf();
 }
 
-$id_usuario_actual = 0;
-if (is_array($_SESSION['usuario'] ?? null)) {
-    $id_usuario_actual = (int)($_SESSION['usuario']['id_usuario'] ?? $_SESSION['usuario']['id'] ?? 0);
-} else {
-    $id_usuario_actual = (int)($_SESSION['usuario'] ?? 0);
-}
-
-$admin = null;
-if (isset($pdo) && $pdo instanceof PDO && $id_usuario_actual > 0) {
-    $stA = $pdo->prepare("SELECT u.id_usuario, u.nombre, u.apellido, u.correo, u.estado, r.nombre AS rol
-                       FROM usuarios u LEFT JOIN roles r ON r.id_rol = u.id_rol
-                       WHERE u.id_usuario = ?");
-    $stA->execute([$id_usuario_actual]);
-    $admin = $stA->fetch(PDO::FETCH_ASSOC) ?: null;
-}
-$esAdmin = $admin && stripos((string)($admin['rol'] ?? ''), 'admin') !== false && strtolower((string)($admin['estado'] ?? '')) !== 'inactivo';
+$id_usuario_actual = (int)($admin['id_usuario'] ?? 0);
+$esAdmin = true;
 $nombreAdmin = trim(($admin['nombre'] ?? 'Administrador') . ' ' . ($admin['apellido'] ?? ''));
 $correoUsuario = $admin['correo'] ?? '';
 // Helper para procesamiento seguro de imágenes de producto (subida física o URL)
@@ -903,6 +887,13 @@ main { min-width: 0; width: 100%; overflow-x: hidden; }
 </div>
 
 <script>
+// Bloqueo estricto del botón "Atrás" tras cerrar sesión (Anti-bfcache)
+window.addEventListener('pageshow', function (event) {
+    if (event.persisted || (window.performance && window.performance.navigation && window.performance.navigation.type === 2) || (window.performance && window.performance.getEntriesByType && window.performance.getEntriesByType('navigation')[0] && window.performance.getEntriesByType('navigation')[0].type === 'back_forward')) {
+        window.location.reload();
+    }
+});
+
 const endpoint = 'dashboard.php';
 const $ = s => document.querySelector(s);
 const escapeHtml = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
