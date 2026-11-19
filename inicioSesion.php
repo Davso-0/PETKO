@@ -142,6 +142,13 @@ require_once __DIR__ . '/src/php/config/conexion_BD.php';
 // =========================================================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_usuarios_por_rol' && DEV_MODE === true) {
     $rolBuscado = trim($_GET['rol'] ?? '');
+    if (!in_array($rolBuscado, ['admin', 'gerente', 'usuario'], true)) {
+        http_response_code(400);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'message' => 'Rol de demostración no válido.']);
+        exit;
+    }
+
     try {
         $sql = "SELECT u.id_usuario, u.nombre, u.apellido, u.correo, COALESCE(s.nombre, 'Sin sucursal') AS sucursal 
                 FROM usuarios u 
@@ -153,8 +160,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_usuarios_por_rol' && DEV_
             $sql .= " AND r.nombre LIKE '%admin%'";
         } elseif ($rolBuscado === 'gerente') {
             $sql .= " AND r.nombre LIKE '%gerente%'";
-        } elseif ($rolBuscado === 'cajero') {
-            $sql .= " AND r.nombre LIKE '%cajero%'";
         } else {
             $sql .= " AND (r.nombre LIKE '%usuario%' OR r.nombre LIKE '%cliente%')";
         }
@@ -409,6 +414,7 @@ if ($metodoPost) {
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 50%, #e0f2fe 100%);
@@ -724,7 +730,7 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
             <span class="back-text">Inicio</span>
         </a>
         <div class="topbar-right">
-            <button id="darkModeBtn" class="dark-mode-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro" aria-pressed="false" data-no-i18n>🌙</button>
+            <button id="darkModeBtn" class="dark-mode-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro" aria-pressed="false" data-no-i18n><i id="darkModeIcon" class="fa-solid fa-moon" aria-hidden="true"></i></button>
             <button id="languageToggle" class="language-btn" type="button" title="Switch to English" aria-label="Switch to English" data-no-i18n>EN</button>
         </div>
     </div>
@@ -818,7 +824,6 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
                 <nav class="role-options" id="stepRoles" aria-label="Roles de demostración">
                     <button type="button" class="role-option btn-rol-categoria" data-rol="admin" data-label="Administrador General">Administrador General</button>
                     <button type="button" class="role-option btn-rol-categoria" data-rol="gerente" data-label="Gerente">Gerente</button>
-                    <button type="button" class="role-option btn-rol-categoria" data-rol="cajero" data-label="Cajero">Cajero</button>
                     <button type="button" class="role-option btn-rol-categoria" data-rol="usuario" data-label="Usuario / Cliente">Usuario / Cliente</button>
                 </nav>
 
@@ -957,7 +962,7 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
             const btn = document.getElementById('darkModeBtn');
             const dark = document.body.classList.contains('dark-mode');
             const label = t(dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
-            btn.textContent = dark ? '☀️' : '🌙';
+            document.getElementById('darkModeIcon').className = dark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
             btn.title = label; btn.setAttribute('aria-label', label);
             btn.setAttribute('aria-pressed', String(dark));
         }

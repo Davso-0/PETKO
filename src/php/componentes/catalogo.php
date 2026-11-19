@@ -366,6 +366,7 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="../../css/catalogo.css?v=<?= (int) @filemtime(__DIR__ . '/../../css/catalogo.css') ?>">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>

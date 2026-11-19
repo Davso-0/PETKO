@@ -28,6 +28,7 @@ if (isset($_GET['action'])) {
 }
 require_once __DIR__ . '/../../componentes/mi_cuenta_api.php';
 require_once __DIR__ . '/../../componentes/apartados_consultas_api.php';
+require_once __DIR__ . '/../../componentes/product_image_upload.php';
 
 // --------------------------------------------------------------
 // Resolver el usuario/gerente en sesión y su sucursal asignada (Anti-IDOR)
@@ -54,31 +55,6 @@ if ($esAdmin && isset($pdo) && $pdo instanceof PDO) {
 $nombreGerente = trim(($gerente['nombre'] ?? 'Gerente') . ' ' . ($gerente['apellido'] ?? ''));
 if ($nombreGerente === '') $nombreGerente = 'Gerente';
 $correoUsuario = $gerente['correo'] ?? '';
-
-// Helper para procesamiento seguro de imágenes de producto (subida física o URL)
-function procesarSubidaImagen(?array $file, string $urlTexto = ''): ?string {
-    if ($file && isset($file['error']) && $file['error'] === UPLOAD_ERR_OK && $file['size'] > 0) {
-        $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime = finfo_file($finfo, $file['tmp_name']);
-        finfo_close($finfo);
-        
-        if (isset($allowed[$mime])) {
-            $ext = $allowed[$mime];
-            $dirDestino = __DIR__ . '/../../../img/productos/';
-            if (!is_dir($dirDestino)) {
-                @mkdir($dirDestino, 0755, true);
-            }
-            $nombreArchivo = 'prod_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-            $destino = $dirDestino . $nombreArchivo;
-            if (move_uploaded_file($file['tmp_name'], $destino)) {
-                return '../../img/productos/' . $nombreArchivo;
-            }
-        }
-    }
-    $urlTexto = trim($urlTexto);
-    return $urlTexto !== '' ? $urlTexto : null;
-}
 
 // --------------------------------------------------------------
 // API (AJAX) — todas las acciones quedan restringidas a $id_sucursal
@@ -164,7 +140,7 @@ if (isset($_GET['action'])) {
             $stockMin = max(0, (int)($_POST['stock_minimo'] ?? 5));
             if ($codigo === '' || $nombre === '') throw new Exception('[ERROR DE USUARIO] El código y el nombre son obligatorios.');
 
-            $imagenUrl = procesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
+            $imagenUrl = petkoProcesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
 
             $pdo->beginTransaction();
             try {
@@ -190,7 +166,7 @@ if (isset($_GET['action'])) {
             $chk->execute([$id, $id_sucursal]);
             if (!$chk->fetchColumn()) throw new Exception('[ERROR DE USUARIO] Este producto no pertenece a tu sucursal.');
 
-            $imagenUrl = procesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
+            $imagenUrl = petkoProcesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
             if ($imagenUrl === null) {
                 $stAct = $pdo->prepare("SELECT imagen_url FROM productos WHERE id_producto=?");
                 $stAct->execute([$id]);
@@ -732,6 +708,7 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
     <title>PETKO · Panel de Gerente</title>
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -2031,8 +2008,8 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
                 </div>
             </div>
             <div class="topbar-actions">
-                <button class="icon-btn" id="btnLang" data-petko-lang type="button">EN</button>
                 <button class="icon-btn" id="btnTheme" data-petko-theme type="button">🌙</button>
+                <button class="icon-btn" id="btnLang" data-petko-lang type="button">EN</button>
                 <div class="user-profile">
                     <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--accent)"></i>
                     <span><?= htmlspecialchars($nombreGerente) ?></span>
@@ -2388,6 +2365,11 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
 const endpoint = 'dashboard_gerente.php';
 const $ = s => document.querySelector(s);
 const escapeHtml = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const imagenProductoUrl = value => {
+    const url = String(value ?? '').trim();
+    const legacyPrefix = '../../img/productos/';
+    return url.startsWith(legacyPrefix) ? `../../../img/productos/${url.slice(legacyPrefix.length)}` : url;
+};
 const money = n => Number(n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
 
 const notify = (msg, icon='success') => Swal.fire({ toast:true, position:'top-end', icon, title: msg, showConfirmButton:false, timer:2500, background: 'var(--bg-surface)', color: 'var(--ink)' });
@@ -2726,7 +2708,7 @@ async function loadInventario() {
             return `<tr>
                 <td>
                     <div style="display:flex; align-items:center; gap:12px;">
-                        <img src="${x.imagen_url ? escapeHtml(x.imagen_url) : 'https://placehold.co/100x100?text=Sin+Imagen'}" style="width:40px; height:40px; border-radius:10px; object-fit:cover; border:1px solid var(--border-soft);">
+                        <img src="${x.imagen_url ? escapeHtml(imagenProductoUrl(x.imagen_url)) : 'https://placehold.co/100x100?text=Sin+Imagen'}" style="width:40px; height:40px; border-radius:10px; object-fit:cover; border:1px solid var(--border-soft);">
                         <b>${escapeHtml(x.producto)}</b>
                     </div>
                 </td>
@@ -2745,7 +2727,7 @@ async function loadInventario() {
         // Vista Visual (Grid)
         $('#invVisualView').innerHTML = data.length ? data.map(x => {
             const statusCls = x.estado === 'ACTIVO' ? 'color: var(--success);' : 'color: var(--danger);';
-            const img = x.imagen_url ? escapeHtml(x.imagen_url) : 'https://placehold.co/300x300?text=Sin+Imagen';
+            const img = x.imagen_url ? escapeHtml(imagenProductoUrl(x.imagen_url)) : 'https://placehold.co/300x300?text=Sin+Imagen';
             
             let stockClass = 'stock-ok';
             let stockLabel = `Stock: ${x.existencias}`;
@@ -2831,19 +2813,28 @@ async function productoModal(record = null) {
     const editing = !!record;
     
     const L = currentLang === 'en'
-        ? { titleNew:'New Product', titleEdit:'Edit Product', img:'Product Image (Upload or URL)', codigo:'Code *', nombre:'Name *', desc:'Description', cat:'Category', precio:'Base price *', minStock:'Minimum stock', initStock:'Initial stock', estado:'Status', required:'Code and name are required.' }
-        : { titleNew:'Nuevo Producto', titleEdit:'Editar Producto', img:'Imagen del Producto (Subir o URL)', codigo:'Código *', nombre:'Nombre *', desc:'Descripción', cat:'Categoría', precio:'Precio base *', minStock:'Stock mínimo', initStock:'Existencia inicial', estado:'Estado', required:'Código y nombre son obligatorios.' };
+        ? { titleNew:'New Product', titleEdit:'Edit Product', img:'Product Image (Upload or URL)', chooseImage:'Choose photo', noImage:'No photo selected', codigo:'Code *', nombre:'Name *', desc:'Description', cat:'Category', precio:'Base price *', minStock:'Minimum stock', initStock:'Initial stock', estado:'Status', required:'Code and name are required.' }
+        : { titleNew:'Nuevo Producto', titleEdit:'Editar Producto', img:'Imagen del Producto (Subir o URL)', chooseImage:'Seleccionar foto', noImage:'Ninguna foto seleccionada', codigo:'Código *', nombre:'Nombre *', desc:'Descripción', cat:'Categoría', precio:'Precio base *', minStock:'Stock mínimo', initStock:'Existencia inicial', estado:'Estado', required:'Código y nombre son obligatorios.' };
 
+    let previewObjectUrl = null;
+    const releasePreviewObjectUrl = () => {
+        if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = null;
+    };
     const { value: form } = await Swal.fire({
         title: editing ? L.titleEdit : L.titleNew,
         html: `<div style="text-align:left;">
             <div style="text-align:center; margin-bottom:18px;">
-                <img id="swal-preview" class="swal-preview-img" src="${editing && record.imagen_url ? escapeHtml(record.imagen_url) : 'https://placehold.co/150x150?text=Sin+Imagen'}" style="max-width:140px; max-height:140px; object-fit:cover; border-radius:18px; border:1.5px solid rgba(11, 37, 69, 0.22); box-shadow:var(--shadow-sm);">
+                <img id="swal-preview" class="swal-preview-img" src="${editing && record.imagen_url ? escapeHtml(imagenProductoUrl(record.imagen_url)) : 'https://placehold.co/150x150?text=Sin+Imagen'}" style="max-width:140px; max-height:140px; object-fit:cover; border-radius:18px; border:1.5px solid rgba(11, 37, 69, 0.22); box-shadow:var(--shadow-sm);">
             </div>
             
             <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.img}</label>
-            <input type="file" id="swal-file" accept="image/jpeg,image/png,image/webp,image/gif" class="swal2-file" style="width:100%; margin:0 0 10px; font-size:13px; border-radius:12px;">
-            <input id="swal-img" class="swal2-input" style="width:100%;margin:0 0 16px; font-size:13px;" value="${editing?escapeHtml(record.imagen_url||''):''}" placeholder="O pega un enlace (https://...)">
+            <div class="petko-image-upload">
+                <input type="file" id="swal-file" class="petko-image-upload__input" accept="image/jpeg,image/png,image/webp,image/gif">
+                <label class="petko-image-upload__button" for="swal-file"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i><span>${L.chooseImage}</span></label>
+                <span class="petko-image-upload__name" id="swal-file-name" aria-live="polite">${L.noImage}</span>
+            </div>
+            <input id="swal-img" class="swal2-input" style="width:100%;margin:0 0 16px; font-size:13px;" value="${editing?escapeHtml(imagenProductoUrl(record.imagen_url||'')):''}" placeholder="O pega un enlace (https://...)">
             
             <div style="display:flex; gap:12px; margin-bottom:16px;">
                 <div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.codigo}</label><input id="swal-codigo" class="swal2-input" style="width:100%;margin:0;" value="${editing?escapeHtml(record.codigo):''}"></div>
@@ -2871,24 +2862,31 @@ async function productoModal(record = null) {
         didOpen: () => {
             const preview = document.getElementById('swal-preview');
             const fileIn = document.getElementById('swal-file');
+            const fileName = document.getElementById('swal-file-name');
             const urlIn = document.getElementById('swal-img');
 
-            fileIn.addEventListener('change', e => {
-                if (e.target.files && e.target.files[0]) {
-                    preview.src = URL.createObjectURL(e.target.files[0]);
+            fileIn.addEventListener('change', () => {
+                const file = fileIn.files && fileIn.files[0] ? fileIn.files[0] : null;
+                fileName.textContent = file ? file.name : L.noImage;
+                releasePreviewObjectUrl();
+                if (file) {
+                    previewObjectUrl = URL.createObjectURL(file);
+                    preview.src = previewObjectUrl;
+                } else {
+                    preview.src = urlIn.value.trim() || 'https://placehold.co/150x150?text=Sin+Imagen';
                 }
             });
-            urlIn.addEventListener('input', e => {
-                const val = e.target.value.trim();
-                if (val) {
-                    preview.src = val;
-                } else if (fileIn.files && fileIn.files[0]) {
-                    preview.src = URL.createObjectURL(fileIn.files[0]);
-                } else {
-                    preview.src = 'https://placehold.co/150x150?text=Sin+Imagen';
+            urlIn.addEventListener('input', () => {
+                const val = urlIn.value.trim();
+                if (val && fileIn.files && fileIn.files.length) {
+                    fileIn.value = '';
+                    fileName.textContent = L.noImage;
+                    releasePreviewObjectUrl();
                 }
+                preview.src = val || previewObjectUrl || 'https://placehold.co/150x150?text=Sin+Imagen';
             });
         },
+        willClose: releasePreviewObjectUrl,
         preConfirm: () => {
             const codigo = document.getElementById('swal-codigo').value.trim();
             const nombre = document.getElementById('swal-nombre').value.trim();

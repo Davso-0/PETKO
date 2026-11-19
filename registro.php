@@ -165,6 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 50%, #e0f2fe 100%);
@@ -503,7 +504,7 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
             <span class="back-text">Inicio</span>
         </a>
         <div class="topbar-right">
-            <button id="darkModeBtn" class="dark-mode-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro" aria-pressed="false" data-no-i18n>🌙</button>
+            <button id="darkModeBtn" class="dark-mode-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro" aria-pressed="false" data-no-i18n><i id="darkModeIcon" class="fa-solid fa-moon" aria-hidden="true"></i></button>
             <button id="languageToggle" class="language-btn" type="button" title="Switch to English" aria-label="Switch to English" data-no-i18n>EN</button>
         </div>
     </div>
@@ -694,7 +695,7 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
             const btn = document.getElementById('darkModeBtn');
             const dark = document.body.classList.contains('dark-mode');
             const label = t(dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
-            btn.textContent = dark ? '☀️' : '🌙';
+            document.getElementById('darkModeIcon').className = dark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
             btn.title = label; btn.setAttribute('aria-label', label);
             btn.setAttribute('aria-pressed', String(dark));
         }
