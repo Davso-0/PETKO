@@ -1,0 +1,9 @@
+/* KION · VERSIÓN MÓVIL · generic.css — inicio de sesión, registro y otras páginas sin módulo propio */
+.km-generic { min-height: 100dvh; padding: calc(var(--km-safe-t) + 16px) var(--km-gut) calc(var(--km-safe-b) + 24px); box-sizing: border-box; }
+.km-generic :is(.container, .login-container, .login-box, .card, .box, main, form) { max-width: 100% !important; box-sizing: border-box; }
+.km-generic :is(.container, .login-container, .login-box, .card, .box) { width: min(100%, 440px) !important; margin-inline: auto !important; padding: 22px 18px !important; border-radius: 22px !important; }
+.km-generic :is(input:not([type=checkbox]):not([type=radio]):not([type=submit]), select, textarea) { width: 100% !important; min-height: 48px; padding: 12px 14px; border-radius: 14px; box-sizing: border-box; font-size: 16px; }
+.km-generic :is(button, input[type=submit], .btn) { min-height: 48px; border-radius: 999px; font-weight: 800; }
+.km-generic form :is(button[type=submit], input[type=submit]) { width: 100%; }
+.km-generic img { height: auto; }
+.km-generic table { display: block; overflow-x: auto; }

@@ -26,7 +26,7 @@
                       : (dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
         var lTxt = en ? 'Cambiar a español' : 'Switch to English';
         Array.prototype.forEach.call(document.querySelectorAll('[data-petko-theme]'), function (b) {
-            b.textContent = dark ? '☀️' : '🌙';
+            b.innerHTML = '<i class="fa-solid ' + (dark ? 'fa-sun' : 'fa-moon') + '" aria-hidden="true"></i>';
             b.title = tTxt; b.setAttribute('aria-label', tTxt); b.setAttribute('aria-pressed', String(dark));
         });
         Array.prototype.forEach.call(document.querySelectorAll('[data-petko-lang]'), function (b) {

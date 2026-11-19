@@ -184,4 +184,61 @@ body.dark-mode .app-footer {
     }
 }
 
+.petko-image-upload {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.petko-image-upload__input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+.petko-image-upload__button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 42px;
+    padding: 0 16px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: var(--coffee-gradient);
+    box-shadow: 0 8px 18px var(--accent-glow);
+    color: #04142e;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform .25s ease, box-shadow .25s ease, filter .25s ease;
+}
+.petko-image-upload__button:hover {
+    filter: brightness(1.06);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px var(--accent-glow);
+}
+.petko-image-upload__button i { font-size: 15px; }
+.petko-image-upload__input:focus-visible + .petko-image-upload__button {
+    outline: 3px solid var(--accent-glow);
+    outline-offset: 3px;
+}
+.petko-image-upload__name {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ink-faint);
+    font-size: 12px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 a.nav-btn, a.brand { text-decoration: none; }

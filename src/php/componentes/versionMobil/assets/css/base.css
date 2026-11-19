@@ -1,0 +1,276 @@
+/* ==========================================================================
+   KION · VERSIÓN MÓVIL · base.css
+   Sistema de diseño móvil compartido por todos los módulos.
+   Conserva la paleta/identidad del proyecto: usa las variables originales de
+   cada página y solo define respaldos (--km-*) cuando una página no las tiene.
+   ========================================================================== */
+
+:root {
+  --km-top-h: 56px;
+  --km-nav-h: 62px;
+  --km-safe-t: env(safe-area-inset-top, 0px);
+  --km-safe-b: env(safe-area-inset-bottom, 0px);
+  --km-safe-l: env(safe-area-inset-left, 0px);
+  --km-safe-r: env(safe-area-inset-right, 0px);
+  --km-gut: clamp(12px, 4vw, 18px);
+  --km-r: 18px;
+  --km-r-sm: 12px;
+  --km-ease: cubic-bezier(.22, 1, .36, 1);
+
+  /* Respaldo de paleta KION (azules del proyecto) */
+  --km-bg: #f4f8fd;
+  --km-surface: #fff;
+  --km-panel: #eef5fc;
+  --km-ink: #0a1f3d;
+  --km-soft: #385377;
+  --km-faint: #567296;
+  --km-line: #c8daf0;
+  --km-accent: #1a6fd8;
+  --km-accent-2: #4bb4f8;
+  --km-grad: linear-gradient(135deg, #7fd6ff, #2f80ed);
+  --km-on-grad: #04142e;
+  --km-danger: #c42b1c;
+  --km-shadow: 0 6px 20px rgba(10, 31, 61, .08);
+  --km-shadow-up: 0 -10px 30px rgba(10, 31, 61, .14);
+}
+body.dark-mode {
+  --km-bg: #060e1d;
+  --km-surface: #0a1528;
+  --km-panel: #0f1e38;
+  --km-ink: #f0f6ff;
+  --km-soft: #a8bfde;
+  --km-faint: #7f9ec7;
+  --km-line: #182e52;
+  --km-accent: #5cc8ff;
+  --km-accent-2: #8fd6ff;
+  --km-danger: #f87171;
+  --km-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  --km-shadow-up: 0 -10px 30px rgba(0, 0, 0, .55);
+}
+
+/* ---------- Reglas globales anti-desborde / táctiles ---------- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scroll-padding-top: calc(var(--km-top-h) + var(--km-safe-t) + 8px); }
+body.km-body { max-width: 100%; overflow-x: hidden; -webkit-font-smoothing: antialiased; overscroll-behavior-y: none; }
+.km-body * { -webkit-tap-highlight-color: transparent; }
+.km-body img, .km-body video, .km-body canvas, .km-body svg { max-width: 100%; }
+.km-body :is(a, button, select, input, summary, [role="button"], label) { touch-action: manipulation; }
+.km-body :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea) { font-size: 16px; } /* evita el zoom de iOS */
+.km-body :is(button, [role="button"], .btn-primary, .btn-ghost, .chip-btn) { min-height: 40px; }
+.km-body :focus-visible { outline: 2px solid var(--km-accent); outline-offset: 2px; }
+
+@media (hover: none) {
+  .km-body *:hover { transform: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .km-body *, .km-body *::before, .km-body *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+/* ---------- Espacio para la navegación inferior ---------- */
+body.km-has-nav { padding-bottom: calc(var(--km-nav-h) + var(--km-safe-b) + 14px) !important; }
+
+/* ==========================================================================
+   Navegación inferior (Bottom Navigation)
+   ========================================================================== */
+.km-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  height: calc(var(--km-nav-h) + var(--km-safe-b));
+  padding: 6px calc(6px + var(--km-safe-r)) var(--km-safe-b) calc(6px + var(--km-safe-l));
+  background: color-mix(in srgb, var(--km-surface) 92%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(18px); backdrop-filter: saturate(1.6) blur(18px);
+  border-top: 1px solid var(--km-line);
+  box-shadow: var(--km-shadow-up);
+  transition: transform .3s var(--km-ease);
+}
+.km-kb .km-nav { transform: translateY(115%); }
+.km-nav__it {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  min-width: 0; padding: 4px 2px; border: 0; background: none; color: var(--km-faint);
+  font-family: inherit; font-weight: 600; font-size: 10.5px; line-height: 1.1; text-decoration: none; cursor: pointer;
+  transition: color .2s ease;
+}
+.km-nav__ic {
+  position: relative; display: grid; place-items: center; width: 52px; height: 30px; border-radius: 999px;
+  font-size: 22px; transition: background .25s var(--km-ease), transform .25s var(--km-ease);
+}
+.km-nav__ic svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.km-nav__lb { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .01em; }
+.km-nav__it.is-active { color: var(--km-accent); }
+.km-nav__it.is-active .km-nav__ic { background: color-mix(in srgb, var(--km-accent) 16%, transparent); transform: translateY(-1px); }
+.km-nav__it.is-active .km-nav__lb { font-weight: 800; }
+.km-nav__it:active .km-nav__ic { transform: scale(.92); }
+.km-nav__badge {
+  position: absolute; top: -3px; right: 2px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px;
+  background: var(--km-danger); color: #fff; font-family: inherit; font-weight: 800; font-size: 10px; line-height: 17px; text-align: center;
+  box-shadow: 0 0 0 2px var(--km-surface);
+}
+.km-nav__badge[hidden] { display: none; }
+@media (min-width: 700px) { .km-nav { left: 50%; right: auto; width: min(560px, 100%); transform: translateX(-50%); border-radius: 22px 22px 0 0; } .km-kb .km-nav { transform: translate(-50%, 115%); } }
+
+/* ==========================================================================
+   Hoja inferior (Bottom Sheet) reutilizable
+   ========================================================================== */
+.km-scrim { position: fixed; inset: 0; z-index: 70; background: rgba(7, 26, 50, .5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility .3s; }
+.km-scrim.is-open { opacity: 1; visibility: visible; }
+.km-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 71; max-height: 86dvh; overflow-y: auto; overscroll-behavior: contain;
+  padding: 8px var(--km-gut) calc(18px + var(--km-safe-b));
+  background: var(--km-surface); color: var(--km-ink);
+  border-radius: 24px 24px 0 0; box-shadow: var(--km-shadow-up);
+  transform: translateY(105%); visibility: hidden; transition: transform .38s var(--km-ease), visibility .38s;
+  margin-inline: auto; max-width: 640px;
+}
+.km-sheet.is-open { transform: none; visibility: visible; }
+.km-sheet__grip { width: 40px; height: 4px; border-radius: 4px; background: var(--km-line); margin: 4px auto 10px; }
+.km-sheet__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.km-sheet__title { font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+.km-sheet__x { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--km-panel); color: var(--km-ink); font-size: 18px; display: grid; place-items: center; }
+.km-sheet__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.km-sheet__list { display: grid; gap: 8px; }
+.km-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 76px; padding: 12px 6px;
+  background: var(--km-panel); color: var(--km-ink); border: 1px solid var(--km-line); border-radius: 16px;
+  font-family: inherit; font-weight: 700; font-size: 12px; line-height: 1.2; text-align: center; text-decoration: none;
+}
+.km-tile i { font-size: 24px; color: var(--km-accent); }
+.km-tile svg { width: 24px; height: 24px; stroke: var(--km-accent); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.km-tile:active { transform: scale(.97); }
+.km-sheet__row { display: flex; align-items: center; gap: 10px; }
+.km-sheet__row > * { flex: 1; }
+
+/* ==========================================================================
+   SweetAlert2 → hoja inferior en móvil (no afecta a los toasts)
+   ========================================================================== */
+body:not(.swal2-toast-shown) .swal2-container { align-items: flex-end !important; padding: 0 !important; }
+body:not(.swal2-toast-shown) .swal2-container .swal2-popup:not(.swal2-toast) {
+  width: 100% !important; max-width: 640px !important; margin: 0 auto !important; padding: 14px 16px calc(16px + var(--km-safe-b)) !important;
+  max-height: 92dvh; overflow-y: auto; border-radius: 24px 24px 0 0 !important; text-align: left;
+}
+body:not(.swal2-toast-shown) .swal2-popup:not(.swal2-toast)::before { content: ""; display: block; width: 40px; height: 4px; margin: 0 auto 10px; border-radius: 4px; background: var(--km-line, #c8daf0); }
+.swal2-popup:not(.swal2-toast) .swal2-title { font-size: 19px !important; padding: 4px 0 8px !important; margin: 0 !important; text-align: left; }
+.swal2-popup:not(.swal2-toast) .swal2-html-container { margin: 6px 0 0 !important; padding: 0 !important; font-size: 14px !important; text-align: left; }
+.swal2-popup:not(.swal2-toast) .swal2-actions { width: 100%; flex-wrap: wrap; gap: 8px !important; margin: 14px 0 0 !important; flex-direction: row-reverse; }
+.swal2-popup:not(.swal2-toast) .swal2-actions button { flex: 1 1 120px; min-height: 46px; margin: 0 !important; border-radius: 999px !important; font-weight: 800 !important; }
+.swal2-popup:not(.swal2-toast) :is(.swal2-input, .swal2-select, .swal2-textarea, .swal2-file) { width: 100% !important; max-width: 100% !important; margin: 6px 0 12px !important; font-size: 16px !important; box-sizing: border-box; }
+.swal2-popup:not(.swal2-toast) .swal2-html-container :is(input, select, textarea) { max-width: 100%; }
+.swal2-popup:not(.swal2-toast) .swal2-close { top: 8px; right: 8px; }
+
+/* ==========================================================================
+   Tablas → tarjetas informativas (clase añadida por movil.js)
+   ========================================================================== */
+table.km-ct, table.km-ct tbody { display: block; width: 100% !important; min-width: 0 !important; }
+table.km-ct thead, table.km-ct tr:has(> th) { display: none !important; }
+table.km-ct tr {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; align-items: start;
+  padding: 14px; margin: 0 0 10px; border-radius: 16px;
+  background: var(--km-surface); border: 1px solid var(--km-line); box-shadow: var(--km-shadow);
+}
+table.km-ct tr:hover { background: var(--km-surface) !important; transform: none !important; border-radius: 16px !important; }
+table.km-ct td {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 0 !important; border: 0 !important;
+  font-size: 14px !important; text-align: left !important; overflow-wrap: anywhere; color: var(--km-ink);
+}
+table.km-ct td[data-label]::before { content: attr(data-label); font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--km-accent); }
+table.km-ct td:first-child { grid-column: 1 / -1; font-size: 15px !important; font-weight: 700; }
+table.km-ct td:first-child[data-label]::before { display: none; }
+table.km-ct td:empty { display: none; }
+table.km-ct td[colspan] { grid-column: 1 / -1; display: block; text-align: center !important; padding: 18px 8px !important; }
+table.km-ct td.km-act { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 10px !important; border-top: 1px dashed var(--km-line) !important; }
+table.km-ct td.km-act > * { flex: 0 0 auto; }
+table.km-ct td.km-act .row-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+table.km-ct td.km-act :is(.btn-ghost, .chip-btn, button:not(.icon-x)) { flex: 1 1 auto; justify-content: center; }
+table.km-ct .badge { align-self: flex-start; }
+
+/* ==========================================================================
+   Estructura de "app" para dashboards (admin, gerente y usuario)
+   ========================================================================== */
+:is(.km-dash, .km-usuario) {
+  --km-bg: var(--bg-app); --km-surface: var(--bg-surface); --km-panel: var(--bg-panel);
+  --km-ink: var(--ink); --km-soft: var(--ink-soft); --km-faint: var(--ink-faint); --km-line: var(--border-soft);
+  --km-danger: var(--danger);
+}
+:is(.km-dash, .km-usuario) .app-layout { display: block !important; width: 100%; max-width: 100%; min-height: 100dvh; overflow: visible !important; }
+:is(.km-dash, .km-usuario) main { display: block; width: 100%; min-width: 0; overflow: visible !important; }
+:is(.km-dash, .km-usuario) .sidebar-collapse-btn, :is(.km-dash, .km-usuario) .hamburger-btn { display: none !important; }
+
+/* Encabezado compacto (conserva el fondo/color originales) */
+:is(.km-dash, .km-usuario) .topbar {
+  position: sticky !important; top: 0; z-index: 40;
+  height: calc(var(--km-top-h) + var(--km-safe-t)) !important;
+  padding: var(--km-safe-t) calc(var(--km-gut) + var(--km-safe-r)) 0 calc(var(--km-gut) + var(--km-safe-l)) !important;
+  gap: 8px;
+}
+:is(.km-dash, .km-usuario) .topbar > div:first-child { min-width: 0; gap: 10px !important; flex: 1 1 auto; }
+:is(.km-dash, .km-usuario) .topbar-title-block { min-width: 0; }
+:is(.km-dash, .km-usuario) .topbar-title-block .eyebrow { font-size: 10px !important; letter-spacing: .08em; line-height: 1.2; }
+:is(.km-dash, .km-usuario) .topbar-title-block .title-main, :is(.km-dash, .km-usuario) #topbarTitle {
+  font-size: 17px !important; line-height: 1.2; max-width: 52vw !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+:is(.km-dash, .km-usuario) .topbar-actions { gap: 8px !important; flex: none; }
+:is(.km-dash, .km-usuario) .icon-btn { width: 38px !important; height: 38px !important; min-height: 0; font-size: 17px !important; }
+:is(.km-dash, .km-usuario) .user-profile { padding-left: 8px !important; gap: 6px !important; border-left: 1px solid rgba(255, 255, 255, .18); }
+:is(.km-dash, .km-usuario) .user-profile > span { display: none !important; }
+:is(.km-dash, .km-usuario) .user-profile > i { font-size: 28px !important; }
+
+:is(.km-dash, .km-usuario) .content { padding: 16px var(--km-gut) 8px !important; max-width: 760px !important; margin-inline: auto; }
+:is(.km-dash, .km-usuario) .header-row { flex-direction: column !important; align-items: stretch !important; gap: 12px !important; margin-bottom: 16px !important; }
+:is(.km-dash, .km-usuario) .header-row > div:first-child { width: 100%; }
+:is(.km-dash, .km-usuario) .title { font-size: clamp(22px, 6.4vw, 27px) !important; line-height: 1.15; letter-spacing: -.02em; gap: 8px !important; }
+:is(.km-dash, .km-usuario) .subtitle { font-size: 13.5px !important; line-height: 1.5; margin-top: 6px !important; }
+
+/* Botones compactos */
+:is(.km-dash, .km-usuario) .btn-primary, :is(.km-dash, .km-usuario) .btn-danger {
+  width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 18px !important; font-size: 14px !important; border-radius: 999px; box-shadow: 0 8px 20px rgba(47, 128, 237, .28) !important; min-height: 46px;
+}
+:is(.km-dash, .km-usuario) .btn-ghost { padding: 10px 16px !important; font-size: 13px !important; width: auto; justify-content: center; }
+:is(.km-dash, .km-usuario) .chip-btn { padding: 9px 14px !important; font-size: 12.5px !important; }
+
+/* Paneles y formularios */
+:is(.km-dash, .km-usuario) .panel {
+  padding: 16px !important; margin-bottom: 14px !important; border-radius: var(--km-r) !important;
+  overflow: visible !important; box-shadow: var(--km-shadow) !important; border-width: 1px !important;
+}
+:is(.km-dash, .km-usuario) .panel:hover { border-color: var(--border-soft); }
+:is(.km-dash, .km-usuario) .panel-head { margin-bottom: 12px !important; gap: 8px !important; flex-wrap: nowrap !important; align-items: center !important; }
+:is(.km-dash, .km-usuario) .panel-title { font-size: 17px !important; line-height: 1.25; }
+:is(.km-dash, .km-usuario) .panel-sub { font-size: 12px !important; margin-top: 2px !important; }
+:is(.km-dash, .km-usuario) .grid-2col { grid-template-columns: minmax(0, 1fr) !important; gap: 0 !important; }
+
+:is(.km-dash, .km-usuario) .form-inline { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px !important; align-items: stretch; width: 100%; }
+:is(.km-dash, .km-usuario) .form-inline > * { grid-column: 1 / -1; min-width: 0 !important; }
+:is(.km-dash, .km-usuario) .form-inline > input[type=date], :is(.km-dash, .km-usuario) .form-inline > .chip-btn { grid-column: auto; }
+:is(.km-dash, .km-usuario) .form-inline .form-inline { padding: 0 !important; border: 0 !important; background: none !important; box-shadow: none !important; margin: 0 !important; }
+:is(.km-dash, .km-usuario) .form-inline[style] { padding: 12px !important; margin-bottom: 14px !important; border-radius: var(--km-r) !important; }
+:is(.km-dash, .km-usuario) :is(.search-input, .select-input, .form-input) {
+  width: 100% !important; min-width: 0 !important; flex: 1 1 100% !important; padding: 12px 16px !important; font-size: 16px !important; border-radius: 14px !important; min-height: 46px;
+}
+
+/* Menú lateral → hoja inferior de accesos ("Más") */
+:is(.km-dash, .km-usuario) .sidebar {
+  position: fixed !important; inset: auto 0 0 0 !important; top: auto !important; width: 100% !important; max-width: 640px; margin-inline: auto;
+  height: auto !important; max-height: 84dvh; overflow-y: auto; overscroll-behavior: contain;
+  padding: 8px var(--km-gut) calc(16px + var(--km-safe-b)) !important; gap: 10px !important;
+  border: 0 !important; border-radius: 24px 24px 0 0; box-shadow: var(--km-shadow-up) !important; z-index: 71 !important;
+  transform: translateY(105%) !important; visibility: hidden; transition: transform .38s var(--km-ease), visibility .38s !important;
+}
+:is(.km-dash, .km-usuario) .app-layout.mobile-open .sidebar { transform: none !important; visibility: visible; }
+:is(.km-dash, .km-usuario) .sidebar::before { content: ""; flex: none; width: 40px; height: 4px; margin: 2px auto 6px; border-radius: 4px; background: var(--km-line); }
+:is(.km-dash, .km-usuario) .sidebar .brand { padding: 0 4px; justify-content: center; }
+:is(.km-dash, .km-usuario) .sidebar .brand img { height: 34px; width: auto; }
+:is(.km-dash, .km-usuario) .nav-menu { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px !important; }
+:is(.km-dash, .km-usuario) .nav-section-title { grid-column: 1 / -1; padding: 8px 4px 0 !important; font-size: 10.5px !important; }
+:is(.km-dash, .km-usuario) .nav-btn {
+  flex-direction: column !important; justify-content: center; gap: 6px !important; min-height: 78px; padding: 12px 6px !important;
+  border-radius: 16px !important; background: var(--km-panel); border: 1px solid var(--km-line);
+  font-size: 12px !important; line-height: 1.2; text-align: center; box-shadow: none;
+}
+:is(.km-dash, .km-usuario) .nav-btn i { font-size: 24px !important; }
+:is(.km-dash, .km-usuario) .nav-btn .nav-label { opacity: 1 !important; width: auto !important; white-space: normal; }
+:is(.km-dash, .km-usuario) .nav-btn.active { border-color: transparent; }
+:is(.km-dash, .km-usuario) .sidebar-scrim { display: block !important; position: fixed; inset: 0; z-index: 70 !important; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .3s ease, visibility .3s !important; }
+:is(.km-dash, .km-usuario) .app-layout.mobile-open .sidebar-scrim { opacity: 1; visibility: visible; pointer-events: auto; }
+
+/* Animación de entrada de vistas (solo transform/opacity) */
+:is(.km-dash, .km-usuario) .view-section.active { animation: km-in .32s var(--km-ease) both; }
+@keyframes km-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }

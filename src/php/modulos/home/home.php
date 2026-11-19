@@ -1,6 +1,23 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/../../componentes/versionMobil/core/Movil.php';
 
+/* =====================================================
+   DETECCIÓN AUTOMÁTICA DE VERSIÓN MÓVIL
+   Solo en peticiones GET directas (no AJAX ni POST)
+===================================================== */
+if (empty($GLOBALS['KION_MOBILE_RENDER']) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !isset($_GET['action'])) {
+    if (KionMovil::usarVersionMovil()) {
+        header('Accept-CH: Sec-CH-UA-Mobile');
+        header('Vary: Sec-CH-UA-Mobile, Cookie');
+        header('Location: ../../componentes/versionMobil/home.php');
+        exit;
+    }
+}
+
+/* =====================================================
+   SEGURIDAD: SESIÓN
+===================================================== */
 $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['SERVER_PORT'] ?? '') === '443');
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -153,9 +170,10 @@ if ($petkoProjectRoot && $petkoDocumentRoot) {
 $rutaCatalogo = $appBaseUrl . '/src/php/componentes/catalogo.php';
 $rutaLogin = $appBaseUrl . '/inicioSesion.php';
 $rutaTerminos = $appBaseUrl . '/terminos.php';
-$rutaAccesoCatalogo = $logueado ? $rutaCatalogo : $rutaLogin;
+$rutaAccesoCatalogo = $rutaCatalogo;
 
 $ctaHref = $logueado ? $rutaDashboard : $rutaLogin;
+$rutaAgendarCita = $logueado ? $rutaDashboard : $rutaLogin . '?continuar=agendar';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -173,10 +191,12 @@ a{text-decoration:none}
 
 .navbar{width:100%;height:82px;display:flex;align-items:center;justify-content:space-between;padding:0 6.5%;background:rgba(8,18,38,.96);border-bottom:1px solid rgba(124,196,255,.16);backdrop-filter:blur(18px);position:sticky;top:0;z-index:1000}
 .logo{font-size:30px;font-weight:800;letter-spacing:3px;color:#f2f8ff}.logo span{color:#5cc8ff}
-.menu{display:flex;align-items:center;gap:clamp(12px,1.7vw,27px)}
+.menu{display:flex;align-items:center;gap:clamp(8px,1.2vw,18px)}
+.menu-links{display:flex;align-items:center;gap:clamp(12px,1.7vw,27px);min-width:0}
+.menu-actions{display:flex;align-items:center;gap:clamp(8px,.9vw,14px);flex:0 0 auto}
 .menu a{color:#d6e6fb;font-size:13px;transition:color .25s}.menu a:hover{color:#5cc8ff}
-.menu>a:not(.btn-login):not(.profile-link){display:inline-flex;align-items:center;gap:7px;padding:10px 2px}
-.menu>a:not(.btn-login):not(.profile-link) i{font-size:12px;color:#75ceff}
+.menu-links>a:not(.btn-login):not(.profile-link){display:inline-flex;align-items:center;gap:7px;padding:10px 2px}
+.menu-links>a:not(.btn-login):not(.profile-link) i{font-size:12px;color:#75ceff}
 .profile-link{width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(200,225,255,.36);border-radius:50%;background:linear-gradient(145deg,#5cc8ff,#2f80ed);color:#fff!important;font-size:21px;transition:transform .2s,box-shadow .2s}
 .profile-link:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(47,128,237,.35)}
 .menu .btn-login{background:#5cc8ff;color:#04142e;border-radius:999px;padding:12px 19px;font-weight:800;transition:.25s}
@@ -586,7 +606,8 @@ body{padding-top:0}
 .logout-link{border:1px solid rgba(200,225,255,.3);background:transparent;color:inherit;border-radius:50%;width:42px;height:42px;display:grid;place-items:center;padding:0;cursor:pointer;font:inherit;font-size:18px;transition:.2s}
 .logout-link:hover{background:rgba(92,200,255,.18);border-color:#5cc8ff;transform:translateY(-1px)}
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
-.quick-access{padding:36px 7%;background:var(--bg);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.quick-access{padding:36px 7%;background:var(--bg);display:flex;flex-wrap:wrap;justify-content:center;gap:16px}
+.quick-access>a,.quick-access>button{flex:0 1 calc(25% - 12px);min-width:0}
 .quick-access a,.quick-access button{display:flex;align-items:center;gap:13px;padding:18px;border-radius:16px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;text-align:left;cursor:pointer;transition:.25s}
 .quick-access a:hover,.quick-access button:hover{transform:translateY(-3px);border-color:var(--acc);box-shadow:0 12px 25px rgba(47,128,237,.12)}
 .quick-access .qa-icon{width:44px;height:44px;display:grid;place-items:center;border-radius:13px;background:rgba(92,200,255,.18);font-size:23px;flex-shrink:0}
@@ -626,8 +647,8 @@ body.dark-mode .product-image{background:linear-gradient(135deg,#10264a,#071225)
 @media(max-width:1000px){.branches-section{grid-template-columns:1fr}.product-card{flex-basis:calc(50% - 10px)}}
 @media(max-width:650px){.branches-section{padding:60px 6%}.product-card{flex-basis:85%}.map-shell{padding:8px;border-radius:19px}#petkoMap{height:470px;border-radius:14px}.map-toolbar{top:18px;left:18px;right:18px}.map-search{height:46px}.map-locate{height:44px;width:44px}.map-legend{bottom:17px;left:17px}.petko-footer{padding:54px 6% 24px}.footer-grid{gap:28px}}
 
-@media(max-width:1000px){.quick-access{grid-template-columns:repeat(2,minmax(0,1fr))}.product-track{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:650px){.navbar{align-items:center;height:auto;min-height:64px}.menu{justify-content:flex-end;gap:7px}.menu a:not(.btn-login):not(.profile-link),.menu .logout-form{display:none}.quick-access,.product-track,.footer-grid{grid-template-columns:1fr}.products-section{padding:60px 6%}.product-image{height:160px}.footer-bottom{flex-direction:column}}
+@media(max-width:1000px){.quick-access>a,.quick-access>button{flex-basis:calc(50% - 8px)}.product-track{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.navbar{align-items:center;height:auto;min-height:64px}.menu{justify-content:flex-end;gap:7px}.menu a:not(.btn-login):not(.profile-link),.menu .logout-form{display:none}.quick-access>a,.quick-access>button{flex-basis:100%}.product-track,.footer-grid{grid-template-columns:1fr}.products-section{padding:60px 6%}.product-image{height:160px}.footer-bottom{flex-direction:column}}
 
 .products-section .product-track{display:flex!important;flex-wrap:nowrap;overflow-x:auto;gap:20px;margin-top:32px;padding:8px 2px 20px;scroll-snap-type:x mandatory;scroll-behavior:smooth}
 .products-section .product-card{display:flex;flex-direction:column;flex:0 0 calc(25% - 15px);min-width:240px;scroll-snap-align:start}
@@ -648,12 +669,29 @@ body.dark-mode .product-image{background:linear-gradient(135deg,#10264a,#071225)
 .navbar .logo{display:flex;align-items:center;flex:0 0 auto;min-width:0}
 .navbar .logo img{height:clamp(36px,3vw,50px);width:auto;max-width:min(17vw,220px);object-fit:contain}
 .navbar .menu{display:flex;flex:1 1 auto;min-width:0;flex-wrap:nowrap;align-items:center;justify-content:flex-end;gap:clamp(7px,.9vw,16px);white-space:nowrap}
-.navbar .menu>a:not(.btn-login):not(.profile-link){padding:8px 0;font-size:clamp(12px,.82vw,15px)}
-.navbar .menu>a:not(.btn-login):not(.profile-link) i{font-size:12px}
+.navbar .menu-links{display:flex;flex:1 1 auto;min-width:0;flex-wrap:nowrap;align-items:center;justify-content:flex-end;gap:clamp(7px,.9vw,16px);white-space:nowrap}
+.navbar .menu-actions{display:flex;flex:0 0 auto;align-items:center;justify-content:flex-end;gap:clamp(7px,.9vw,16px);white-space:nowrap}
+.navbar .menu-links>a:not(.btn-login):not(.profile-link){padding:8px 0;font-size:clamp(12px,.82vw,15px)}
+.navbar .menu-links>a:not(.btn-login):not(.profile-link) i{font-size:12px}
 .navbar .profile-link,.navbar .dark-mode-btn,.navbar .language-btn,.navbar .logout-link{flex:0 0 40px;width:40px;min-width:40px;height:40px}
 .navbar .logout-form{display:flex;flex:0 0 auto;align-items:center;margin:0}
-@media(max-width:1100px){.navbar .menu>a:not(.btn-login):not(.profile-link){display:none}}
+@media(max-width:1100px){.navbar .menu-links>a:not(.btn-login):not(.profile-link){display:none}}
 @media(max-width:650px){.navbar{padding-inline:12px!important;gap:8px}.navbar .logo img{height:38px;max-width:128px}.navbar .menu{gap:7px}.navbar .profile-link,.navbar .dark-mode-btn,.navbar .language-btn,.navbar .logout-link{flex-basis:36px;width:36px;min-width:36px;height:36px}.navbar .menu .logout-form{display:flex}.navbar .language-btn{padding:0;font-size:12px}}
+@media(min-width:700px) and (max-width:1100px){
+  .navbar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:40px 32px;align-content:center;height:96px!important;min-height:96px!important;padding:6px 4%!important;gap:0 12px}
+  .navbar .logo{grid-column:1;grid-row:1;align-self:center;z-index:2}
+  .navbar .logo img{height:36px!important;max-width:160px}
+  .navbar .menu{display:grid;grid-column:1/-1;grid-row:1/3;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:40px 32px;align-items:center;min-width:0;width:100%;gap:0 12px;pointer-events:none}
+  .navbar .menu-links{grid-column:1/-1;grid-row:2;display:flex!important;align-items:center;justify-content:space-between;gap:clamp(3px,.5vw,7px);min-width:0;width:100%;white-space:nowrap;pointer-events:auto}
+  .navbar .menu-links>a:not(.btn-login):not(.profile-link){display:inline-flex!important;align-items:center;gap:4px;padding:4px 0;font-size:clamp(10px,1.45vw,13px);flex:none}
+  .navbar .menu-links>a:not(.btn-login):not(.profile-link) i{font-size:11px}
+  .navbar .menu-actions{grid-column:2;grid-row:1;display:flex;align-items:center;justify-content:flex-end;gap:6px;pointer-events:auto}
+  .navbar .menu-actions .btn-login{padding:8px 12px;font-size:12px}
+  .navbar .profile-link,.navbar .dark-mode-btn,.navbar .language-btn,.navbar .logout-link{flex-basis:36px;width:36px;min-width:36px;height:36px}
+  .navbar .menu-actions .logout-form{display:flex}
+  .ps-sticky{padding-top:96px!important}
+  .sec,.petko-footer{scroll-margin-top:96px}
+}
 .petko-footer{display:block;width:100%;box-sizing:border-box;padding:clamp(44px,6vw,72px) clamp(20px,7vw,100px) 28px;background:linear-gradient(125deg,#06152f 0%,#0d3972 55%,#1268ad 100%);color:#f2f8ff;border-top:5px solid #5cc8ff;box-shadow:0 -16px 45px rgba(7,35,76,.12)}
 .petko-footer .footer-grid{width:min(100%,1240px);margin:0 auto;display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:clamp(24px,4vw,52px);align-items:start}
 .petko-footer .logo{display:inline-flex;align-items:center;justify-content:center;margin:0 0 16px;padding:0;background:transparent;border-radius:0;line-height:0}
@@ -677,6 +715,235 @@ body:not(.dark-mode) .petko-footer .footer-links a:hover,body:not(.dark-mode) .p
 body:not(.dark-mode) .petko-footer .footer-bottom{border-color:rgba(30,90,200,.2)}
 @media(max-width:760px){.petko-footer .footer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.petko-footer .footer-brand{grid-column:1/-1}}
 @media(max-width:520px){.petko-footer{padding:46px 6% 22px}.petko-footer .footer-grid{grid-template-columns:1fr;gap:25px}.petko-footer .footer-brand{grid-column:auto}.petko-footer .footer-bottom{flex-direction:column;gap:8px;margin-top:28px}}
+
+/* Cabecera fija con grupos separados: marca, navegación y cuenta. */
+.navbar,.navbar.hide{
+    position:fixed!important;
+    top:0!important;
+    right:0!important;
+    left:0!important;
+    z-index:2000;
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr);
+    align-items:center;
+    gap:clamp(14px,2vw,34px);
+    width:100%;
+    height:auto!important;
+    min-height:80px!important;
+    padding:12px clamp(18px,4vw,70px)!important;
+    transform:none!important;
+    background:rgba(238,247,255,.84)!important;
+    border-bottom:1px solid rgba(47,128,237,.16)!important;
+    box-shadow:0 10px 32px rgba(27,75,132,.09);
+    -webkit-backdrop-filter:saturate(1.5) blur(22px);
+    backdrop-filter:saturate(1.5) blur(22px);
+}
+body.dark-mode .navbar,body.dark-mode .navbar.solid{
+    background:rgba(5,15,32,.88)!important;
+    border-bottom-color:rgba(124,196,255,.16)!important;
+    box-shadow:0 10px 32px rgba(0,0,0,.2);
+}
+.navbar .logo{position:relative;z-index:2;display:flex;align-items:center;justify-self:start;width:max-content;max-width:100%;min-width:0}
+.navbar .logo img{height:48px;width:auto;max-width:180px;object-fit:contain}
+.navbar .menu{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:clamp(8px,1.2vw,18px);
+    min-width:0;
+    width:100%;
+}
+.navbar .menu-links,.navbar .menu-actions{
+    min-height:52px;
+    padding:6px 10px;
+    border:1px solid rgba(47,128,237,.15);
+    border-radius:24px;
+    background:rgba(255,255,255,.64);
+    box-shadow:0 8px 24px rgba(35,91,157,.08),inset 0 1px 0 rgba(255,255,255,.7);
+    -webkit-backdrop-filter:blur(16px);
+    backdrop-filter:blur(16px);
+}
+body.dark-mode .navbar .menu-links,body.dark-mode .navbar .menu-actions{
+    background:rgba(12,29,55,.74);
+    border-color:rgba(124,196,255,.18);
+    box-shadow:0 8px 24px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.06);
+}
+.navbar .menu-links{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:clamp(3px,.45vw,10px);
+    overflow-x:auto;
+    scrollbar-width:none;
+}
+.navbar .menu-links::-webkit-scrollbar{display:none}
+.navbar .menu-links>a:not(.btn-login):not(.profile-link){
+    display:inline-flex;
+    flex:0 0 auto;
+    align-items:center;
+    gap:7px;
+    padding:10px clamp(5px,.65vw,12px);
+    border-radius:15px;
+    color:var(--ink);
+    font-size:clamp(11px,.82vw,15px);
+    font-weight:650;
+    transition:background .2s,color .2s;
+}
+.navbar .menu-links>a:not(.btn-login):not(.profile-link) i{color:#55baf4;font-size:13px}
+.navbar .menu-links>a:not(.btn-login):not(.profile-link):hover{
+    color:var(--acc);
+    background:rgba(47,128,237,.1);
+}
+.navbar .menu-actions{
+    display:flex;
+    flex:0 0 auto;
+    align-items:center;
+    justify-content:center;
+    gap:clamp(6px,.65vw,12px);
+    white-space:nowrap;
+}
+.navbar .menu-actions .profile-link,
+.navbar .menu-actions .dark-mode-btn,
+.navbar .menu-actions .language-btn,
+.navbar .menu-actions .logout-link{
+    flex:0 0 42px;
+    width:42px;
+    min-width:42px;
+    height:42px;
+}
+.navbar .menu-actions .profile-link{position:relative}
+.navbar .menu-actions .profile-link::after{
+    content:"";
+    position:absolute;
+    top:1px;
+    right:1px;
+    width:12px;
+    height:12px;
+    border:2px solid var(--card);
+    border-radius:50%;
+    background:#22c55e;
+}
+.navbar .menu-actions .dark-mode-btn,
+.navbar .menu-actions .language-btn{
+    border-color:rgba(47,128,237,.25);
+    color:var(--ink);
+}
+.navbar .menu-actions .dark-mode-btn:hover,
+.navbar .menu-actions .language-btn:hover{
+    background:var(--acc);
+    border-color:var(--acc);
+    color:#fff;
+}
+.navbar .menu-actions .logout-link{
+    display:grid;
+    place-items:center;
+    padding:0;
+    border:1px solid rgba(192,57,43,.32);
+    border-radius:50%;
+    background:rgba(192,57,43,.07);
+    color:#c0392b;
+}
+.navbar .menu-actions .logout-link:hover{background:#c0392b;border-color:#c0392b;color:#fff}
+body.dark-mode .navbar .menu-actions .logout-link{color:#ff9a8d;border-color:rgba(255,154,141,.35)}
+.navbar .menu-actions .btn-login{padding:10px 16px}
+.navbar .menu-actions .logout-form{display:flex;align-items:center;margin:0}
+.ps-sticky{padding-top:80px!important}
+.sec,.petko-footer{scroll-margin-top:80px}
+
+@media(max-width:1100px){
+    .navbar,.navbar.hide{
+        grid-template-columns:minmax(0,1fr) auto;
+        grid-template-rows:42px 44px;
+        min-height:104px!important;
+        padding:7px clamp(12px,4vw,36px)!important;
+        gap:0 12px;
+    }
+    .navbar .logo{grid-column:1;grid-row:1;z-index:3}
+    .navbar .logo img{height:40px;max-width:160px}
+    .navbar .menu{
+        grid-column:1/-1;
+        grid-row:1/3;
+        grid-template-columns:minmax(0,1fr) auto;
+        grid-template-rows:42px 44px;
+        gap:4px 10px;
+        pointer-events:none;
+    }
+    .navbar .menu-links{
+        grid-column:1/-1;
+        grid-row:2;
+        display:flex!important;
+        justify-content:space-between;
+        min-width:0;
+        width:100%;
+        min-height:40px;
+        padding:3px 6px;
+        pointer-events:auto;
+    }
+    .navbar .menu-links>a:not(.btn-login):not(.profile-link){
+        display:inline-flex!important;
+        gap:5px;
+        padding:7px clamp(4px,.8vw,10px);
+        font-size:clamp(10px,1.35vw,13px);
+    }
+    .navbar .menu-links>a:not(.btn-login):not(.profile-link) i{font-size:11px}
+    .navbar .menu-actions{
+        grid-column:2;
+        grid-row:1;
+        min-height:38px;
+        padding:3px 7px;
+        gap:5px;
+        pointer-events:auto;
+    }
+    .navbar .menu-actions .profile-link,
+    .navbar .menu-actions .dark-mode-btn,
+    .navbar .menu-actions .language-btn,
+    .navbar .menu-actions .logout-link{
+        flex-basis:34px;
+        width:34px;
+        min-width:34px;
+        height:34px;
+    }
+    .navbar .menu-actions .language-btn{padding:0;font-size:11px}
+    .navbar .menu-actions .dark-mode-btn{font-size:14px}
+    .navbar .menu-actions .btn-login{padding:7px 10px;font-size:12px}
+    .ps-sticky{padding-top:104px!important}
+    .sec,.petko-footer{scroll-margin-top:104px}
+}
+@media(max-width:520px){
+    .navbar,.navbar.hide{
+        grid-template-rows:40px 42px;
+        min-height:98px!important;
+        padding:6px 10px!important;
+    }
+    .navbar .logo img{height:36px;max-width:104px}
+    .navbar .menu{
+        grid-template-rows:40px 42px;
+        gap:4px 6px;
+    }
+    .navbar .menu-links{
+        justify-content:flex-start;
+        gap:2px;
+        padding:3px 4px;
+    }
+    .navbar .menu-links>a:not(.btn-login):not(.profile-link){
+        gap:4px;
+        padding:6px 7px;
+        font-size:10px;
+    }
+    .navbar .menu-actions{gap:4px;padding-inline:5px}
+    .navbar .menu-actions .profile-link,
+    .navbar .menu-actions .dark-mode-btn,
+    .navbar .menu-actions .language-btn,
+    .navbar .menu-actions .logout-link{
+        flex-basis:32px;
+        width:32px;
+        min-width:32px;
+        height:32px;
+    }
+    .navbar .menu-actions .btn-login{padding:6px 8px;font-size:11px}
+    .ps-sticky{padding-top:98px!important}
+    .sec,.petko-footer{scroll-margin-top:98px}
+}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
@@ -695,27 +962,30 @@ body:not(.dark-mode) .petko-footer .footer-bottom{border-color:rgba(30,90,200,.2
 
 <header class="navbar">
     <a class="logo" href="#inicio" aria-label="PETKO"><img src="../../../img/petko/logo_amarillo.png" alt="PETKO Veterinaria y Ganadería"></a>
-    <nav class="menu">
-        <a href="#inicio"><i class="fa-solid fa-house" aria-hidden="true"></i>Inicio</a>
-        <a href="#funciones"><i class="fa-solid fa-grip" aria-hidden="true"></i>Funciones</a>
-        <a href="#mascotas"><i class="fa-solid fa-paw" aria-hidden="true"></i>Mascotas</a>
-        <a href="#ventas"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>Ventas</a>
-        <a href="#inventario"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>Inventario</a>
-        <a href="#sucursales"><i class="fa-solid fa-location-dot" aria-hidden="true"></i>Sucursales</a>
-        <a href="#nosotros"><i class="fa-solid fa-heart" aria-hidden="true"></i>Nosotros</a>
-        <?php if ($logueado): ?>
-            <a href="<?= e($rutaDashboard) ?>" class="profile-link" title="Ir al dashboard de <?= e($nombre) ?>" aria-label="Ir al dashboard de <?= e($nombre) ?>"><i class="fa-solid fa-circle-user" aria-hidden="true"></i></a>
-            
-            <form method="post" action="<?= e(basename((string)($_SERVER['SCRIPT_NAME'] ?? 'home.php'))) ?>" class="logout-form">
-                <input type="hidden" name="accion" value="cerrar_sesion">
-                <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-                <button type="submit" class="logout-link" title="Cerrar sesión" aria-label="Cerrar sesión"><i class="fa-solid fa-door-open" aria-hidden="true"></i><span class="sr-only">Cerrar sesión</span></button>
-            </form>
-        <?php else: ?>
-            <a href="<?= e($rutaLogin) ?>" class="btn-login">Iniciar sesión</a>
-        <?php endif; ?>
-        <button id="darkModeBtn" class="dark-mode-btn" title="Cambiar modo" aria-label="Cambiar modo"><i id="darkModeIcon" class="fa-solid fa-moon" aria-hidden="true"></i></button>
-        <button id="languageToggle" class="language-btn" type="button" aria-label="Cambiar idioma">EN</button>
+    <nav class="menu" aria-label="Navegación principal">
+        <div class="menu-links">
+            <a href="#inicio"><i class="fa-solid fa-house" aria-hidden="true"></i>Inicio</a>
+            <a href="#funciones"><i class="fa-solid fa-grip" aria-hidden="true"></i>Funciones</a>
+            <a href="#mascotas"><i class="fa-solid fa-paw" aria-hidden="true"></i>Mascotas</a>
+            <a href="#ventas"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>Ventas</a>
+            <a href="#inventario"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>Inventario</a>
+            <a href="#sucursales"><i class="fa-solid fa-location-dot" aria-hidden="true"></i>Sucursales</a>
+            <a href="#nosotros"><i class="fa-solid fa-heart" aria-hidden="true"></i>Nosotros</a>
+        </div>
+        <div class="menu-actions" role="group" aria-label="Cuenta y configuración">
+            <?php if ($logueado): ?>
+                <a href="<?= e($rutaDashboard) ?>" class="profile-link" title="Ir al dashboard de <?= e($nombre) ?>" aria-label="Ir al dashboard de <?= e($nombre) ?>"><i class="fa-solid fa-circle-user" aria-hidden="true"></i></a>
+                <form method="post" action="<?= e(basename((string)($_SERVER['SCRIPT_NAME'] ?? 'home.php'))) ?>" class="logout-form">
+                    <input type="hidden" name="accion" value="cerrar_sesion">
+                    <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+                    <button type="submit" class="logout-link" title="Cerrar sesión" aria-label="Cerrar sesión"><i class="fa-solid fa-door-open" aria-hidden="true"></i><span class="sr-only">Cerrar sesión</span></button>
+                </form>
+            <?php else: ?>
+                <a href="<?= e($rutaLogin) ?>" class="btn-login">Iniciar sesión</a>
+            <?php endif; ?>
+            <button id="darkModeBtn" class="dark-mode-btn" title="Cambiar modo" aria-label="Cambiar modo"><i id="darkModeIcon" class="fa-solid fa-moon" aria-hidden="true"></i></button>
+            <button id="languageToggle" class="language-btn" type="button" aria-label="Cambiar idioma">EN</button>
+        </div>
     </nav>
 </header>
 
@@ -737,8 +1007,8 @@ body:not(.dark-mode) .petko-footer .footer-bottom{border-color:rgba(30,90,200,.2
                 <h1>Cuida a quienes <em>más quieres.</em></h1>
                 <p>Encuentra productos veterinarios y agropecuarios, elige tu sucursal y solicita una cita para tu mascota. Todo lo que necesitas, más cerca de ti.</p>
                 <div class="ps-btns">
-                    <a href="#productos" class="ps-b1">Explorar catálogo</a>
-                    <a href="#citas" class="ps-b2">Agendar una cita</a>
+                    <a href="<?= e($rutaCatalogo) ?>" class="ps-b1">Explorar catálogo</a>
+                    <a href="<?= e($rutaAgendarCita) ?>" class="ps-b2">Agendar una cita</a>
                 </div>
                 <div class="ps-chips">
                     <button data-go="1"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Punto de venta</button><button data-go="2"><i class="fa-solid fa-box" aria-hidden="true"></i> Inventario</button>

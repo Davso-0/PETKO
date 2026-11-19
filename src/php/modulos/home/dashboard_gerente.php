@@ -1,62 +1,48 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/../../componentes/versionMobil/core/Movil.php';
+
+/* =====================================================
+   DETECCIÓN AUTOMÁTICA DE VERSIÓN MÓVIL
+   Solo en peticiones GET directas (no AJAX ni action params)
+===================================================== */
+if (empty($GLOBALS['KION_MOBILE_RENDER']) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !isset($_GET['action'])) {
+    if (KionMovil::usarVersionMovil()) {
+        header('Accept-CH: Sec-CH-UA-Mobile');
+        header('Vary: Sec-CH-UA-Mobile, Cookie');
+        header('Location: ../../componentes/versionMobil/dashboard_gerente.php');
+        exit;
+    }
+}
 
 ob_start();
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../config/conexion_BD.php';
+require_once __DIR__ . '/../../config/auth_guard.php';
 
-header("Cache-Control: no-cache, no-store, must-revalidate");
-header("Pragma: no-cache");
-header("Expires: 0");
+// Control de Acceso Estricto por Rol (Exclusivamente Administrador y Gerente)
+$gerente = exigirAcceso($pdo, ['admin', 'gerente'], '../../../../inicioSesion.php', true);
 
-// Guardia de sesión: si no hay sesión activa, redirigir (o devolver JSON en AJAX)
-if (!isset($_SESSION['usuario'])) {
-    if (isset($_GET['action'])) {
-        ob_end_clean();
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['ok' => false, 'msg' => '[SESIÓN EXPIRADA] Tu sesión ha caducado. Vuelve a iniciar sesión.'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-    header('Location: ../../../../inicioSesion.php');
-    exit;
+if (isset($_GET['action'])) {
+    verificarCsrf();
 }
-
-if (file_exists(__DIR__ . '/../../config/conexion_BD.php')) {
-    require_once __DIR__ . '/../../config/conexion_BD.php';
-} elseif (file_exists(__DIR__ . '/../../config/conexion.php')) {
-    require_once __DIR__ . '/../../config/conexion.php';
-}
+require_once __DIR__ . '/../../componentes/mi_cuenta_api.php';
+require_once __DIR__ . '/../../componentes/apartados_consultas_api.php';
+require_once __DIR__ . '/../../componentes/product_image_upload.php';
 
 // --------------------------------------------------------------
-// Resolver el usuario/gerente en sesión y su sucursal asignada
+// Resolver el usuario/gerente en sesión y su sucursal asignada (Anti-IDOR)
 // --------------------------------------------------------------
-$id_usuario_actual = 0;
-if (is_array($_SESSION['usuario'] ?? null)) {
-    $id_usuario_actual = (int)($_SESSION['usuario']['id_usuario'] ?? $_SESSION['usuario']['id'] ?? 0);
-} else {
-    $id_usuario_actual = (int)($_SESSION['usuario'] ?? 0);
-}
+$id_usuario_actual = (int)$gerente['id_usuario'];
+$rolDB             = (string)($gerente['rol'] ?? '');
+$esGerente         = stripos($rolDB, 'gerente') !== false || stripos($rolDB, 'cajero') !== false;
+$esAdmin           = stripos($rolDB, 'admin') !== false;
 
-$gerente = null;
-if (isset($pdo) && $pdo instanceof PDO && $id_usuario_actual > 0) {
-    $stG = $pdo->prepare("SELECT u.id_usuario, u.nombre, u.apellido, u.id_sucursal, r.nombre AS rol
-                           FROM usuarios u LEFT JOIN roles r ON r.id_rol = u.id_rol
-                           WHERE u.id_usuario = ?");
-    $stG->execute([$id_usuario_actual]);
-    $gerente = $stG->fetch(PDO::FETCH_ASSOC) ?: null;
-}
+// Anti-IDOR: Para el Gerente la sucursal proviene ESTRICTAMENTE de su registro oficial en la BD
+$id_sucursal = (int)($gerente['id_sucursal'] ?? 0);
 
-// Determinar rol: Admin o Gerente
-$rolDB       = (string)($gerente['rol'] ?? $_SESSION['usuario']['rol'] ?? '');
-$esGerente   = stripos($rolDB, 'gerente') !== false;
-$esAdmin     = stripos($rolDB, 'admin') !== false;
-
-$id_sucursal = (int)($gerente['id_sucursal'] ?? $_SESSION['usuario']['id_sucursal'] ?? 0);
-
-// Si es Admin sin sucursal asignada, tomar la primera sucursal activa disponible
-if (($esAdmin || ($id_sucursal <= 0)) && isset($pdo) && $pdo instanceof PDO) {
+// Solo el Administrador general puede conmutar sucursal vía sesión o fallback
+if ($esAdmin && isset($pdo) && $pdo instanceof PDO) {
     $sucursalForzada = (int)($_SESSION['sucursal_gerente'] ?? 0);
     if ($sucursalForzada > 0) {
         $id_sucursal = $sucursalForzada;
@@ -66,33 +52,9 @@ if (($esAdmin || ($id_sucursal <= 0)) && isset($pdo) && $pdo instanceof PDO) {
     }
 }
 
-$nombreGerente = trim(($gerente['nombre'] ?? $_SESSION['usuario']['nombre'] ?? 'Usuario') . ' ' . ($gerente['apellido'] ?? $_SESSION['usuario']['apellido'] ?? ''));
+$nombreGerente = trim(($gerente['nombre'] ?? 'Gerente') . ' ' . ($gerente['apellido'] ?? ''));
 if ($nombreGerente === '') $nombreGerente = 'Gerente';
-
-// Helper para procesamiento seguro de imágenes de producto (subida física o URL)
-function procesarSubidaImagen(?array $file, string $urlTexto = ''): ?string {
-    if ($file && isset($file['error']) && $file['error'] === UPLOAD_ERR_OK && $file['size'] > 0) {
-        $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime = finfo_file($finfo, $file['tmp_name']);
-        finfo_close($finfo);
-        
-        if (isset($allowed[$mime])) {
-            $ext = $allowed[$mime];
-            $dirDestino = __DIR__ . '/../../../img/productos/';
-            if (!is_dir($dirDestino)) {
-                @mkdir($dirDestino, 0777, true);
-            }
-            $nombreArchivo = 'prod_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-            $destino = $dirDestino . $nombreArchivo;
-            if (move_uploaded_file($file['tmp_name'], $destino)) {
-                return '../../img/productos/' . $nombreArchivo;
-            }
-        }
-    }
-    $urlTexto = trim($urlTexto);
-    return $urlTexto !== '' ? $urlTexto : null;
-}
+$correoUsuario = $gerente['correo'] ?? '';
 
 // --------------------------------------------------------------
 // API (AJAX) — todas las acciones quedan restringidas a $id_sucursal
@@ -116,6 +78,22 @@ if (isset($_GET['action'])) {
             throw new RuntimeException('[ACCESO DENEGADO] No hay ninguna sucursal activa disponible. Crea una primero desde el panel de Administrador.');
         }
 
+        $miCuenta = petkoMiCuentaApi($pdo, $id_usuario_actual, (string)($rolDB ?? ''));
+        if ($miCuenta['handled'] ?? false) {
+            $out = $miCuenta['response'];
+            ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($out, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $acApi = petkoApartadosConsultasApi($pdo, $id_usuario_actual, (string)($rolDB ?? ''), $id_sucursal);
+        if ($acApi['handled'] ?? false) {
+            $out = $acApi['response'];
+            ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($out, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         if ($action === 'get_metrics') {
             $rv = $pdo->prepare("SELECT COUNT(*) n, COALESCE(SUM(total),0) t FROM ventas WHERE id_sucursal=? AND DATE(fecha_hora)=CURDATE()");
             $rv->execute([$id_sucursal]); $rv = $rv->fetch();
@@ -162,7 +140,7 @@ if (isset($_GET['action'])) {
             $stockMin = max(0, (int)($_POST['stock_minimo'] ?? 5));
             if ($codigo === '' || $nombre === '') throw new Exception('[ERROR DE USUARIO] El código y el nombre son obligatorios.');
 
-            $imagenUrl = procesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
+            $imagenUrl = petkoProcesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
 
             $pdo->beginTransaction();
             try {
@@ -188,8 +166,8 @@ if (isset($_GET['action'])) {
             $chk->execute([$id, $id_sucursal]);
             if (!$chk->fetchColumn()) throw new Exception('[ERROR DE USUARIO] Este producto no pertenece a tu sucursal.');
 
-            $imagenUrl = procesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
-            if ($imagenUrl === null && !isset($_POST['imagen_url'])) {
+            $imagenUrl = petkoProcesarSubidaImagen($_FILES['imagen_archivo'] ?? null, $_POST['imagen_url'] ?? '');
+            if ($imagenUrl === null) {
                 $stAct = $pdo->prepare("SELECT imagen_url FROM productos WHERE id_producto=?");
                 $stAct->execute([$id]);
                 $imagenUrl = $stAct->fetchColumn() ?: null;
@@ -380,9 +358,9 @@ if (isset($_GET['action'])) {
                     ->execute([$id_caja, $id_cajero, $id_sucursal, $dineroInicial]);
                 $idTurno = (int)$pdo->lastInsertId();
                 
-$stFI = $pdo->prepare("SELECT fecha_inicio FROM turnos_caja WHERE id_turno = ?");
-$stFI->execute([$idTurno]);
-$fInicio = $stFI->fetchColumn();
+                $stFI = $pdo->prepare("SELECT fecha_inicio FROM turnos_caja WHERE id_turno = ?");
+                $stFI->execute([$idTurno]);
+                $fInicio = $stFI->fetchColumn();
                 $out = ['ok' => true, 'msg' => 'Acceso concedido.', 'data' => [
                     'nombre_cajero' => $cajero['nombre'], 'nombre_caja' => $nombreCaja, 'id_caja' => $id_caja, 'id_cajero' => $id_cajero,
                     'id_turno' => $idTurno, 'dinero_inicial' => $dineroInicial, 'fecha_inicio' => $fInicio, 'horas_extra' => false, 'reanudado' => false
@@ -561,8 +539,17 @@ $fInicio = $stFI->fetchColumn();
             $carrito = json_decode($_POST['carrito'] ?? '[]', true);
             $idMetodo = (int)($_POST['id_metodo_pago'] ?? 0);
             $idTurno = (int)($_POST['id_turno'] ?? 0);
+            $montoRecibidoInput = $_POST['monto_recibido'] ?? null;
+
             if (!is_array($carrito) || count($carrito) === 0) throw new Exception('[ERROR DE USUARIO] El carrito está vacío.');
             if (!$idMetodo) throw new Exception('[ERROR DE USUARIO] Selecciona un método de pago.');
+
+            $stMp = $pdo->prepare('SELECT nombre FROM metodos_pago WHERE id_metodo_pago = ?');
+            $stMp->execute([$idMetodo]);
+            $nombreMetodo = (string)$stMp->fetchColumn();
+            if ($nombreMetodo === '') throw new Exception('[ERROR DE USUARIO] Método de pago no válido.');
+            $esEfectivo = stripos($nombreMetodo, 'efectivo') !== false;
+
             if ($idTurno) {
                 $chkT = $pdo->prepare("SELECT COUNT(*) FROM turnos_caja WHERE id_turno=? AND id_sucursal=? AND estado='ABIERTO'");
                 $chkT->execute([$idTurno, $id_sucursal]);
@@ -571,49 +558,109 @@ $fInicio = $stFI->fetchColumn();
 
             $pdo->beginTransaction();
             try {
-                $total = 0; $lineas = [];
-                $stStock = $pdo->prepare("SELECT i.existencias, p.precio, p.nombre FROM inventarios i JOIN productos p ON p.id_producto=i.id_producto WHERE i.id_producto=? AND i.id_sucursal=?");
+                $subtotalCentavos = 0;
+                $lineas = [];
+                $stStock = $pdo->prepare("SELECT i.existencias, p.precio, p.nombre, p.codigo FROM inventarios i JOIN productos p ON p.id_producto=i.id_producto WHERE i.id_producto=? AND i.id_sucursal=? FOR UPDATE");
                 foreach ($carrito as $item) {
-                    $idP = (int)($item['id_producto'] ?? 0); $cant = (int)($item['cantidad'] ?? 0);
+                    $idP = (int)($item['id_producto'] ?? 0);
+                    $cant = (int)($item['cantidad'] ?? 0);
                     if ($cant <= 0 || !$idP) continue;
                     $stStock->execute([$idP, $id_sucursal]);
-                    $row = $stStock->fetch();
+                    $row = $stStock->fetch(PDO::FETCH_ASSOC);
                     if (!$row) throw new Exception('[ERROR DE USUARIO] Un producto del carrito ya no está disponible.');
                     if ((int)$row['existencias'] < $cant) throw new Exception('[ERROR DE USUARIO] Stock insuficiente para "' . $row['nombre'] . '". Disponible: ' . $row['existencias']);
-                    $subtotal = (float)$row['precio'] * $cant;
-                    $total += $subtotal;
-                    $lineas[] = ['id_producto' => $idP, 'cantidad' => $cant, 'precio_unitario' => $row['precio'], 'subtotal' => $subtotal];
+
+                    $precioCentavos = (int)round((float)$row['precio'] * 100);
+                    $subLineaCentavos = $precioCentavos * $cant;
+                    $subtotalCentavos += $subLineaCentavos;
+
+                    $lineas[] = [
+                        'id_producto' => $idP,
+                        'codigo' => $row['codigo'],
+                        'nombre' => $row['nombre'],
+                        'cantidad' => $cant,
+                        'precio_unitario' => $precioCentavos / 100,
+                        'subtotal' => $subLineaCentavos / 100,
+                    ];
                 }
                 if (empty($lineas)) throw new Exception('[ERROR DE USUARIO] No hay productos válidos en el carrito.');
 
-                $pdo->prepare("INSERT INTO ventas(fecha_hora,total,estado,id_sucursal,id_metodo_pago,id_usuario,id_turno) VALUES(NOW(),?,'COMPLETADA',?,?,?,?)")
-                    ->execute([$total, $id_sucursal, $idMetodo, $id_usuario_actual, $idTurno ?: null]);
-                $idVenta = (int)$pdo->lastInsertId();
+                $ivaCentavos = (int)round($subtotalCentavos * 0.16);
+                $totalCentavos = $subtotalCentavos + $ivaCentavos;
+                $total = $totalCentavos / 100;
 
+                $montoRecibido = null;
+                $cambioEntregado = null;
+                if ($esEfectivo) {
+                    if ($montoRecibidoInput === null || $montoRecibidoInput === '' || !is_numeric($montoRecibidoInput)) throw new Exception('[ERROR DE USUARIO] Debes ingresar la cantidad recibida en efectivo.');
+                    $recibidoCentavos = (int)round((float)$montoRecibidoInput * 100);
+                    if ($recibidoCentavos < $totalCentavos) throw new Exception('[ERROR DE USUARIO] El importe recibido es insuficiente para cubrir el total.');
+                    $montoRecibido = $recibidoCentavos / 100;
+                    $cambioEntregado = ($recibidoCentavos - $totalCentavos) / 100;
+                }
+
+                $colsVentas = array_column($pdo->query('SHOW COLUMNS FROM ventas')->fetchAll(PDO::FETCH_ASSOC), 'Field');
+                if (in_array('monto_recibido', $colsVentas, true) && in_array('cambio_entregado', $colsVentas, true)) {
+                    $pdo->prepare("INSERT INTO ventas(fecha_hora,total,monto_recibido,cambio_entregado,estado,id_sucursal,id_metodo_pago,id_usuario,id_turno) VALUES(NOW(),?,?,?,'COMPLETADA',?,?,?,?)")
+                        ->execute([$total, $montoRecibido, $cambioEntregado, $id_sucursal, $idMetodo, $id_usuario_actual, $idTurno ?: null]);
+                } else {
+                    $pdo->prepare("INSERT INTO ventas(fecha_hora,total,estado,id_sucursal,id_metodo_pago,id_usuario,id_turno) VALUES(NOW(),?,'COMPLETADA',?,?,?,?)")
+                        ->execute([$total, $id_sucursal, $idMetodo, $id_usuario_actual, $idTurno ?: null]);
+                }
+
+                $idVenta = (int)$pdo->lastInsertId();
                 $stDet = $pdo->prepare("INSERT INTO detalle_ventas(id_venta,id_producto,cantidad,precio_unitario,subtotal) VALUES(?,?,?,?,?)");
                 $stUpd = $pdo->prepare("UPDATE inventarios SET existencias=existencias-? WHERE id_producto=? AND id_sucursal=?");
                 foreach ($lineas as $l) {
                     $stDet->execute([$idVenta, $l['id_producto'], $l['cantidad'], $l['precio_unitario'], $l['subtotal']]);
                     $stUpd->execute([$l['cantidad'], $l['id_producto'], $id_sucursal]);
                 }
+
+                $stSucInfo = $pdo->prepare('SELECT nombre, direccion, telefono, contacto FROM sucursales WHERE id_sucursal = ?');
+                $stSucInfo->execute([$id_sucursal]);
+                $sucInfo = $stSucInfo->fetch(PDO::FETCH_ASSOC) ?: [];
+
+                $cajeroNombre = $nombreGerente;
+                if ($idTurno) {
+                    $stCajN = $pdo->prepare("SELECT cj.nombre FROM turnos_caja tc JOIN cajeros cj ON cj.id_cajero = tc.id_cajero WHERE tc.id_turno = ?");
+                    $stCajN->execute([$idTurno]);
+                    $cajRes = $stCajN->fetchColumn();
+                    if ($cajRes) $cajeroNombre = $cajRes;
+                }
+
                 $pdo->commit();
 
                 $dineroEsperado = null;
                 if ($idTurno) {
-                    $stT = $pdo->prepare("SELECT dinero_inicial FROM turnos_caja WHERE id_turno=?");
+                    $stT = $pdo->prepare('SELECT dinero_inicial FROM turnos_caja WHERE id_turno=?');
                     $stT->execute([$idTurno]);
                     $dInicial = (float)$stT->fetchColumn();
                     $stVE = $pdo->prepare("SELECT COALESCE(SUM(v.total),0) FROM ventas v JOIN metodos_pago mp ON mp.id_metodo_pago=v.id_metodo_pago WHERE v.id_turno=? AND mp.nombre LIKE '%efectivo%'");
                     $stVE->execute([$idTurno]);
                     $totalEfectivo = (float)$stVE->fetchColumn();
-                    $stR = $pdo->prepare("SELECT COALESCE(SUM(monto),0) FROM retiros_caja WHERE id_turno=?");
+                    $stR = $pdo->prepare('SELECT COALESCE(SUM(monto),0) FROM retiros_caja WHERE id_turno=?');
                     $stR->execute([$idTurno]);
                     $totalRetiros = (float)$stR->fetchColumn();
                     $dineroEsperado = $dInicial + $totalEfectivo - $totalRetiros;
                 }
 
-                $out = ['ok' => true, 'msg' => 'Venta registrada correctamente.', 'data' => ['id_venta' => $idVenta, 'total' => $total, 'dinero_esperado' => $dineroEsperado]];
-            } catch (Exception $e) { $pdo->rollBack(); throw $e; }
+                $out = ['ok' => true, 'msg' => 'Venta registrada correctamente.', 'data' => [
+                    'id_venta' => $idVenta,
+                    'folio' => 'VTA-' . str_pad((string)$idVenta, 6, '0', STR_PAD_LEFT),
+                    'fecha_hora' => date('Y-m-d H:i:s'),
+                    'sucursal' => $sucInfo,
+                    'cajero' => $cajeroNombre,
+                    'metodo_pago' => $nombreMetodo,
+                    'es_efectivo' => $esEfectivo,
+                    'subtotal' => $subtotalCentavos / 100,
+                    'iva' => $ivaCentavos / 100,
+                    'total' => $total,
+                    'monto_recibido' => $montoRecibido,
+                    'cambio_entregado' => $cambioEntregado,
+                    'items' => $lineas,
+                    'dinero_esperado' => $dineroEsperado,
+                ]];
+            } catch (Exception $e) { if ($pdo->inTransaction()) { $pdo->rollBack(); } throw $e; }
         }
     } catch (Throwable $e) {
         $out = ['ok' => false, 'msg' => $e->getMessage()];
@@ -629,7 +676,7 @@ $fInicio = $stFI->fetchColumn();
 // --------------------------------------------------------------
 if ($id_sucursal <= 0) {
     ob_end_clean();
-    echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>KION · Sin Sucursal</title><style>
+    echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PETKO · Sin Sucursal</title><style>
     body { font-family: "Segoe UI", system-ui, sans-serif; background: #fffaf6; color: #38281f; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 16px; box-sizing: border-box; }
     .card { background: #fff; padding: clamp(24px, 5vw, 40px); border-radius: 18px; border: 1px solid #eeddd1; text-align: center; max-width: 440px; width: 100%; box-shadow: 0 10px 30px rgba(80,50,30,0.08); box-sizing: border-box; }
     h2 { font-size: clamp(20px, 4vw, 22px); color: #1a6fd8; margin-bottom: 12px; }
@@ -661,6 +708,7 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
     <title>PETKO · Panel de Gerente</title>
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -1414,6 +1462,7 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
             align-items: center;
             gap: 6px;
             white-space: nowrap;
+            text-decoration: none;
         }
         .chip-btn:hover, .chip-btn.active { 
             background: var(--accent); 
@@ -1815,214 +1864,106 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
         /* ==========================================================
            12. MEDIA QUERIES ADAPTATIVAS (LAPTOPS, TABLETS, MÓVILES)
            ========================================================== */
-        
-        /* LAPTOPS PEQUEÑAS / DESKTOPS COMPACTAS (hasta 1240px) */
         @media (max-width: 1240px) {
-            :root {
-                --sidebar-w: 236px;
-            }
-            .grid-2col { 
-                grid-template-columns: 1fr; 
-                gap: 20px;
-            }
-            .pos-layout {
-                grid-template-columns: 1.5fr 1fr;
-            }
+            :root { --sidebar-w: 236px; }
+            .grid-2col { grid-template-columns: 1fr; gap: 20px; }
+            .pos-layout { grid-template-columns: 1.5fr 1fr; }
         }
 
-        /* TABLETS HORIZONTALES / LAPTOPS SUB-1050px (hasta 1024px) */
         @media (max-width: 1024px) {
-            .app-layout { 
-                grid-template-columns: 1fr; 
-            }
+            .app-layout { grid-template-columns: 1fr; }
             .sidebar { 
-                position: fixed; 
-                left: 0; 
-                top: 0; 
-                width: min(84vw, 290px); 
-                height: 100vh; 
-                transform: translateX(-100%); 
-                box-shadow: 0 10px 40px rgba(7, 26, 50, 0.45); 
-                border-right: none; 
+                position: fixed; left: 0; top: 0; width: min(84vw, 290px); height: 100vh; 
+                transform: translateX(-100%); box-shadow: 0 10px 40px rgba(7, 26, 50, 0.45); border-right: none; 
             }
-            .app-layout.mobile-open .sidebar { 
-                transform: translateX(0); 
-            }
-            .app-layout.mobile-open .sidebar-scrim { 
-                display: block; 
-                opacity: 1; 
-                pointer-events: auto; 
-            }
+            .app-layout.mobile-open .sidebar { transform: translateX(0); }
+            .app-layout.mobile-open .sidebar-scrim { display: block; opacity: 1; pointer-events: auto; }
             .sidebar-collapse-btn { display: none; }
             .hamburger-btn { display: inline-flex; }
-
-            .pos-layout {
-                grid-template-columns: 1fr;
-            }
-            .pos-summary {
-                position: static;
-            }
+            .pos-layout { grid-template-columns: 1fr; }
+            .pos-summary { position: static; }
         }
 
-        /* TABLETS VERTICALES (hasta 768px) */
         @media (max-width: 768px) {
-            .topbar {
-                height: 66px;
-            }
-            .user-profile span:not(.admin-chip) {
-                display: none;
-            }
-            .user-profile {
-                padding-left: 8px;
-                gap: 6px;
-            }
-
-            .kpi-grid { 
-                grid-template-columns: repeat(2, 1fr); 
-                gap: 12px;
-            }
-            .kpi-card {
-                padding: 16px 14px;
-            }
-            .kpi-card i.kpi-icon {
-                font-size: 20px;
-                padding: 10px;
-            }
-
-            .form-inline {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .search-input, .select-input {
-                min-width: 100%;
-                width: 100%;
-                flex: 1 1 100%;
-            }
-
+            .topbar { height: 66px; }
+            .user-profile span:not(.admin-chip) { display: none; }
+            .user-profile { padding-left: 8px; gap: 6px; }
+            .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .kpi-card { padding: 16px 14px; }
+            .kpi-card i.kpi-icon { font-size: 20px; padding: 10px; }
+            .form-inline { flex-direction: column; align-items: stretch; }
+            .search-input, .select-input { min-width: 100%; width: 100%; flex: 1 1 100%; }
             .swal2-popup .swal2-html-container div[style*="display:flex"],
             .swal2-popup .swal2-html-container div[style*="display: flex"] {
-                flex-direction: column !important;
-                gap: 8px !important;
+                flex-direction: column !important; gap: 8px !important;
             }
         }
 
-        /* SMARTPHONES Y PANTALLAS PEQUEÑAS (hasta 580px) */
         @media (max-width: 580px) {
-            .topbar {
-                height: 62px;
-                padding: 0 12px;
-            }
-            .topbar-title-block .eyebrow {
-                display: none;
-            }
-            .topbar-title-block .title-main {
-                max-width: 140px;
-                font-size: 15px;
-            }
-            .admin-chip {
-                display: none;
-            }
-            .icon-btn {
-                width: 36px;
-                height: 36px;
-                font-size: 17px;
-            }
-
-            .header-row {
-                flex-direction: column;
-                align-items: stretch !important;
-                gap: 12px;
-            }
-            .header-row > div:first-child {
-                width: 100%;
-            }
-            .header-row .btn-primary, 
-            .header-row .btn-danger {
-                width: 100%;
-            }
-
-            .pos-scanner {
-                padding: 12px;
-            }
-            .pos-scanner > div {
-                flex-wrap: wrap;
-                gap: 10px !important;
-            }
-            .pos-scanner > div > i {
-                display: none;
-            }
-            .pos-scanner > div > div {
-                min-width: 0;
-                flex: 1 1 100% !important;
-            }
-            #btnStartCameraScan {
-                width: 100%;
-                justify-content: center;
-                padding: 10px 14px !important;
-            }
-
-            .pos-cart table th, 
-            .pos-cart table td {
-                padding: 9px 6px !important;
-                font-size: 12.5px !important;
-            }
-            .pos-cart table th:first-child, 
-            .pos-cart table td:first-child {
-                padding-left: 10px !important;
-            }
-            .pos-cart table th:last-child, 
-            .pos-cart table td:last-child {
-                padding-right: 10px !important;
-            }
-            .qty-ctrl {
-                padding: 2px;
-                gap: 2px;
-            }
-            .qty-btn {
-                width: 22px;
-                height: 22px;
-                font-size: 13px;
-            }
-            .qty-input {
-                width: 26px;
-                font-size: 12.5px;
-            }
+            .topbar { height: 62px; padding: 0 12px; }
+            .topbar-title-block .eyebrow { display: none; }
+            .topbar-title-block .title-main { max-width: 140px; font-size: 15px; }
+            .admin-chip { display: none; }
+            .icon-btn { width: 36px; height: 36px; font-size: 17px; }
+            .header-row { flex-direction: column; align-items: stretch !important; gap: 12px; }
+            .header-row > div:first-child { width: 100%; }
+            .header-row .btn-primary, .header-row .btn-danger { width: 100%; }
+            .pos-scanner { padding: 12px; }
+            .pos-scanner > div { flex-wrap: wrap; gap: 10px !important; }
+            .pos-scanner > div > i { display: none; }
+            .pos-scanner > div > div { min-width: 0; flex: 1 1 100% !important; }
+            #btnStartCameraScan { width: 100%; justify-content: center; padding: 10px 14px !important; }
+            .pos-cart table th, .pos-cart table td { padding: 9px 6px !important; font-size: 12.5px !important; }
+            .pos-cart table th:first-child, .pos-cart table td:first-child { padding-left: 10px !important; }
+            .pos-cart table th:last-child, .pos-cart table td:last-child { padding-right: 10px !important; }
+            .qty-ctrl { padding: 2px; gap: 2px; }
+            .qty-btn { width: 22px; height: 22px; font-size: 13px; }
+            .qty-input { width: 26px; font-size: 12.5px; }
         }
 
-        /* SMARTPHONES COMPACTOS (hasta 420px) */
         @media (max-width: 420px) {
-            .content {
-                padding: 14px 10px;
-            }
-            .kpi-grid {
-                grid-template-columns: 1fr;
-            }
-            .prod-grid {
-                grid-template-columns: 1fr;
-            }
-            .panel {
-                padding: 14px 12px;
-                border-radius: 16px;
-            }
-            .kpi-card {
-                border-radius: 16px;
-            }
-            .pos-summary {
-                padding: 18px 14px;
-                border-radius: 16px;
-            }
-            .summary-total {
-                font-size: 28px;
-            }
+            .content { padding: 14px 10px; }
+            .kpi-grid { grid-template-columns: 1fr; }
+            .prod-grid { grid-template-columns: 1fr; }
+            .panel { padding: 14px 12px; border-radius: 16px; }
+            .kpi-card { border-radius: 16px; }
+            .pos-summary { padding: 18px 14px; border-radius: 16px; }
+            .summary-total { font-size: 28px; }
         }
 
         @media (prefers-reduced-motion: reduce) {
-            * {
-                animation-duration: 0.01ms !important;
-                transition-duration: 0.01ms !important;
-            }
+            * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
         }
-    </style>
+        .sidebar,
+        .nav-menu,
+        .app-layout.is-collapsed .nav-btn { overflow: visible !important; }
+        .nav-btn { position: relative !important; }
+        .app-layout.is-collapsed .nav-btn::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: calc(100% + 14px);
+            top: 50%;
+            transform: translateY(-50%) translateX(-6px);
+            background: var(--ink);
+            color: var(--bg-surface);
+            font-size: 12.5px;
+            font-weight: 700;
+            padding: 7px 13px;
+            border-radius: 10px;
+            white-space: nowrap;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity .18s ease, transform .18s ease;
+            z-index: 9999;
+        }
+        .app-layout.is-collapsed .nav-btn:hover::after {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(-50%) translateX(0);
+        }
+    </style>    
     <link rel="stylesheet" href="../../../css/petko-ui.css?v=<?= (int) @filemtime(__DIR__ . '/../../../css/petko-ui.css') ?>">
 </head>
 <body>
@@ -2035,10 +1976,17 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
         <nav class="nav-menu">
             <div class="nav-section-title" data-i18n="nav_section_panel">Panel</div>
             <button class="nav-btn active" data-target="view-dash"><i class="ph ph-squares-four"></i><span class="nav-label" data-i18n="nav_dash">Panel Principal</span></button>
+            <div class="nav-section-title" data-i18n="nav_section_cuenta">Mi Cuenta</div>
+            <button class="nav-btn" data-target="view-mi-cuenta"><i class="ph ph-user-circle"></i><span class="nav-label" data-i18n="nav_mis_apartados">Mis Apartados</span></button>
+            <button class="nav-btn" data-target="view-mi-cuenta-config"><i class="ph ph-gear"></i><span class="nav-label" data-i18n="nav_configuracion">Configuración</span></button>
             <div class="nav-section-title" data-i18n="nav_section_gestion">Gestión</div>
             <button class="nav-btn" data-target="view-inventario"><i class="ph ph-package"></i><span class="nav-label" data-i18n="nav_inventario">Inventario</span></button>
             <button class="nav-btn" data-target="view-cajas"><i class="ph ph-desktop"></i><span class="nav-label" data-i18n="nav_cajas">Cajas</span></button>
             <button class="nav-btn" data-target="view-ventas"><i class="ph ph-chart-line-up"></i><span class="nav-label" data-i18n="nav_ventas">Ventas</span></button>
+            <button class="nav-btn" data-target="view-apartados-consultas">
+                <i class="ph ph-clipboard-text"></i>
+                <span class="nav-label" data-i18n="nav_apartados_consultas">Apartados y Consultas</span>
+            </button>
             <button class="nav-btn" data-target="view-cortes"><i class="ph ph-calculator"></i><span class="nav-label" data-i18n="nav_cortes">Cortes de Caja</span></button>
             <div class="nav-section-title" data-i18n="nav_section_caja">Caja</div>
             <button class="nav-btn" id="btnIrPOS"><i class="ph ph-monitor"></i><span class="nav-label" data-i18n="nav_pos">Punto de Venta</span></button>
@@ -2060,8 +2008,8 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
                 </div>
             </div>
             <div class="topbar-actions">
-                <button class="icon-btn" id="btnLang" data-petko-lang type="button">EN</button>
                 <button class="icon-btn" id="btnTheme" data-petko-theme type="button">🌙</button>
+                <button class="icon-btn" id="btnLang" data-petko-lang type="button">EN</button>
                 <div class="user-profile">
                     <i class="ph-fill ph-user-circle" style="font-size:24px; color:var(--accent)"></i>
                     <span><?= htmlspecialchars($nombreGerente) ?></span>
@@ -2073,26 +2021,29 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
         <div class="content">
 
             <!-- PANEL PRINCIPAL -->
-<section id="view-dash" class="view-section active">
-    <div class="header-row"><div><h1 class="title" data-i18n="dash_title">Resumen de Operaciones <span class="wave">👋</span></h1><p class="subtitle" data-i18n="dash_sub">Métricas en tiempo real de tu sucursal.</p></div></div>
-    
-    <div class="panel" style="margin-bottom: 24px;">
-        <div class="panel-head"><div><h2 class="panel-title" data-i18n="misuc_title">Mi Sucursal</h2><p class="panel-sub" data-i18n="misuc_sub">Información general de tu punto de venta.</p></div></div>
-        <div class="info-grid" id="infoSucursal" data-i18n="cargando">Cargando...</div>
-    </div>
+            <section id="view-dash" class="view-section active">
+                <div class="header-row"><div><h1 class="title" data-i18n="dash_title">Resumen de Operaciones <span class="wave">👋</span></h1><p class="subtitle" data-i18n="dash_sub">Métricas en tiempo real de tu sucursal.</p></div></div>
+                
+                <div class="panel" style="margin-bottom: 24px;">
+                    <div class="panel-head"><div><h2 class="panel-title" data-i18n="misuc_title">Mi Sucursal</h2><p class="panel-sub" data-i18n="misuc_sub">Información general de tu punto de venta.</p></div></div>
+                    <div class="info-grid" id="infoSucursal" data-i18n="cargando">Cargando...</div>
+                </div>
 
-    <div class="kpi-grid">
-        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-money kpi-icon"></i></div><div class="kpi-val" id="kpiIngresos">$0.00</div><div class="kpi-label" data-i18n="kpi_ingresos">Ingresos Hoy</div></div>
-        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-warning-circle kpi-icon" style="color:var(--danger); background:var(--danger-bg);"></i></div><div class="kpi-val" id="kpiBajo" style="color:var(--danger)">0</div><div class="kpi-label" data-i18n="kpi_bajo">Stock Bajo</div></div>
-        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-desktop kpi-icon"></i></div><div class="kpi-val" id="kpiCajas">0</div><div class="kpi-label" data-i18n="kpi_cajas">Cajas Activas</div></div>
-        <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-package kpi-icon"></i></div><div class="kpi-val" id="kpiProductos">0</div><div class="kpi-label" data-i18n="kpi_productos">Productos Asignados</div></div>
-    </div>
+                <div class="kpi-grid">
+                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-money kpi-icon"></i></div><div class="kpi-val" id="kpiIngresos">$0.00</div><div class="kpi-label" data-i18n="kpi_ingresos">Ingresos Hoy</div></div>
+                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-warning-circle kpi-icon" style="color:var(--danger); background:var(--danger-bg);"></i></div><div class="kpi-val" id="kpiBajo" style="color:var(--danger)">0</div><div class="kpi-label" data-i18n="kpi_bajo">Stock Bajo</div></div>
+                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-desktop kpi-icon"></i></div><div class="kpi-val" id="kpiCajas">0</div><div class="kpi-label" data-i18n="kpi_cajas">Cajas Activas</div></div>
+                    <div class="kpi-card"><div class="kpi-top"><i class="ph-fill ph-package kpi-icon"></i></div><div class="kpi-val" id="kpiProductos">0</div><div class="kpi-label" data-i18n="kpi_productos">Productos Asignados</div></div>
+                </div>
 
-    <div class="grid-2col">
-        <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="chart_ventas">Ventas (7 días)</h2></div></div><div class="chart-box"><canvas id="salesChart"></canvas></div></div>
-        <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="alertas_title">Alertas de Inventario Bajo</h2></div></div><table style="margin-top:16px;" id="tblAlertas"><tr><th data-i18n="th_producto">Producto</th><th data-i18n="th_existencia">Existencia</th><th data-i18n="th_estado">Estado</th></tr></table></div>
-    </div>
-</section>
+                <div class="grid-2col">
+                    <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="chart_ventas">Ventas (7 días)</h2></div></div><div class="chart-box"><canvas id="salesChart"></canvas></div></div>
+                    <div class="panel"><div class="panel-head"><div><h2 class="panel-title" data-i18n="alertas_title">Alertas de Inventario Bajo</h2></div></div><table style="margin-top:16px;" id="tblAlertas"><tr><th data-i18n="th_producto">Producto</th><th data-i18n="th_existencia">Existencia</th><th data-i18n="th_estado">Estado</th></tr></table></div>
+                </div>
+            </section>
+
+            <?php require_once __DIR__ . '/../../componentes/mi_cuenta_vistas.php'; ?>
+            <?php require_once __DIR__ . '/../../componentes/gestion_apartados_consultas_vista.php'; ?>
 
             <!-- INVENTARIO -->
             <section id="view-inventario" class="view-section">
@@ -2186,54 +2137,225 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
             </section>
 
             <!-- PUNTO DE VENTA (ESTRUCTURA CORREGIDA DE 2 COLUMNAS) -->
-<section id="view-pos" class="view-section">
-    <div class="header-row" style="margin-bottom: 12px;">
-        <div><h1 class="title"><span data-i18n="pos_caja_label">Caja</span> <span id="lblCajaActual" style="color:var(--accent);">-</span></h1><p class="subtitle" style="margin-top:4px;"><span data-i18n="pos_cajero_label">Cajero:</span> <b id="lblCajeroActual" style="color:var(--ink);">—</b> <span style="margin:0 8px;">·</span> <span id="lblTurnoTiempo" style="color:var(--ink-soft); font-weight:600;"></span></p></div>
-        <button class="btn-danger" id="btnCerrarCaja"><i class="ph ph-sign-out"></i> <span data-i18n="btn_cerrar_turno">Cerrar Turno</span></button>
-    </div>
-    
-    <div class="pos-layout">
-        <!-- COLUMNA IZQUIERDA (Escáner + Carrito dentro del mismo contenedor) -->
-        <div>
-            <div class="pos-scanner" style="position:relative;">
-                <div style="display:flex; gap:16px; width:100%;">
-                    <i class="ph ph-barcode" style="font-size:32px; color:var(--accent); align-self:center;"></i>
-                    <div style="flex:1; position:relative;">
-                        <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
-                        <div id="posSearchResults" class="pos-search-dropdown"></div>
+            <section id="view-pos" class="view-section">
+                <div class="header-row" style="margin-bottom: 12px;">
+                    <div>
+                        <h1 class="title"><span data-i18n="pos_caja_label">Caja</span> <span id="lblCajaActual" style="color:var(--accent);">-</span></h1>
+                        <p class="subtitle" style="margin-top:4px;">
+                            <span data-i18n="pos_cajero_label">Cajero:</span> <b id="lblCajeroActual" style="color:var(--ink);">—</b>
+                            <span style="margin:0 8px;">·</span>
+                            <span id="lblTurnoTiempo" style="color:var(--ink-soft); font-weight:600;"></span>
+                        </p>
                     </div>
-                    <button type="button" class="chip-btn" id="btnStartCameraScan" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
-    <i class="ph ph-barcode" style="font-size:20px;"></i>
-    <span style="font-weight:700;">Escanear</span>
-</button>
+                    <button class="btn-danger" id="btnCerrarCaja"><i class="ph ph-sign-out"></i> <span data-i18n="btn_cerrar_turno">Cerrar Turno</span></button>
                 </div>
-            </div>
+                
+                <div class="pos-layout">
+                    <!-- COLUMNA IZQUIERDA (Escáner + Carrito dentro del mismo contenedor) -->
+                    <div>
+                        <div class="pos-scanner" style="position:relative;">
+                            <div style="display:flex; gap:16px; width:100%;">
+                                <i class="ph ph-barcode" style="font-size:32px; color:var(--accent); align-self:center;"></i>
+                                <div style="flex:1; position:relative;">
+                                    <input type="text" id="posBarcode" style="width:100%;" data-i18n-placeholder="pos_scan_placeholder" placeholder="Escanea, o escribe nombre/código..." autocomplete="off">
+                                    <div id="posSearchResults" class="pos-search-dropdown"></div>
+                                </div>
+                                <button type="button" class="chip-btn" id="btnStartCameraScan" data-i18n-title="pos_scan_cam_title" title="Escanear con cámara" style="align-self:center; display:flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border:none; padding:12px 18px;">
+                                    <i class="ph ph-barcode" style="font-size:20px;"></i>
+                                    <span style="font-weight:700;" data-i18n="pos_btn_scan">Escanear</span>
+                                </button>
+                            </div>
+                        </div>
 
-            <div class="pos-cart panel" style="padding:0;">
-                <table style="width:100%; margin:0;">
-                    <thead><tr><th style="padding:16px 24px;" data-i18n="th_producto">Producto</th><th style="text-align:center;" data-i18n="th_cant">Cant.</th><th style="text-align:right;" data-i18n="th_precio">Precio</th><th style="text-align:right; padding-right:24px;" data-i18n="th_subtotal">Subtotal</th></tr></thead>
-                    <tbody id="cartBody"><tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--ink-faint); font-weight:600;" data-i18n="carrito_vacio">El carrito está vacío. Escanea un producto.</td></tr></tbody>
-                </table>
-            </div>
-        </div>
+                        <div class="pos-cart panel" style="padding:0;">
+                            <table style="width:100%; margin:0;">
+                                <thead>
+                                    <tr>
+                                        <th style="padding:16px 24px;" data-i18n="th_producto">Producto</th>
+                                        <th style="text-align:center;" data-i18n="th_cant">Cant.</th>
+                                        <th style="text-align:right;" data-i18n="th_precio">Precio</th>
+                                        <th style="text-align:right; padding-right:24px;" data-i18n="th_subtotal">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cartBody">
+                                    <tr>
+                                        <td colspan="4" style="text-align:center; padding: 40px; color:var(--ink-faint); font-weight:600;" data-i18n="carrito_vacio">El carrito está vacío. Escanea un producto.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
 
-        <!-- COLUMNA DERECHA (Resumen de venta) -->
-        <div class="pos-summary">
-            <h2 data-i18n="resumen_venta" style="font-family:var(--font-display); font-size:24px;">Resumen de Venta</h2>
-            <select class="pay-select" id="posMetodo"><option value="" data-i18n="cargando_metodos">Cargando métodos de pago...</option></select>
-            <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="fondo_inicial_label">Fondo inicial:</span><span id="posFondoInicial">$0.00</span></div>
-            <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="efectivo_esperado_label">Efectivo esperado:</span><span id="posEfectivoEsperado">$0.00</span></div>
-            <button class="chip-btn" id="btnRetiroManual" style="align-self:flex-start; background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.3); color:#fff;" type="button"><span data-i18n="btn_registrar_retiro">+ Registrar retiro</span></button>
-            <div style="flex:1;"></div>
-            <div class="summary-row"><span data-i18n="subtotal_label">Subtotal:</span><span id="posSubtotal">$0.00</span></div>
-            <div class="summary-row"><span data-i18n="iva_label">IVA (16%):</span><span id="posIva">$0.00</span></div>
-            <hr style="border:1px solid rgba(255,255,255,0.2)">
-            <div style="font-size:18px; font-weight:600; opacity:0.9;" data-i18n="total_pagar">Total a Pagar</div>
-            <div class="summary-total" id="posTotal">$0.00</div>
-            <button class="pay-btn" id="btnCobrar"><i class="ph-fill ph-credit-card"></i> <span data-i18n="btn_procesar_cobro">PROCESAR COBRO</span></button>
-        </div>
-    </div>
-</section>
+                    <!-- COLUMNA DERECHA (Resumen de venta) -->
+                    <div class="pos-summary">
+                        <h2 data-i18n="resumen_venta" style="font-family:var(--font-display); font-size:24px;">Resumen de Venta</h2>
+                        <select class="pay-select" id="posMetodo"><option value="" data-i18n="cargando_metodos">Cargando métodos de pago...</option></select>
+                        <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="fondo_inicial_label">Fondo inicial:</span><span id="posFondoInicial">$0.00</span></div>
+                        <div class="summary-row" style="font-size:12.5px; opacity:.8;"><span data-i18n="efectivo_esperado_label">Efectivo esperado:</span><span id="posEfectivoEsperado">$0.00</span></div>
+                        <button class="chip-btn" id="btnRetiroManual" style="align-self:flex-start; background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.3); color:#fff;" type="button"><span data-i18n="btn_registrar_retiro">+ Registrar retiro</span></button>
+                        <div style="flex:1;"></div>
+                        <div class="summary-row"><span data-i18n="subtotal_label">Subtotal:</span><span id="posSubtotal">$0.00</span></div>
+                        <div class="summary-row"><span data-i18n="iva_label">IVA (16%):</span><span id="posIva">$0.00</span></div>
+                        <hr style="border:1px solid rgba(255,255,255,0.2)">
+                        <div style="font-size:18px; font-weight:600; opacity:0.9;" data-i18n="total_pagar">Total a Pagar</div>
+                        <div class="summary-total" id="posTotal">$0.00</div>
+                        <button class="pay-btn" id="btnCobrar"><i class="ph-fill ph-credit-card"></i> <span data-i18n="btn_procesar_cobro">PROCESAR COBRO</span></button>
+                    </div>
+                </div>
+
+                <!-- BLOQUE CAJERO: VALIDACIÓN Y ENTREGA DE APARTADOS PENDIENTES DE ENTREGA -->
+                <div class="panel" style="margin-top: 20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+                        <div>
+                            <h3 style="margin:0; font-size:17px; color:var(--ink); display:flex; align-items:center; gap:8px;">
+                                <i class="ph-fill ph-shopping-bag" style="color:var(--accent);"></i>
+                                <span data-i18n="caja_ap_title">Apartados pendientes de entrega (Sucursal)</span>
+                            </h3>
+                            <small style="color:var(--ink-faint);" data-i18n="caja_ap_sub">Busca por folio o ticket</small>
+                        </div>
+                        <div style="display:flex; gap:8px; flex:1; max-width:480px;">
+                            <input type="text" id="inputFolioCaja" class="search-input" style="min-width:0;"
+                                   data-i18n-placeholder="caja_ap_placeholder"
+                                   placeholder="Folio, ticket, cliente o código..."
+                                   onkeydown="if(event.key==='Enter') buscarFolioEnCaja()">
+                            <button type="button" class="btn-primary" onclick="buscarFolioEnCaja()" data-i18n="caja_ap_btn_buscar">Buscar</button>
+                        </div>
+                    </div>
+                    <div id="resultadoFolioCaja" style="display:none; background:var(--bg-panel); border:1.5px solid var(--border-soft); border-radius:14px; padding:16px;"></div>
+                </div>
+
+                <script>
+                function formatearFechaLegible(fechaStr) {
+                    if (!fechaStr) return 'N/A';
+                    const normalized = String(fechaStr).replace(' ', 'T');
+                    const dt = new Date(normalized);
+                    if (isNaN(dt.getTime())) return fechaStr;
+                    return dt.toLocaleString(currentLang === 'en' ? 'en-US' : 'es-MX', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                }
+
+                function traducirEstadoApartado(estado) {
+                    const est = String(estado || '').toUpperCase();
+                    if (est === 'PENDIENTE_RECOGER' || est === 'PENDIENTE') return t('caja_ap_est_pendiente');
+                    if (est === 'ENTREGADO') return t('caja_ap_est_entregado');
+                    if (est === 'CANCELADO') return t('caja_ap_est_cancelado');
+                    if (est === 'VENCIDO' || est === 'EXPIRADO') return t('caja_ap_est_vencido');
+                    return estado;
+                }
+
+                function traducirErrorApartadoCaja(msg) {
+                    if (currentLang !== 'en') return msg;
+                    const txt = String(msg || '');
+                    if (/no se encontraron apartados en esta sucursal/i.test(txt)) {
+                        return t('caja_ap_no_encontrado');
+                    }
+                    return txt;
+                }
+
+                async function buscarFolioEnCaja() {
+                    const q = document.getElementById('inputFolioCaja').value.trim();
+                    const box = document.getElementById('resultadoFolioCaja');
+                    if (!q) return;
+
+                    box.style.display = 'block';
+                    box.innerHTML = `<p style="margin:0; color:var(--ink-soft);">${escapeHtml(t('caja_ap_consultando'))}</p>`;
+
+                    try {
+                        const json = await request(`ac_buscar_folio_pdv&q=${encodeURIComponent(q)}`);
+                        const lista = json.lista || (json.data ? [json.data] : []);
+
+                        if (!lista.length) {
+                            box.innerHTML = `<p style="margin:0; color:var(--danger); font-weight:700;">${escapeHtml(t('caja_ap_no_encontrado'))}</p>`;
+                            return;
+                        }
+
+                        box.innerHTML = lista.map(d => {
+                            const activo = (d.estado === 'PENDIENTE_RECOGER' || d.estado === 'PENDIENTE');
+                            const totalAp = parseFloat(d.total_apartado || d.total || 0);
+                            const badgeColor = activo ? '#d97706' : (d.estado === 'ENTREGADO' ? '#059669' : '#dc2626');
+                            const fechaLimiteFmt = formatearFechaLegible(d.fecha_limite);
+
+                            return `
+                                <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-soft);">
+                                    <div>
+                                        <span style="background:${badgeColor}; color:#fff; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:800;">${escapeHtml(traducirEstadoApartado(d.estado))}</span>
+                                        <strong style="margin-left:8px;">${escapeHtml(d.folio)}</strong>
+                                        <h4 style="margin:6px 0 2px; font-size:15px;">${escapeHtml(d.producto_nombre)} (${d.cantidad} ${escapeHtml(t('caja_ap_pza'))}) · ${escapeHtml(t('caja_ap_cod'))} ${escapeHtml(d.producto_codigo)}</h4>
+                                        <p style="margin:0; font-size:13px; color:var(--ink-soft);">
+                                            ${escapeHtml(t('caja_ap_cliente'))} <strong>${escapeHtml(d.cliente_nombre)}</strong> ${d.telefono ? '· ' + escapeHtml(t('caja_ap_tel')) + ' ' + escapeHtml(d.telefono) : ''} · ${escapeHtml(t('caja_ap_limite'))} <strong>${escapeHtml(fechaLimiteFmt)}</strong>
+                                        </p>
+                                        <p style="margin:6px 0 0; font-size:14px;">
+                                            ${escapeHtml(t('caja_ap_total'))} <strong style="color:var(--accent); font-size:15px;">${money(totalAp)}</strong>
+                                        </p>
+                                    </div>
+                                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                        ${activo ? `
+                                            <select id="metodoPagoApartado_${d.id_apartado}" class="select-input" style="min-width:130px; padding:9px 14px;">
+                                                <option value="1">${escapeHtml(t('metodo_efectivo'))}</option>
+                                                <option value="2">${escapeHtml(t('metodo_tarjeta'))}</option>
+                                                <option value="3">${escapeHtml(t('metodo_transferencia'))}</option>
+                                            </select>
+                                            <button type="button" class="btn-primary" style="background:var(--success); color:#fff;" onclick="confirmarEntregaApartadoCaja(${d.id_apartado}, ${totalAp})">
+                                                ${escapeHtml(t('caja_ap_btn_confirmar'))}
+                                            </button>
+                                        ` : ''}
+                                        <a href="../../componentes/comprobante_ticket.php?tipo=apartado&folio=${encodeURIComponent(d.folio)}&lang=${encodeURIComponent(currentLang)}" target="_blank" class="chip-btn">
+                                            ${escapeHtml(t('caja_ap_btn_ticket'))}
+                                        </a>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                    } catch (err) {
+                        box.innerHTML = `<p style="margin:0; color:var(--danger); font-weight:700;">${escapeHtml(traducirErrorApartadoCaja(err.message))}</p>`;
+                    }
+                }
+
+                async function confirmarEntregaApartadoCaja(idApartado, totalApartado) {
+                    const metodoEl = document.getElementById(`metodoPagoApartado_${idApartado}`);
+                    const idMetodo = metodoEl ? metodoEl.value : '1';
+                    const metodoTexto = metodoEl ? (metodoEl.options[metodoEl.selectedIndex]?.text || t('metodo_efectivo')) : t('metodo_efectivo');
+
+                    const conf = await Swal.fire({
+                        title: t('caja_ap_modal_title'),
+                        html: `${escapeHtml(t('caja_ap_modal_total'))} <b style="color:var(--accent); font-size:18px;">${money(totalApartado)}</b><br><small>${escapeHtml(t('caja_ap_modal_metodo'))} <b>${escapeHtml(metodoTexto)}</b></small>`,
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: 'var(--success)',
+                        confirmButtonText: t('caja_ap_modal_confirm'),
+                        cancelButtonText: t('cancelar')
+                    });
+                    if (!conf.isConfirmed) return;
+
+                    const fd = new FormData();
+                    fd.append('id_apartado', idApartado);
+                    fd.append('id_metodo_pago', idMetodo);
+                    fd.append('cobrar_en_caja', '1');
+                    if (typeof currentTurnoId !== 'undefined' && currentTurnoId) {
+                        fd.append('id_turno', currentTurnoId);
+                    }
+
+                    try {
+                        const json = await request('ac_entregar_apartado', { method: 'POST', body: fd });
+                        notify(currentLang === 'en' ? t('caja_ap_entregado_ok') : json.msg);
+                        buscarFolioEnCaja();
+                        if (typeof refrescarEsperado === 'function') await refrescarEsperado();
+                        if (typeof loadDashboard === 'function') loadDashboard();
+                        if (json.ticket && typeof window.mostrarComprobantePETKO === 'function') {
+                            window.mostrarComprobantePETKO('apartado', json.ticket);
+                        }
+                    } catch (e) {
+                        notify(e.message, 'error');
+                    }
+                }
+                </script>
+            </section>
 
         </div>
     </main>
@@ -2243,12 +2365,41 @@ $nombreSucursal = $stSuc->fetchColumn() ?: 'Sucursal';
 const endpoint = 'dashboard_gerente.php';
 const $ = s => document.querySelector(s);
 const escapeHtml = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-const money = v => '$' + Number(v || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const imagenProductoUrl = value => {
+    const url = String(value ?? '').trim();
+    const legacyPrefix = '../../img/productos/';
+    return url.startsWith(legacyPrefix) ? `../../../img/productos/${url.slice(legacyPrefix.length)}` : url;
+};
+const money = n => Number(n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
 
 const notify = (msg, icon='success') => Swal.fire({ toast:true, position:'top-end', icon, title: msg, showConfirmButton:false, timer:2500, background: 'var(--bg-surface)', color: 'var(--ink)' });
+const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+// Protección estricta anti-bfcache: si la página se recupera del caché del navegador tras cerrar sesión, fuerza recarga
+window.addEventListener('pageshow', function (event) {
+    if (event.persisted || (window.performance && window.performance.navigation && window.performance.navigation.type === 2) || (window.performance && window.performance.getEntriesByType && window.performance.getEntriesByType('navigation')[0] && window.performance.getEntriesByType('navigation')[0].type === 'back_forward')) {
+        window.location.reload();
+    }
+});
 
 async function request(actionStr, options = {}) {
-    const r = await fetch(`${endpoint}?action=${actionStr}`, options);
+    const method = (options.method || 'GET').toUpperCase();
+    const requestOptions = { ...options, headers: new Headers(options.headers || {}) };
+
+    if (method !== 'GET') {
+        requestOptions.headers.set('X-CSRF-Token', csrfToken);
+
+        if (requestOptions.body instanceof FormData) {
+            requestOptions.body.append('csrf_token', csrfToken);
+        } else if (typeof requestOptions.body === 'string') {
+            if (!/(?:^|[?&])csrf_token=/.test(requestOptions.body)) {
+                const separator = requestOptions.body.length > 0 ? '&' : '';
+                requestOptions.body = `${requestOptions.body}${separator}csrf_token=${encodeURIComponent(csrfToken)}`;
+            }
+        }
+    }
+
+    const r = await fetch(`${endpoint}?action=${actionStr}`, requestOptions);
     const text = await r.text();
     let data;
     try { data = JSON.parse(text); } catch(e) { throw new Error('[ERROR DE SISTEMA] Respuesta inválida del servidor.'); }
@@ -2256,14 +2407,64 @@ async function request(actionStr, options = {}) {
     return data;
 }
 
+window.abrirConfiguracionRapida = async function () {
+    const { isConfirmed, value } = await Swal.fire({
+        title: 'Configuración de cuenta',
+        html: `<div style="text-align:left;">
+            <p style="margin-bottom:12px; color:var(--ink-soft);">Actualiza tu contraseña actual.</p>
+            <label class="swal2-label" style="display:block; margin-bottom:6px;">Contraseña actual</label>
+            <input id="swal-pass-actual" type="password" class="swal2-input" style="width:100%; margin:0 0 12px;">
+            <label class="swal2-label" style="display:block; margin-bottom:6px;">Nueva contraseña</label>
+            <input id="swal-pass-nueva" type="password" class="swal2-input" style="width:100%; margin:0;">
+        </div>`,
+        confirmButtonText: 'Guardar',
+        showCancelButton: true,
+        preConfirm: () => {
+            const actual = document.getElementById('swal-pass-actual').value;
+            const nueva = document.getElementById('swal-pass-nueva').value;
+            if (!actual || !nueva) {
+                Swal.showValidationMessage('Completa ambos campos.');
+                return false;
+            }
+            return {
+                password_actual: actual,
+                password_nueva: nueva,
+            };
+        }
+    });
+
+    if (!isConfirmed || !value) return;
+    try {
+        const fd = new FormData();
+        fd.append('password_actual', value.password_actual);
+        fd.append('password_nueva', value.password_nueva);
+        const d = await request('update_password', { method: 'POST', body: fd });
+        Swal.fire({ icon: 'success', title: 'Contraseña actualizada', text: d.msg || 'Listo.' });
+    } catch (e) {
+        Swal.fire({ icon: 'error', title: 'No se pudo actualizar', text: e.message });
+    }
+};
+
 // -------- TEMA --------
 const body = document.body;
 
 // -------- SIDEBAR: colapsar / móvil --------
 const appLayout = $('#appLayout');
-$('#btnCollapse').addEventListener('click', () => appLayout.classList.toggle('is-collapsed'));
+function syncTooltips() {
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        const lbl = btn.querySelector('.nav-label');
+        if (lbl) btn.setAttribute('data-tooltip', lbl.textContent.trim());
+    });
+}
+syncTooltips();
+
+$('#btnCollapse').addEventListener('click', () => {
+    appLayout.classList.toggle('is-collapsed');
+    syncTooltips();
+});
 $('#btnMobileMenu').addEventListener('click', () => appLayout.classList.add('mobile-open'));
 $('#sidebarScrim').addEventListener('click', () => appLayout.classList.remove('mobile-open'));
+$('#btnSolicitarCambioPassQuick')?.addEventListener('click', () => abrirConfiguracionRapida());
 
 // -------- IDIOMA (ES / EN) --------
 const I18N = {
@@ -2299,7 +2500,27 @@ const I18N = {
         btn_registrar_retiro: '+ Registrar retiro', agotado_label: 'Agotado',
         modal_prod_new: 'Nuevo Producto', modal_prod_edit: 'Editar Producto', img_url: 'Imagen del Producto (URL)', desc_lbl: 'Descripción', asign_suc: 'Stock Inicial y Mínimo',
         todas_categorias: 'Todas las categorías', cualquier_stock: 'Cualquier nivel de stock', stock_bajo: 'Stock Bajo', stock_agotado: 'Agotados',
-        title_eliminar_prod: '¿Eliminar producto?', desc_eliminar_prod: 'Solo procederá si el stock global es 0.'
+        title_eliminar_prod: '¿Eliminar producto?', desc_eliminar_prod: 'Solo procederá si el stock global es 0.',
+        nav_section_cuenta: 'Mi Cuenta', nav_mis_apartados: 'Mis Apartados', nav_configuracion: 'Configuración',
+        nav_apartados_consultas: 'Apartados y Consultas',
+        pos_btn_scan: 'Escanear', pos_scan_cam_title: 'Escanear con cámara', pos_scan_modal_title: 'Escanear Código de Barras o QR',
+        caja_ap_title: 'Apartados pendientes de entrega (Sucursal)',
+        caja_ap_sub: 'Busca por folio o ticket',
+        caja_ap_placeholder: 'Folio, ticket, cliente o código...',
+        caja_ap_btn_buscar: 'Buscar',
+        caja_ap_consultando: 'Consultando apartados de la sucursal...',
+        caja_ap_no_encontrado: 'No se encontraron apartados en esta sucursal con ese criterio.',
+        caja_ap_pza: 'pza', caja_ap_cod: 'Cód:', caja_ap_cliente: 'Cliente:', caja_ap_tel: 'Tel:', caja_ap_limite: 'Límite:', caja_ap_total: 'Total:',
+        caja_ap_est_pendiente: 'PENDIENTE DE RECOGER', caja_ap_est_entregado: 'ENTREGADO', caja_ap_est_cancelado: 'CANCELADO', caja_ap_est_vencido: 'VENCIDO',
+        metodo_efectivo: 'Efectivo', metodo_tarjeta: 'Tarjeta', metodo_transferencia: 'Transferencia',
+        caja_ap_btn_confirmar: 'Confirmar Entrega', caja_ap_btn_ticket: 'Ver Ticket',
+        caja_ap_modal_title: 'Confirmar Entrega de Apartado', caja_ap_modal_total: 'Total a registrar en caja:',
+        caja_ap_modal_metodo: 'Método de pago:', caja_ap_modal_confirm: 'Confirmar y Registrar en Caja',
+        caja_ap_entregado_ok: 'Apartado entregado y registrado en caja.',
+        pos_cobro_ef_title: 'Cobro en Efectivo', pos_cobro_total_lbl: 'TOTAL DE LA VENTA',
+        pos_cobro_recibido_lbl: 'Cantidad recibida del cliente (MXN)', pos_cobro_cambio_lbl: 'CAMBIO A DEVOLVER',
+        pos_cobro_invalido: 'IMPORTE INVÁLIDO', pos_cobro_insuficiente: 'IMPORTE INSUFICIENTE (FALTA)',
+        pos_cobro_confirmar: 'Confirmar Pago', pos_cobro_proc_title: 'Procesar Cobro', pos_cobro_proc_text: 'Total a cobrar:'
     },
     en: {
         brand_sub: 'Branch Management', role_chip: 'Manager', branch_prefix: 'Branch',
@@ -2333,7 +2554,27 @@ const I18N = {
         btn_registrar_retiro: '+ Register withdrawal', agotado_label: 'Out of stock',
         modal_prod_new: 'New Product', modal_prod_edit: 'Edit Product', img_url: 'Product Image (URL)', desc_lbl: 'Description', asign_suc: 'Initial and Minimum Stock',
         todas_categorias: 'All categories', cualquier_stock: 'Any stock level', stock_bajo: 'Low Stock', stock_agotado: 'Out of stock',
-        title_eliminar_prod: 'Delete product?', desc_eliminar_prod: 'Will only proceed if global stock is 0.'
+        title_eliminar_prod: 'Delete product?', desc_eliminar_prod: 'Will only proceed if global stock is 0.',
+        nav_section_cuenta: 'My Account', nav_mis_apartados: 'My Layaways', nav_configuracion: 'Settings',
+        nav_apartados_consultas: 'Layaways & Appointments',
+        pos_btn_scan: 'Scan', pos_scan_cam_title: 'Scan with camera', pos_scan_modal_title: 'Scan Barcode or QR Code',
+        caja_ap_title: 'Pending Layaways for Pickup (Branch)',
+        caja_ap_sub: 'Search by folio or ticket',
+        caja_ap_placeholder: 'Folio, ticket, customer or code...',
+        caja_ap_btn_buscar: 'Search',
+        caja_ap_consultando: 'Checking branch layaways...',
+        caja_ap_no_encontrado: 'No layaways found in this branch matching that criteria.',
+        caja_ap_pza: 'pcs', caja_ap_cod: 'Code:', caja_ap_cliente: 'Customer:', caja_ap_tel: 'Phone:', caja_ap_limite: 'Deadline:', caja_ap_total: 'Total:',
+        caja_ap_est_pendiente: 'PENDING PICKUP', caja_ap_est_entregado: 'DELIVERED', caja_ap_est_cancelado: 'CANCELED', caja_ap_est_vencido: 'EXPIRED',
+        metodo_efectivo: 'Cash', metodo_tarjeta: 'Card', metodo_transferencia: 'Transfer',
+        caja_ap_btn_confirmar: 'Confirm Pickup', caja_ap_btn_ticket: 'View Ticket',
+        caja_ap_modal_title: 'Confirm Layaway Pickup', caja_ap_modal_total: 'Total to register in cash drawer:',
+        caja_ap_modal_metodo: 'Payment method:', caja_ap_modal_confirm: 'Confirm & Register in Drawer',
+        caja_ap_entregado_ok: 'Layaway delivered and registered in drawer.',
+        pos_cobro_ef_title: 'Cash Payment', pos_cobro_total_lbl: 'SALE TOTAL',
+        pos_cobro_recibido_lbl: 'Amount received from customer (MXN)', pos_cobro_cambio_lbl: 'CHANGE DUE',
+        pos_cobro_invalido: 'INVALID AMOUNT', pos_cobro_insuficiente: 'INSUFFICIENT AMOUNT (DUE)',
+        pos_cobro_confirmar: 'Confirm Payment', pos_cobro_proc_title: 'Process Payment', pos_cobro_proc_text: 'Total due:'
     }
 };
 let currentLang = (window.PetkoPrefs ? PetkoPrefs.lang() : null) || localStorage.getItem('petko_lang') || 'es';
@@ -2342,13 +2583,27 @@ function applyLanguage() {
     document.documentElement.lang = currentLang;
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        const lbl = btn.querySelector('.nav-label');
+        if (lbl) btn.setAttribute('data-tooltip', lbl.textContent.trim());
+    });
 }
 if (window.PetkoPrefs) {
     PetkoPrefs.onLang(function(l) {
         currentLang = l;
         applyLanguage();
         const activeView = document.querySelector('.view-section.active');
-        if (activeView) switchView(activeView.id);
+        if (activeView) {
+            switchView(activeView.id);
+            if (activeView.id === 'view-pos') {
+                const box = document.getElementById('resultadoFolioCaja');
+                const inp = document.getElementById('inputFolioCaja');
+                if (box && box.style.display !== 'none' && inp && inp.value.trim() !== '') {
+                    buscarFolioEnCaja();
+                }
+            }
+        }
     });
 }
 applyLanguage();
@@ -2368,6 +2623,9 @@ function switchView(targetId) {
     if (targetId === 'view-cajas') loadCajas();
     if (targetId === 'view-ventas') loadVentas();
     if (targetId === 'view-cortes') loadCortes();
+    if (targetId === 'view-apartados-consultas' && typeof window.initModuloApartadosConsultas === 'function') {
+        window.initModuloApartadosConsultas();
+    }
 }
 navButtons.forEach(btn => btn.addEventListener('click', e => switchView(e.currentTarget.dataset.target)));
 
@@ -2409,11 +2667,11 @@ async function loadDashboard() {
 }
 
 // -------- INVENTARIO (Visual y Técnico) --------
-let currentInventarioView = localStorage.getItem('kion-gerente-inv-view') || 'visual';
+let currentInventarioView = localStorage.getItem('petko-gerente-inv-view') || 'visual';
 
 function setInventarioView(view) {
     currentInventarioView = view;
-    localStorage.setItem('kion-gerente-inv-view', view);
+    localStorage.setItem('petko-gerente-inv-view', view);
     if (view === 'visual') {
         $('#invVisualView').style.display = 'grid';
         $('#invTechView').style.display = 'none';
@@ -2450,7 +2708,7 @@ async function loadInventario() {
             return `<tr>
                 <td>
                     <div style="display:flex; align-items:center; gap:12px;">
-                        <img src="${x.imagen_url ? escapeHtml(x.imagen_url) : 'https://placehold.co/100x100?text=Sin+Imagen'}" style="width:40px; height:40px; border-radius:10px; object-fit:cover; border:1px solid var(--border-soft);">
+                        <img src="${x.imagen_url ? escapeHtml(imagenProductoUrl(x.imagen_url)) : 'https://placehold.co/100x100?text=Sin+Imagen'}" style="width:40px; height:40px; border-radius:10px; object-fit:cover; border:1px solid var(--border-soft);">
                         <b>${escapeHtml(x.producto)}</b>
                     </div>
                 </td>
@@ -2469,7 +2727,7 @@ async function loadInventario() {
         // Vista Visual (Grid)
         $('#invVisualView').innerHTML = data.length ? data.map(x => {
             const statusCls = x.estado === 'ACTIVO' ? 'color: var(--success);' : 'color: var(--danger);';
-            const img = x.imagen_url ? escapeHtml(x.imagen_url) : 'https://placehold.co/300x300?text=Sin+Imagen';
+            const img = x.imagen_url ? escapeHtml(imagenProductoUrl(x.imagen_url)) : 'https://placehold.co/300x300?text=Sin+Imagen';
             
             let stockClass = 'stock-ok';
             let stockLabel = `Stock: ${x.existencias}`;
@@ -2512,7 +2770,6 @@ $('#invSearch').addEventListener('input', () => { clearTimeout(window.invTimer);
 $('#invCategory').addEventListener('change', loadInventario);
 $('#invStock').addEventListener('change', loadInventario);
 
-// Ajustar stock desde botón directo de la tarjeta/tabla
 document.addEventListener('click', e => {
     const btnAjustar = e.target.closest('[data-ajustar-stock]');
     if (btnAjustar) {
@@ -2556,19 +2813,28 @@ async function productoModal(record = null) {
     const editing = !!record;
     
     const L = currentLang === 'en'
-        ? { titleNew:'New Product', titleEdit:'Edit Product', img:'Product Image (Upload or URL)', codigo:'Code *', nombre:'Name *', desc:'Description', cat:'Category', precio:'Base price *', minStock:'Minimum stock', initStock:'Initial stock', estado:'Status', required:'Code and name are required.' }
-        : { titleNew:'Nuevo Producto', titleEdit:'Editar Producto', img:'Imagen del Producto (Subir o URL)', codigo:'Código *', nombre:'Nombre *', desc:'Descripción', cat:'Categoría', precio:'Precio base *', minStock:'Stock mínimo', initStock:'Existencia inicial', estado:'Estado', required:'Código y nombre son obligatorios.' };
+        ? { titleNew:'New Product', titleEdit:'Edit Product', img:'Product Image (Upload or URL)', chooseImage:'Choose photo', noImage:'No photo selected', codigo:'Code *', nombre:'Name *', desc:'Description', cat:'Category', precio:'Base price *', minStock:'Minimum stock', initStock:'Initial stock', estado:'Status', required:'Code and name are required.' }
+        : { titleNew:'Nuevo Producto', titleEdit:'Editar Producto', img:'Imagen del Producto (Subir o URL)', chooseImage:'Seleccionar foto', noImage:'Ninguna foto seleccionada', codigo:'Código *', nombre:'Nombre *', desc:'Descripción', cat:'Categoría', precio:'Precio base *', minStock:'Stock mínimo', initStock:'Existencia inicial', estado:'Estado', required:'Código y nombre son obligatorios.' };
 
+    let previewObjectUrl = null;
+    const releasePreviewObjectUrl = () => {
+        if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = null;
+    };
     const { value: form } = await Swal.fire({
         title: editing ? L.titleEdit : L.titleNew,
         html: `<div style="text-align:left;">
             <div style="text-align:center; margin-bottom:18px;">
-                <img id="swal-preview" class="swal-preview-img" src="${editing && record.imagen_url ? escapeHtml(record.imagen_url) : 'https://placehold.co/150x150?text=Sin+Imagen'}" style="max-width:140px; max-height:140px; object-fit:cover; border-radius:18px; border:1.5px solid rgba(11, 37, 69, 0.22); box-shadow:var(--shadow-sm);">
+                <img id="swal-preview" class="swal-preview-img" src="${editing && record.imagen_url ? escapeHtml(imagenProductoUrl(record.imagen_url)) : 'https://placehold.co/150x150?text=Sin+Imagen'}" style="max-width:140px; max-height:140px; object-fit:cover; border-radius:18px; border:1.5px solid rgba(11, 37, 69, 0.22); box-shadow:var(--shadow-sm);">
             </div>
             
             <label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.img}</label>
-            <input type="file" id="swal-file" accept="image/jpeg,image/png,image/webp,image/gif" class="swal2-file" style="width:100%; margin:0 0 10px; font-size:13px; border-radius:12px;">
-            <input id="swal-img" class="swal2-input" style="width:100%;margin:0 0 16px; font-size:13px;" value="${editing?escapeHtml(record.imagen_url||''):''}" placeholder="O pega un enlace (https://...)">
+            <div class="petko-image-upload">
+                <input type="file" id="swal-file" class="petko-image-upload__input" accept="image/jpeg,image/png,image/webp,image/gif">
+                <label class="petko-image-upload__button" for="swal-file"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i><span>${L.chooseImage}</span></label>
+                <span class="petko-image-upload__name" id="swal-file-name" aria-live="polite">${L.noImage}</span>
+            </div>
+            <input id="swal-img" class="swal2-input" style="width:100%;margin:0 0 16px; font-size:13px;" value="${editing?escapeHtml(imagenProductoUrl(record.imagen_url||'')):''}" placeholder="O pega un enlace (https://...)">
             
             <div style="display:flex; gap:12px; margin-bottom:16px;">
                 <div style="flex:1"><label class="swal2-label" style="font-weight:700; font-size:13px; color:var(--navy); display:block; margin-bottom:6px;">${L.codigo}</label><input id="swal-codigo" class="swal2-input" style="width:100%;margin:0;" value="${editing?escapeHtml(record.codigo):''}"></div>
@@ -2596,24 +2862,31 @@ async function productoModal(record = null) {
         didOpen: () => {
             const preview = document.getElementById('swal-preview');
             const fileIn = document.getElementById('swal-file');
+            const fileName = document.getElementById('swal-file-name');
             const urlIn = document.getElementById('swal-img');
 
-            fileIn.addEventListener('change', e => {
-                if (e.target.files && e.target.files[0]) {
-                    preview.src = URL.createObjectURL(e.target.files[0]);
+            fileIn.addEventListener('change', () => {
+                const file = fileIn.files && fileIn.files[0] ? fileIn.files[0] : null;
+                fileName.textContent = file ? file.name : L.noImage;
+                releasePreviewObjectUrl();
+                if (file) {
+                    previewObjectUrl = URL.createObjectURL(file);
+                    preview.src = previewObjectUrl;
+                } else {
+                    preview.src = urlIn.value.trim() || 'https://placehold.co/150x150?text=Sin+Imagen';
                 }
             });
-            urlIn.addEventListener('input', e => {
-                const val = e.target.value.trim();
-                if (val) {
-                    preview.src = val;
-                } else if (fileIn.files && fileIn.files[0]) {
-                    preview.src = URL.createObjectURL(fileIn.files[0]);
-                } else {
-                    preview.src = 'https://placehold.co/150x150?text=Sin+Imagen';
+            urlIn.addEventListener('input', () => {
+                const val = urlIn.value.trim();
+                if (val && fileIn.files && fileIn.files.length) {
+                    fileIn.value = '';
+                    fileName.textContent = L.noImage;
+                    releasePreviewObjectUrl();
                 }
+                preview.src = val || previewObjectUrl || 'https://placehold.co/150x150?text=Sin+Imagen';
             });
         },
+        willClose: releasePreviewObjectUrl,
         preConfirm: () => {
             const codigo = document.getElementById('swal-codigo').value.trim();
             const nombre = document.getElementById('swal-nombre').value.trim();
@@ -2827,13 +3100,13 @@ let retiroPromptOpen = false, turnoTimerHandle = null;
 const OCHO_HORAS_MS = 8 * 60 * 60 * 1000;
 
 function guardarTurnoLocal() {
-    localStorage.setItem('kion-gerente-turno', JSON.stringify({
+    localStorage.setItem('petko-gerente-turno', JSON.stringify({
         id_turno: currentTurnoId, id_caja: currentCajaId, id_cajero: currentCajeroId,
         dinero_inicial: dineroInicial, turno_inicio_ts: turnoInicioTs, horas_extra: horasExtraAutorizadas,
         nombre_caja: $('#lblCajaActual').innerText, nombre_cajero: $('#lblCajeroActual').innerText
     }));
 }
-function limpiarTurnoLocal() { localStorage.removeItem('kion-gerente-turno'); }
+function limpiarTurnoLocal() { localStorage.removeItem('petko-gerente-turno'); }
 
 function activarModoCaja(datosLogin) {
     currentCajaId = datosLogin.id_caja; currentCajeroId = datosLogin.id_cajero; currentTurnoId = datosLogin.id_turno;
@@ -3081,7 +3354,7 @@ function addProductToCart(data) {
             nombre: data.nombre, 
             precio: parseFloat(data.precio), 
             qty: 1, 
-            maxStock: maxStock // Guardamos el stock máximo permitido
+            maxStock: maxStock
         }); 
     }
     updateCartUI();
@@ -3154,7 +3427,6 @@ function updateCartUI() {
     $('#posSubtotal').innerText = money(subtotal); $('#posIva').innerText = money(iva); $('#posTotal').innerText = money(total);
 }
 
-// Eventos para detectar los clics en los botones de [+] y [-] del carrito
 $('#cartBody').addEventListener('click', e => {
     const btn = e.target.closest('.qty-btn');
     if (!btn) return;
@@ -3171,12 +3443,11 @@ $('#cartBody').addEventListener('click', e => {
         }
     } else if (btn.dataset.action === 'minus') {
         item.qty--;
-        if (item.qty <= 0) cart = cart.filter(i => i.id_producto !== id); // Si llega a 0, se elimina
+        if (item.qty <= 0) cart = cart.filter(i => i.id_producto !== id);
     }
     updateCartUI();
 });
 
-// Evento para cuando el usuario escribe manualmente un número en el input
 $('#cartBody').addEventListener('change', e => {
     if (!e.target.classList.contains('qty-input')) return;
     
@@ -3185,53 +3456,206 @@ $('#cartBody').addEventListener('change', e => {
     const item = cart.find(i => i.id_producto === id);
     if (!item) return;
 
-    // VALIDACIÓN: Si el usuario teclea más de lo que hay en stock
     if (newQty > item.maxStock) {
         notify(`Stock excedido. Se ajustó al máximo disponible (${item.maxStock}).`, 'warning');
         newQty = item.maxStock;
     }
 
     if (newQty <= 0) {
-        cart = cart.filter(i => i.id_producto !== id); // Si pone 0 o menos, se elimina
+        cart = cart.filter(i => i.id_producto !== id);
     } else {
         item.qty = newQty;
     }
     updateCartUI();
 });
 
-$('#btnCobrar').addEventListener('click', async () => {
-    const Lp = currentLang === 'en'
-        ? { noItems:'There are no products in the sale.', noMethod:'Select a payment method.', title:'Process Payment', totalLabel:'Total to charge:', confirmBtn:'Confirm Payment', success:'Payment Successful!' }
-        : { noItems:'No hay productos en la venta.', noMethod:'Selecciona un método de pago.', title:'Procesar Cobro', totalLabel:'Total a cobrar:', confirmBtn:'Confirmar Pago', success:'¡Pago Exitoso!' };
-    if (cart.length === 0) { notify(Lp.noItems, 'error'); return; }
-    const idMetodo = $('#posMetodo').value;
-    if (!idMetodo) { notify(Lp.noMethod, 'error'); return; }
+let ventaEnProceso = false;
 
-    const conf = await Swal.fire({
-        title: Lp.title, text: `${Lp.totalLabel} ${$('#posTotal').innerText}`, icon: 'info',
-        showCancelButton: true, confirmButtonColor: 'var(--accent)', confirmButtonText: Lp.confirmBtn, cancelButtonText: t('cancelar')
+const formatMXN = (val) => new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+}).format(Number(val || 0));
+
+$('#btnCobrar').addEventListener('click', async () => {
+    if (ventaEnProceso) return;
+
+    if (cart.length === 0) {
+        notify(currentLang === 'en' ? 'There are no products in the sale.' : 'No hay productos en la venta.', 'error');
+        return;
+    }
+    const selMetodo = $('#posMetodo');
+    const idMetodo = selMetodo.value;
+    if (!idMetodo) {
+        notify(currentLang === 'en' ? 'Select a payment method.' : 'Selecciona un método de pago.', 'error');
+        return;
+    }
+
+    const textoMetodo = (selMetodo.options[selMetodo.selectedIndex]?.text || '').toLowerCase();
+    const esEfectivo = textoMetodo.includes('efectivo');
+
+    let subCents = 0;
+    cart.forEach(item => {
+        subCents += Math.round(Number(item.precio) * 100) * Number(item.qty);
     });
-    if (!conf.isConfirmed) return;
+    const ivaCents = Math.round(subCents * 0.16);
+    const totalCents = subCents + ivaCents;
+    const totalExacto = totalCents / 100;
+
+    let montoRecibidoFinal = null;
+
+    if (esEfectivo) {
+        const resEfectivo = await Swal.fire({
+            title: t('pos_cobro_ef_title'),
+            html: `
+                <div style="text-align:left; font-family:var(--font-body);">
+                    <div style="background:var(--bg-panel); border:1.5px solid var(--border-soft); border-radius:16px; padding:16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:14px; font-weight:700; color:var(--ink-soft);">${escapeHtml(t('pos_cobro_total_lbl'))}</span>
+                        <span style="font-size:26px; font-weight:800; color:var(--accent);">${formatMXN(totalExacto)}</span>
+                    </div>
+
+                    <label for="swal-recibido" style="display:block; font-size:13px; font-weight:700; color:var(--ink); margin-bottom:6px;">
+                        ${escapeHtml(t('pos_cobro_recibido_lbl'))}
+                    </label>
+                    <input id="swal-recibido" type="number" step="0.01" min="0" value="${totalExacto.toFixed(2)}"
+                           class="swal2-input"
+                           style="width:100%; margin:0 0 14px; font-size:24px; font-weight:800; text-align:right; color:var(--ink); height:54px;">
+
+                    <div id="box-cambio" style="background:var(--success-bg); border:1.5px solid var(--success); border-radius:16px; padding:16px; display:flex; justify-content:space-between; align-items:center; transition:all .2s ease;">
+                        <span id="lbl-cambio-titulo" style="font-size:14px; font-weight:800; color:var(--success);">${escapeHtml(t('pos_cobro_cambio_lbl'))}</span>
+                        <span id="lbl-cambio-valor" style="font-size:26px; font-weight:800; color:var(--success);">$0.00</span>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: `<i class="ph-bold ph-check"></i> ${t('pos_cobro_confirmar')}`,
+            cancelButtonText: t('cancelar'),
+            confirmButtonColor: '#0d734c',
+            allowOutsideClick: false,
+            didOpen: () => {
+                const inputRec = document.getElementById('swal-recibido');
+                const btnConfirm = Swal.getConfirmButton();
+                const boxCambio = document.getElementById('box-cambio');
+                const lblTitulo = document.getElementById('lbl-cambio-titulo');
+                const lblValor = document.getElementById('lbl-cambio-valor');
+
+                inputRec.focus();
+                inputRec.select();
+
+                const recalcular = () => {
+                    const raw = inputRec.value.trim();
+                    const val = parseFloat(raw);
+                    if (raw === '' || isNaN(val) || val < 0) {
+                        btnConfirm.disabled = true;
+                        boxCambio.style.background = 'var(--danger-bg)';
+                        boxCambio.style.borderColor = 'var(--danger)';
+                        lblTitulo.style.color = 'var(--danger)';
+                        lblValor.style.color = 'var(--danger)';
+                        lblTitulo.textContent = t('pos_cobro_invalido');
+                        lblValor.textContent = '---';
+                        return;
+                    }
+
+                    const recCents = Math.round(val * 100);
+                    const diffCents = recCents - totalCents;
+
+                    if (diffCents < 0) {
+                        btnConfirm.disabled = true;
+                        boxCambio.style.background = 'var(--danger-bg)';
+                        boxCambio.style.borderColor = 'var(--danger)';
+                        lblTitulo.style.color = 'var(--danger)';
+                        lblValor.style.color = 'var(--danger)';
+                        lblTitulo.textContent = t('pos_cobro_insuficiente');
+                        lblValor.textContent = formatMXN(Math.abs(diffCents) / 100);
+                    } else {
+                        btnConfirm.disabled = false;
+                        boxCambio.style.background = 'var(--success-bg)';
+                        boxCambio.style.borderColor = 'var(--success)';
+                        lblTitulo.style.color = 'var(--success)';
+                        lblValor.style.color = 'var(--success)';
+                        lblTitulo.textContent = t('pos_cobro_cambio_lbl');
+                        lblValor.textContent = formatMXN(diffCents / 100);
+                    }
+                };
+
+                inputRec.addEventListener('input', recalcular);
+                inputRec.addEventListener('keydown', (ev) => {
+                    if (ev.key === 'Enter') {
+                        ev.preventDefault();
+                        if (!btnConfirm.disabled && !ventaEnProceso) {
+                            btnConfirm.click();
+                        }
+                    }
+                });
+
+                recalcular();
+            },
+            preConfirm: () => {
+                if (ventaEnProceso) return false;
+                const val = parseFloat(document.getElementById('swal-recibido').value);
+                if (isNaN(val) || Math.round(val * 100) < totalCents) {
+                    Swal.showValidationMessage('La cantidad recibida es insuficiente.');
+                    return false;
+                }
+                return val;
+            }
+        });
+
+        if (!resEfectivo.isConfirmed) return;
+        montoRecibidoFinal = resEfectivo.value;
+    } else {
+        const conf = await Swal.fire({
+            title: t('pos_cobro_proc_title'),
+            text: `${t('pos_cobro_proc_text')} ${formatMXN(totalExacto)}`,
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonColor: 'var(--accent)',
+            confirmButtonText: t('pos_cobro_confirmar'),
+            cancelButtonText: t('cancelar')
+        });
+        if (!conf.isConfirmed) return;
+    }
+
+    ventaEnProceso = true;
+    const btnCobrarEl = $('#btnCobrar');
+    btnCobrarEl.disabled = true;
 
     try {
         const fd = new FormData();
-        fd.append('carrito', JSON.stringify(cart.map(i => ({ id_producto:i.id_producto, cantidad:i.qty }))));
+        fd.append('carrito', JSON.stringify(cart.map(i => ({ id_producto: i.id_producto, cantidad: i.qty }))));
         fd.append('id_metodo_pago', idMetodo);
         if (currentTurnoId) fd.append('id_turno', currentTurnoId);
-        const d = await request('procesar_venta', { method:'POST', body: fd });
+        if (montoRecibidoFinal !== null) fd.append('monto_recibido', montoRecibidoFinal.toFixed(2));
+
+        const d = await request('procesar_venta', { method: 'POST', body: fd });
+
         if (d.data && d.data.dinero_esperado !== null && d.data.dinero_esperado !== undefined) {
             $('#posEfectivoEsperado').innerText = money(d.data.dinero_esperado);
             if (dineroInicial > 0 && d.data.dinero_esperado > dineroInicial * 2) promptRetiro();
         }
-        Swal.fire({ title:Lp.success, text:d.msg, icon:'success', timer:1800, showConfirmButton:false, background: 'var(--bg-surface)', color: 'var(--ink)' }).then(() => {
-            cart = []; updateCartUI(); posBarcode.focus(); loadDashboard();
-        });
-    } catch (e) { notify(e.message, 'error'); }
+
+        cart = [];
+        updateCartUI();
+        loadDashboard();
+
+        if (typeof window.mostrarComprobantePETKO === 'function') {
+            window.mostrarComprobantePETKO('venta', d.data);
+        } else {
+            Swal.fire({ title: '¡Pago Exitoso!', text: d.msg, icon: 'success' });
+        }
+        posBarcode.focus();
+    } catch (e) {
+        notify(e.message, 'error');
+    } finally {
+        ventaEnProceso = false;
+        btnCobrarEl.disabled = false;
+    }
 });
 
 // Reanudar un turno abierto si la página se recarga mientras el cajero trabaja
 (async function resumirTurnoSiExiste() {
-    const raw = localStorage.getItem('kion-gerente-turno');
+    const raw = localStorage.getItem('petko-gerente-turno');
     if (!raw) return;
     let saved;
     try { saved = JSON.parse(raw); } catch (e) { limpiarTurnoLocal(); return; }
@@ -3258,7 +3682,7 @@ loadFiltrosInv();
 
 // -------- ESCÁNER DE CÓDIGO DE BARRAS Y QR (SOPORTE COMPLETO) --------
 let html5QrCode = null;
-let procesandoEscaneo = false; // Evita que lea el código múltiples veces seguidas
+let procesandoEscaneo = false;
 
 document.addEventListener('DOMContentLoaded', () => {
     const btnCamara = document.getElementById('btnStartCameraScan');
@@ -3268,9 +3692,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function abrirEscanerCamara() {
-    procesandoEscaneo = false; // Reiniciamos la bandera
+    procesandoEscaneo = false;
     Swal.fire({
-        title: 'Escanear Código de Barras o QR',
+        title: t('pos_scan_modal_title'),
         html: `
             <style>
                 #reader { width: 100% !important; max-width: 350px !important; margin: 0 auto !important; border-radius: 12px !important; overflow: hidden !important; background: #000 !important; }
@@ -3299,7 +3723,6 @@ function iniciarCamaraModal() {
         qrbox: { width: 250, height: 140 },
         aspectRatio: 1.0,
         disableFlip: false,
-        // Habilitación explícita de todos los formatos de códigos 1D y 2D
         formatsToSupport: [
             Html5QrcodeSupportedFormats.EAN_13,
             Html5QrcodeSupportedFormats.EAN_8,
@@ -3322,11 +3745,9 @@ function iniciarCamaraModal() {
         { facingMode: "environment" },
         config,
         async (decodedText) => {
-            // Si ya se está procesando un código, ignorar lecturas consecutivas
             if (procesandoEscaneo) return;
             procesandoEscaneo = true;
 
-            // 1. Apagar la cámara de forma segura
             if (html5QrCode && html5QrCode.isScanning) {
                 try {
                     await html5QrCode.stop();
@@ -3337,14 +3758,11 @@ function iniciarCamaraModal() {
                 }
             }
 
-            // 2. Cerrar la ventana modal
             Swal.close();
 
-            // 3. Colocar el texto leído en el campo de entrada
             const posBarcode = document.getElementById('posBarcode');
             if (posBarcode) posBarcode.value = decodedText;
 
-            // 4. Buscar el producto en la base de datos y agregarlo
             try {
                 const { data } = await request(`buscar_producto_pos&codigo=${encodeURIComponent(decodedText)}`);
                 if (data) {
@@ -3355,9 +3773,7 @@ function iniciarCamaraModal() {
                 notify(err.message, 'error');
             }
         },
-        (errorMessage) => {
-            // Ignorar fotogramas sin detección
-        }
+        (errorMessage) => {}
     ).catch((err) => {
         console.error("Error al iniciar cámara:", err);
         Swal.showValidationMessage("No se pudo acceder a la cámara. Revisa los permisos.");
@@ -3381,6 +3797,6 @@ function detenerEscanerCamara() {
     }
 }
 </script>
-
+<?php require_once __DIR__ . '/../../componentes/comprobantes.php'; ?>
 </body>
 </html>

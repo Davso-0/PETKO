@@ -1,8 +1,22 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/versionMobil/core/Movil.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
+}
+
+/* =====================================================
+   DETECCIÓN AUTOMÁTICA DE VERSIÓN MÓVIL
+   Solo en peticiones GET directas (no AJAX)
+===================================================== */
+if (empty($GLOBALS['KION_MOBILE_RENDER']) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($_GET['action'] ?? '') === '') {
+    if (KionMovil::usarVersionMovil()) {
+        header('Accept-CH: Sec-CH-UA-Mobile');
+        header('Vary: Sec-CH-UA-Mobile, Cookie');
+        header('Location: versionMobil/catalogo.php');
+        exit;
+    }
 }
 
 // Token CSRF para proteger peticiones POST de apartados y compras
@@ -21,46 +35,20 @@ if (is_array($_SESSION['usuario'] ?? null)) {
 $usuarioAutenticado = $idUsuarioSesion > 0;
 $rutaLogin = '../../../inicioSesion.php';
 
-// Conexión centralizada con respaldo local
-if (file_exists(__DIR__ . '/../config/conexion_BD.php')) {
-    require_once __DIR__ . '/../config/conexion_BD.php';
-} elseif (file_exists(__DIR__ . '/../config/conexion.php')) {
-    require_once __DIR__ . '/../config/conexion.php';
-}
-
-if (!isset($pdo) || !($pdo instanceof PDO)) {
-    $dbHost = 'localhost';
-    $dbName = 'kion';
-    $dbUser = 'root';
-    $dbPass = '';
-    $pdo = null;
-    $errorConsulta = null;
-
-    try {
-        $pdo = new PDO(
-            "mysql:host={$dbHost};dbname={$dbName};charset=utf8mb4",
-            $dbUser,
-            $dbPass,
-            [
-                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            ]
-        );
-    } catch (PDOException $e) {
-        $errorConsulta = 'Fallo al conectar con la base de datos.';
-    }
-} else {
-    $errorConsulta = $errorConexion ?? null;
-}
+// Conexión centralizada y segura
+require_once __DIR__ . '/../config/conexion_BD.php';
+$errorConsulta = $errorConexion ?? null;
 
 // -------------------------------------------------------------------------
 // ENDPOINT AJAX SEGURO (POST): Guardar apartado / compra en BD por 48 horas
 // -------------------------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'registrar_apartado') {
+    ob_start();
     header('Content-Type: application/json; charset=utf-8');
 
     // 1. Verificar sesión autenticada
     if (!$usuarioAutenticado) {
+        if (ob_get_length()) ob_clean();
         http_response_code(401);
         echo json_encode([
             'ok'   => false,
@@ -73,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'regist
     // 2. Verificar token CSRF
     $headerCsrf = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
     if ($headerCsrf === '' || !hash_equals($_SESSION['csrf_token'], $headerCsrf)) {
+        if (ob_get_length()) ob_clean();
         http_response_code(403);
         echo json_encode([
             'ok'  => false,
@@ -82,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'regist
     }
 
     if (!isset($pdo) || !($pdo instanceof PDO)) {
+        if (ob_get_length()) ob_clean();
         http_response_code(500);
         echo json_encode(['ok' => false, 'msg' => 'Sin conexión a la base de datos.'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -89,6 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'regist
 
     $payload = json_decode(file_get_contents('php://input') ?: '{}', true);
     if (!is_array($payload)) {
+        if (ob_get_length()) ob_clean();
         http_response_code(400);
         echo json_encode(['ok' => false, 'msg' => 'Formato de solicitud inválido.'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -110,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'regist
     }
 
     if (empty($itemsAgrupados)) {
+        if (ob_get_length()) ob_clean();
         http_response_code(400);
         echo json_encode(['ok' => false, 'msg' => 'No hay productos válidos en el carrito para procesar.'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -136,27 +128,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'regist
             throw new RuntimeException('No hay sucursales activas registradas en el sistema.');
         }
 
-        // Detectar columnas disponibles en la tabla apartados
-        $colsStmt = $pdo->query("SHOW COLUMNS FROM apartados");
-        $columnasTabla = array_column($colsStmt->fetchAll(PDO::FETCH_ASSOC), 'Field');
-        $tieneCantidad = in_array('cantidad', $columnasTabla, true);
-        $tieneEstadoPago = in_array('estado_pago', $columnasTabla, true);
+        // Detectar columnas disponibles en apartados antes de preparar el INSERT
+        $colsApartados = array_column($pdo->query("SHOW COLUMNS FROM apartados")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+        $tieneCantidad = in_array('cantidad', $colsApartados, true);
+        $tieneEstadoPago = in_array('estado_pago', $colsApartados, true);
 
-        // Bloqueo FOR UPDATE para evitar condiciones de carrera en el inventario
-        $stmtCheckStock = $pdo->prepare("
-            SELECT p.id_producto, p.nombre, p.precio, UPPER(TRIM(COALESCE(p.estado, 'ACTIVO'))) AS estado_prod,
-                   COALESCE(i.existencias, 10) AS stock, i.id_inventario
-            FROM productos p
-            LEFT JOIN inventarios i ON p.id_producto = i.id_producto
-            WHERE p.id_producto = ?
+        $stmtCheckProd = $pdo->prepare("
+            SELECT id_producto, nombre, precio, UPPER(TRIM(COALESCE(estado, 'ACTIVO'))) AS estado_prod
+            FROM productos
+            WHERE id_producto = ?
             LIMIT 1
+        ");
+
+        $stmtCheckInv = $pdo->prepare("
+            SELECT id_inventario, existencias
+            FROM inventarios
+            WHERE id_producto = ?
             FOR UPDATE
         ");
 
         $stmtUpdateStock = $pdo->prepare("
             UPDATE inventarios 
             SET existencias = GREATEST(0, existencias - ?) 
-            WHERE id_producto = ?
+            WHERE id_inventario = ?
         ");
 
         if ($tieneCantidad && $tieneEstadoPago) {
@@ -176,11 +170,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'regist
         $totalReal = 0.0;
 
         foreach ($itemsAgrupados as $idProd => $cant) {
-            $stmtCheckStock->execute([$idProd]);
-            $prodInfo = $stmtCheckStock->fetch(PDO::FETCH_ASSOC);
+            $stmtCheckProd->execute([$idProd]);
+            $prodInfo = $stmtCheckProd->fetch(PDO::FETCH_ASSOC);
 
             if (!$prodInfo || $prodInfo['estado_prod'] !== 'ACTIVO') {
                 $pdo->rollBack();
+                if (ob_get_length()) ob_clean();
                 http_response_code(409);
                 echo json_encode([
                     'ok'          => false,
@@ -190,7 +185,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'regist
                 exit;
             }
 
-            $stockActual = (int)$prodInfo['stock'];
+            // Consultar filas de inventario del producto
+            $stmtCheckInv->execute([$idProd]);
+            $filasInv = $stmtCheckInv->fetchAll(PDO::FETCH_ASSOC);
+
+            $tieneInv = count($filasInv) > 0;
+            $stockActual = $tieneInv
+                ? array_sum(array_map(static fn($r) => (int)$r['existencias'], $filasInv))
+                : 10;
+
             if ($stockActual < $cant) {
                 throw new RuntimeException("Stock insuficiente para \"{$prodInfo['nombre']}\" (disponibles: {$stockActual}).");
             }
@@ -203,8 +206,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'regist
                 }
             }
 
-            if (!empty($prodInfo['id_inventario'])) {
-                $stmtUpdateStock->execute([$cant, $idProd]);
+            // Descontar existencias de las filas de inventario disponibles
+            if ($tieneInv) {
+                $restante = $cant;
+                foreach ($filasInv as $filaInv) {
+                    if ($restante <= 0) break;
+                    $dispFila = (int)$filaInv['existencias'];
+                    if ($dispFila <= 0) continue;
+                    $aDescontar = min($dispFila, $restante);
+                    $stmtUpdateStock->execute([$aDescontar, (int)$filaInv['id_inventario']]);
+                    $restante -= $aDescontar;
+                }
             }
 
             $precioUnit = (float)$prodInfo['precio'];
@@ -219,6 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'regist
         }
 
         $pdo->commit();
+        if (ob_get_length()) ob_clean();
 
         echo json_encode([
             'ok'          => true,
@@ -240,6 +253,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'regist
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
+        if (ob_get_length()) ob_clean();
         http_response_code(400);
         echo json_encode(['ok' => false, 'msg' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
         exit;
@@ -270,8 +284,16 @@ if (isset($pdo) && $pdo instanceof PDO) {
             $categoriasDisponibles = ['Medicamentos', 'Alimentos', 'Antiparasitarios', 'Higiene', 'Accesorios'];
         }
 
-        // Consulta de productos con su información completa (código, descripción e imagen)
-        $sql = "SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.imagen_url, p.precio, c.nombre AS categoria, COALESCE(i.existencias, 10) AS stock FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria LEFT JOIN inventarios i ON p.id_producto = i.id_producto WHERE p.estado = 'ACTIVO'";
+        // Consulta de productos agrupada por id_producto para evitar duplicados por sucursal en inventarios
+        $sql = "SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.imagen_url, p.precio,
+                       MAX(c.nombre) AS categoria,
+                       COALESCE(SUM(i.existencias), 10) AS stock
+                FROM productos p
+                LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+                LEFT JOIN inventarios i ON p.id_producto = i.id_producto
+                WHERE UPPER(TRIM(COALESCE(p.estado, 'ACTIVO'))) = 'ACTIVO'
+                GROUP BY p.id_producto, p.codigo, p.nombre, p.descripcion, p.imagen_url, p.precio
+                ORDER BY p.id_producto ASC";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute();
@@ -344,6 +366,7 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="../../css/catalogo.css?v=<?= (int) @filemtime(__DIR__ . '/../../css/catalogo.css') ?>">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
@@ -845,6 +868,58 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
         'loginUrl'    => $rutaLogin,
         'csrf'        => $csrfToken,
     ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?>;
+
+    // Sincronizar localStorage con el stock real de MySQL ANTES de que catalogo.js cargue el carrito
+    (function sincronizarCarritoAntesDeCatalogo() {
+        const activos = new Map();
+        document.querySelectorAll('.tarjeta[data-id]').forEach(card => {
+            const id = Number(card.dataset.id);
+            if (id > 0) activos.set(id, Number(card.dataset.stock || 0));
+        });
+
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key || !/cart|carrito|petko/i.test(key) || /apartado|reserve/i.test(key)) continue;
+            try {
+                const parsed = JSON.parse(localStorage.getItem(key));
+                if (Array.isArray(parsed)) {
+                    let modificado = false;
+                    const limpio = parsed.reduce((acc, item) => {
+                        const id = Number(item?.id_producto ?? item?.id ?? 0);
+                        if (!id) {
+                            acc.push(item);
+                            return acc;
+                        }
+                        if (activos.size > 0 && !activos.has(id)) {
+                            modificado = true;
+                            return acc;
+                        }
+                        if (activos.has(id)) {
+                            const stockReal = activos.get(id);
+                            if (stockReal <= 0) {
+                                modificado = true;
+                                return acc;
+                            }
+                            const cant = Number(item.cantidad ?? item.qty ?? item.quantity ?? 1);
+                            if (Number(item.stock) !== stockReal || cant > stockReal) {
+                                modificado = true;
+                                const ajustada = Math.min(cant, stockReal);
+                                item.stock = stockReal;
+                                if ('cantidad' in item) item.cantidad = ajustada;
+                                if ('qty' in item) item.qty = ajustada;
+                                if ('quantity' in item) item.quantity = ajustada;
+                            }
+                        }
+                        acc.push(item);
+                        return acc;
+                    }, []);
+                    if (modificado || limpio.length !== parsed.length) {
+                        localStorage.setItem(key, JSON.stringify(limpio));
+                    }
+                }
+            } catch (_) {}
+        }
+    })();
 </script>
 <script src="../../js/catalogo.js?v=<?= (int) @filemtime(__DIR__ . '/../../js/catalogo.js') ?>"></script>
 
@@ -871,25 +946,50 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
         return mapa;
     }
 
-    // Purgar cualquier ID obsoleto (como ID 18) de localStorage si ya no existe en el catálogo
+    // Purgar IDs obsoletos y ajustar cantidades/stock en localStorage contra el stock real de MySQL
     function limpiarIdsObsoletosLocalStorage(idsInvalidos = []) {
         const activos = obtenerProductosActivosCatalogo();
         const setInvalidos = new Set(idsInvalidos.map(Number));
 
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (!key || !/cart|carrito|petko/i.test(key)) continue;
+            if (!key || !/cart|carrito|petko/i.test(key) || /apartado|reserve/i.test(key)) continue;
             try {
                 const raw = localStorage.getItem(key);
                 const parsed = JSON.parse(raw);
                 if (Array.isArray(parsed)) {
-                    const filtrado = parsed.filter(item => {
+                    let huboCambios = false;
+                    const filtrado = parsed.reduce((acc, item) => {
                         const id = Number(item?.id_producto ?? item?.id ?? 0);
-                        if (!id) return true;
-                        if (setInvalidos.has(id)) return false;
-                        return activos.size === 0 || activos.has(id);
-                    });
-                    if (filtrado.length !== parsed.length) {
+                        if (!id) {
+                            acc.push(item);
+                            return acc;
+                        }
+                        if (setInvalidos.has(id) || (activos.size > 0 && !activos.has(id))) {
+                            huboCambios = true;
+                            return acc;
+                        }
+                        if (activos.has(id)) {
+                            const stockReal = activos.get(id).stock;
+                            if (stockReal <= 0) {
+                                huboCambios = true;
+                                return acc;
+                            }
+                            const cantActual = Number(item.cantidad ?? item.qty ?? item.quantity ?? 1);
+                            if (Number(item.stock) !== stockReal || cantActual > stockReal) {
+                                huboCambios = true;
+                                const nuevaCant = Math.min(cantActual, stockReal);
+                                item.stock = stockReal;
+                                if ('cantidad' in item) item.cantidad = nuevaCant;
+                                if ('qty' in item) item.qty = nuevaCant;
+                                if ('quantity' in item) item.quantity = nuevaCant;
+                            }
+                        }
+                        acc.push(item);
+                        return acc;
+                    }, []);
+
+                    if (huboCambios || filtrado.length !== parsed.length) {
                         localStorage.setItem(key, JSON.stringify(filtrado));
                     }
                 }
@@ -906,7 +1006,6 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
         document.querySelectorAll('#cart-items > *').forEach(row => {
             let id = Number(row.dataset?.id || row.querySelector('[data-id]')?.dataset?.id || 0);
 
-            // Si el nodo no tiene data-id, empatar por nombre con las tarjetas del catálogo
             if (!id) {
                 const textoNodo = (row.textContent || '').toLowerCase();
                 for (const [idAct, info] of activos.entries()) {
@@ -981,13 +1080,22 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
         const totalEl = document.getElementById('ticket-total');
         const codigoEl = document.getElementById('ticket-codigo');
 
+        const isEn = (window.PetkoPrefs && PetkoPrefs.lang() === 'en');
         const esPago = data.modo === 'pagar';
-        if (titulo) titulo.textContent = esPago ? '¡Compra y apartado confirmados!' : '¡Apartado confirmado por 48 h!';
-        if (sub) sub.textContent = data.msg;
+        if (titulo) titulo.textContent = isEn
+            ? (esPago ? 'Purchase & reservation confirmed!' : 'Reservation confirmed for 48 hrs!')
+            : (esPago ? '¡Compra y apartado confirmados!' : '¡Apartado confirmado por 48 h!');
+        if (sub) sub.textContent = isEn
+            ? (esPago ? 'Payment verified and product(s) reserved for 48 hours.' : 'Product(s) reserved for 48 hours for in-branch payment.')
+            : data.msg;
         if (folio) folio.textContent = data.folio;
         if (fecha) fecha.textContent = data.fecha;
-        if (metodo) metodo.textContent = esPago ? 'Pago en línea' : 'Pago en sucursal (Efectivo)';
-        if (estado) estado.textContent = esPago ? 'PAGADO · APARTADO 48H' : 'PENDIENTE DE PAGO (48H)';
+        if (metodo) metodo.textContent = isEn
+            ? (esPago ? 'Online payment' : 'In-branch payment (Cash)')
+            : (esPago ? 'Pago en línea' : 'Pago en sucursal (Efectivo)');
+        if (estado) estado.textContent = isEn
+            ? (esPago ? 'PAID · RESERVED 48H' : 'PENDING PAYMENT (48H)')
+            : (esPago ? 'PAGADO · APARTADO 48H' : 'PENDIENTE DE PAGO (48H)');
         if (totalEl) totalEl.textContent = '$' + Number(data.total || 0).toFixed(2);
         if (codigoEl) codigoEl.textContent = data.folio;
 
@@ -1036,16 +1144,22 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
         if (transaccionEnCurso) return;
         transaccionEnCurso = true;
 
+        const modalCheckoutEl = document.getElementById('modal-checkout');
+
         try {
-            // Si eligió "Pagar ahora", exigir confirmación explícita antes de registrar como PAGADO
+            // Si eligió "Pagar ahora", mostrar confirmación encima del modal de checkout
             if (modo === 'pagar') {
+                const isEn = (window.PetkoPrefs && PetkoPrefs.lang() === 'en');
                 const conf = await Swal.fire({
+                    target: (modalCheckoutEl && modalCheckoutEl.open) ? modalCheckoutEl : 'body',
                     icon: 'question',
-                    title: 'Confirmar pago en línea',
-                    text: 'Se verificará el cargo y tus productos quedarán apartados por 48 horas como YA PAGADOS.',
+                    title: isEn ? 'Confirm online payment' : 'Confirmar pago en línea',
+                    text: isEn
+                        ? 'Your payment will be verified and your products will be reserved for 48 hours as PAID.'
+                        : 'Se verificará el cargo y tus productos quedarán apartados por 48 horas como YA PAGADOS.',
                     showCancelButton: true,
-                    confirmButtonText: 'Confirmar pago',
-                    cancelButtonText: 'Cancelar'
+                    confirmButtonText: isEn ? 'Confirm payment' : 'Confirmar pago',
+                    cancelButtonText: isEn ? 'Cancel' : 'Cancelar'
                 });
                 if (!conf.isConfirmed) return;
             }
@@ -1075,29 +1189,34 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
                 throw new Error(data.msg || 'No se pudo completar la operación en la base de datos.');
             }
 
-            // Actualizar stock visual en las tarjetas del catálogo
+            // Actualizar stock visual en las tarjetas del catálogo y en localStorage
             if (data.stocks) {
                 Object.entries(data.stocks).forEach(([idProd, nuevoStock]) => {
                     const card = document.querySelector(`.tarjeta[data-id="${idProd}"]`);
                     if (card) {
                         card.dataset.stock = String(nuevoStock);
+                        const btnAdd = card.querySelector('.js-add-cart');
+                        if (btnAdd) btnAdd.dataset.stock = String(nuevoStock);
+
                         const stockSpan = card.querySelector('.tarjeta__stock');
                         if (stockSpan) {
                             if (Number(nuevoStock) <= 0) {
                                 stockSpan.className = 'tarjeta__stock stock-none';
                                 stockSpan.textContent = 'Agotado';
-                                card.querySelectorAll('button').forEach(b => { if (!b.classList.contains('js-ver-detalle')) b.disabled = true; });
+                                card.querySelectorAll('button').forEach(b => {
+                                    if (!b.classList.contains('js-ver-detalle')) b.disabled = true;
+                                });
                             } else {
                                 stockSpan.textContent = `Disponibles: ${nuevoStock}`;
                             }
                         }
                     }
                 });
+                limpiarIdsObsoletosLocalStorage();
             }
 
             // Cerrar modal de checkout y carrito lateral
-            const modalCheckout = document.getElementById('modal-checkout');
-            if (modalCheckout && modalCheckout.open) modalCheckout.close();
+            if (modalCheckoutEl && modalCheckoutEl.open) modalCheckoutEl.close();
             document.getElementById('cart-panel')?.classList.remove('is-open', 'open');
             document.getElementById('cart-overlay')?.classList.remove('is-open', 'open');
 
@@ -1109,8 +1228,7 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
             renderizarTicketVerificado(data);
 
         } catch (err) {
-            const modalCheckout = document.getElementById('modal-checkout');
-            if (modalCheckout && modalCheckout.open) modalCheckout.close();
+            if (modalCheckoutEl && modalCheckoutEl.open) modalCheckoutEl.close();
             Swal.fire({
                 icon: 'error',
                 title: 'Operación no completada',
@@ -1133,8 +1251,64 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
         }
     }, true);
 
-    // Interceptar EN FASE DE CAPTURA antes que catalogo.js para impedir tickets falsos
+    // Interceptar EN FASE DE CAPTURA antes que catalogo.js para impedir excesos de stock y tickets falsos
     document.addEventListener('click', function (e) {
+        // 0A. Evitar agregar al carrito por encima del stock real de MySQL
+        const btnAddCart = e.target.closest('.js-add-cart');
+        if (btnAddCart) {
+            const idProd = Number(btnAddCart.dataset.id || btnAddCart.closest('.tarjeta')?.dataset.id || 0);
+            const card = document.querySelector(`.tarjeta[data-id="${idProd}"]`);
+            const stockMax = card ? Number(card.dataset.stock || 0) : Number(btnAddCart.dataset.stock || 0);
+            const enCarrito = obtenerItemsCarritoReales().find(it => it.id_producto === idProd)?.cantidad || 0;
+
+            if (stockMax <= 0 || enCarrito + 1 > stockMax) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Stock máximo alcanzado',
+                    text: stockMax <= 0
+                        ? 'Este producto ya está agotado.'
+                        : `Solo quedan ${stockMax} unidad(es) disponibles de este producto.`
+                });
+                return;
+            }
+        }
+
+        // 0B. Evitar subir cantidad (+) dentro del carrito por encima del stock real de MySQL
+        const btnPlusCart = e.target.closest('#cart-items button, #cart-items [data-action="plus"], #cart-items .qty-plus');
+        if (btnPlusCart && btnPlusCart.closest('#cart-items')) {
+            const textoBtn = (btnPlusCart.textContent || btnPlusCart.dataset.action || '').trim();
+            if (textoBtn === '+' || /plus|inc|add/i.test(textoBtn)) {
+                const row = btnPlusCart.closest('#cart-items > *');
+                const activos = obtenerProductosActivosCatalogo();
+                let idProd = Number(row?.dataset?.id || row?.querySelector('[data-id]')?.dataset?.id || 0);
+                if (!idProd && row) {
+                    const txt = (row.textContent || '').toLowerCase();
+                    for (const [idAct, info] of activos.entries()) {
+                        if (info.nombre && txt.includes(info.nombre)) {
+                            idProd = idAct;
+                            break;
+                        }
+                    }
+                }
+                if (idProd > 0 && activos.has(idProd)) {
+                    const stockMax = activos.get(idProd).stock;
+                    const actual = obtenerItemsCarritoReales().find(it => it.id_producto === idProd)?.cantidad || 1;
+                    if (actual >= stockMax) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Stock máximo alcanzado',
+                            text: `Solo hay ${stockMax} disponible(s) en inventario.`
+                        });
+                        return;
+                    }
+                }
+            }
+        }
+
         // 1. Botón "Apartar producto" (tarjeta o modal de producto)
         const btnApartar = e.target.closest('.js-apartar, #modal-apartar');
         if (btnApartar) {
@@ -1169,6 +1343,7 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
             procesarEnServidor(items, modo);
         }
     }, true);
+
     function actualizarTextoMisCompras(lang) {
         const span = document.querySelector('[data-custom-i18n="nav_my_purchases"]');
         if (span) {
@@ -1181,7 +1356,6 @@ function resolverImagenProducto(?string $imagenUrl, int $idProd, string $categor
         PetkoPrefs.onLang(actualizarTextoMisCompras);
     }
 })();
-
 </script>
 </body>
 </html>

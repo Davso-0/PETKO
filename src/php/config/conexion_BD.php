@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
-// Configuración centralizada de conexión a la Base de Datos KION
-require_once dirname(__DIR__, 3) . '/vendor/autoload.php';
+// Configuración centralizada de conexión única a la Base de Datos KION / PETKO
+if (file_exists(dirname(__DIR__, 3) . '/vendor/autoload.php')) {
+    require_once dirname(__DIR__, 3) . '/vendor/autoload.php';
+}
 
 if (class_exists('Dotenv\\Dotenv')) {
     Dotenv\Dotenv::createMutable(dirname(__DIR__, 3))->safeLoad();

@@ -1,11 +1,51 @@
 <?php
 declare(strict_types=1);
 session_start();
+if (!empty($GLOBALS['KION_MOBILE_RENDER'])) {
+    $_SESSION['kion_mobile_auth_base'] = rtrim(
+        str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? ''))),
+        '/'
+    );
+} elseif (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+    unset($_SESSION['kion_mobile_auth_base']);
+}
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     unset($_SESSION['registro_terminos_abiertos']);
 }
 $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 
+function destinoDespuesDeRegistro(string $modulo, string $destinoEscritorio): string
+{
+    if (!empty($GLOBALS['KION_MOBILE_RENDER'])) {
+        unset($_SESSION['kion_mobile_auth_base']);
+        return KionMovil::urlModulo($modulo);
+    }
+
+    $baseMovil = $_SESSION['kion_mobile_auth_base'] ?? '';
+    if (is_string($baseMovil) && $baseMovil !== '') {
+        unset($_SESSION['kion_mobile_auth_base']);
+        return rtrim($baseMovil, '/') . '/' . $modulo . '.php';
+    }
+
+    return $destinoEscritorio;
+}
+
+function rutaLoginDespuesDeRegistro(): string
+{
+    if (!empty($GLOBALS['KION_MOBILE_RENDER'])) {
+        return rtrim(
+            str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? ''))),
+            '/'
+        ) . '/pagina.php?p=inicioSesion';
+    }
+
+    $baseMovil = $_SESSION['kion_mobile_auth_base'] ?? '';
+    if (is_string($baseMovil) && $baseMovil !== '') {
+        return rtrim($baseMovil, '/') . '/pagina.php?p=inicioSesion';
+    }
+
+    return 'inicioSesion.php';
+}
 
 function responderRegistro(bool $ok, string $message, ?string $redirect = null): never
 {
@@ -87,7 +127,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         unset($_SESSION['registro_terminos_abiertos']);
-        responderRegistro(true, '¡Cuenta creada exitosamente! Redirigiendo al inicio de sesión...', 'inicioSesion.php');
+        if (($_SESSION['kion_after_auth'] ?? null) === 'dashboard_usuario') {
+            session_regenerate_id(true);
+            $_SESSION['usuario'] = [
+                'id_usuario' => (int)$pdo->lastInsertId(),
+                'nombre' => $nombre,
+                'apellido' => $apellido,
+                'correo' => $correo,
+                'id_rol' => (int)$idRol,
+                'id_sucursal' => null,
+                'rol' => 'Usuario',
+            ];
+            $_SESSION['user_agent_hash'] = hash('sha256', (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+            $_SESSION['ultimo_acceso'] = time();
+            $_SESSION['created_at'] = time();
+            unset($_SESSION['kion_after_auth']);
+            $destino = destinoDespuesDeRegistro('dashboard_usuario', 'src/php/modulos/home/dashboard_usuario.php');
+            responderRegistro(true, '¡Cuenta creada exitosamente! Redirigiendo a tu panel...', $destino);
+        }
+        responderRegistro(true, '¡Cuenta creada exitosamente! Redirigiendo al inicio de sesión...', rutaLoginDespuesDeRegistro());
     } catch (PDOException $e) {
         if ($e->getCode() === '23000') {
             responderRegistro(false, 'Este correo electrónico ya se encuentra registrado.');
@@ -107,6 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 50%, #e0f2fe 100%);
@@ -445,7 +504,7 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
             <span class="back-text">Inicio</span>
         </a>
         <div class="topbar-right">
-            <button id="darkModeBtn" class="dark-mode-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro" aria-pressed="false" data-no-i18n>🌙</button>
+            <button id="darkModeBtn" class="dark-mode-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro" aria-pressed="false" data-no-i18n><i id="darkModeIcon" class="fa-solid fa-moon" aria-hidden="true"></i></button>
             <button id="languageToggle" class="language-btn" type="button" title="Switch to English" aria-label="Switch to English" data-no-i18n>EN</button>
         </div>
     </div>
@@ -636,7 +695,7 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
             const btn = document.getElementById('darkModeBtn');
             const dark = document.body.classList.contains('dark-mode');
             const label = t(dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
-            btn.textContent = dark ? '☀️' : '🌙';
+            document.getElementById('darkModeIcon').className = dark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
             btn.title = label; btn.setAttribute('aria-label', label);
             btn.setAttribute('aria-pressed', String(dark));
         }
