@@ -127,7 +127,8 @@ CREATE TABLE `roles` (
 INSERT INTO `roles` (`id_rol`, `nombre`) VALUES
 (1, 'Administrador General'),
 (3, 'Cajero'),
-(2, 'Gerente');
+(2, 'Gerente'),
+(4, 'Usuario');
 
 -- --------------------------------------------------------
 
@@ -163,6 +164,9 @@ CREATE TABLE `usuarios` (
   `remember_expires_at` datetime DEFAULT NULL,
   `recovery_token` char(64) DEFAULT NULL,
   `recovery_expires_at` datetime DEFAULT NULL,
+  `recovery_sent_at` datetime DEFAULT NULL,
+  `recovery_window_started_at` datetime DEFAULT NULL,
+  `recovery_send_count` tinyint(3) UNSIGNED NOT NULL DEFAULT 0,
   `reset_token` char(64) DEFAULT NULL,
   `token_expira` datetime DEFAULT NULL,
   `estado` enum('pendiente','activo','inactivo') NOT NULL DEFAULT 'activo'
@@ -251,6 +255,20 @@ ALTER TABLE `usuarios`
   ADD KEY `id_rol` (`id_rol`),
   ADD KEY `id_sucursal` (`id_sucursal`);
 
+CREATE TABLE `registro_verificaciones` (
+  `id_usuario` int(10) UNSIGNED NOT NULL,
+  `codigo_hash` varchar(255) NOT NULL,
+  `expira_en` datetime NOT NULL,
+  `intentos` tinyint(3) UNSIGNED NOT NULL DEFAULT 0,
+  `enviado_en` datetime NOT NULL,
+  `ventana_envios_inicio` datetime NOT NULL,
+  `envios_en_ventana` tinyint(3) UNSIGNED NOT NULL DEFAULT 1,
+  PRIMARY KEY (`id_usuario`),
+  CONSTRAINT `fk_registro_verificaciones_usuario`
+    FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 --
 -- Indices de la tabla `ventas`
 --
@@ -298,7 +316,7 @@ ALTER TABLE `productos`
 -- AUTO_INCREMENT de la tabla `roles`
 --
 ALTER TABLE `roles`
-  MODIFY `id_rol` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id_rol` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de la tabla `sucursales`

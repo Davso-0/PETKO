@@ -25,6 +25,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         responderRegistro(false, 'La solicitud expiró o no es válida. Recarga la página e inténtalo de nuevo.');
     }
 
+    $accionRegistro = $_POST['action'] ?? 'crear';
+    if (!is_string($accionRegistro) || $accionRegistro !== 'crear') {
+        responderRegistro(false, 'La solicitud no es válida. Recarga la página e inténtalo de nuevo.');
+    }
+
     if (($_SESSION['registro_terminos_abiertos'] ?? false) !== true) {
         responderRegistro(false, 'Debes abrir los Términos y Condiciones antes de aceptarlos.');
     }
@@ -35,27 +40,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $apellido = is_string($apellido) ? trim($apellido) : '';
     $correo = $_POST['email'] ?? '';
     $correo = is_string($correo) ? trim($correo) : '';
-    $contrasena = $_POST['password'] ?? '';
-    $contrasena = is_string($contrasena) ? $contrasena : '';
-    $confirmacion = $_POST['confirm_password'] ?? '';
-    $confirmacion = is_string($confirmacion) ? $confirmacion : '';
     if (!isset($_POST['acepto_terminos'])
         || !is_string($_POST['acepto_terminos'])
         || $_POST['acepto_terminos'] !== '1') {
         responderRegistro(false, 'Debes aceptar los Términos y Condiciones para poder registrarte.');
     }
 
-    if ($nombre === '' || $apellido === '' || $correo === '' || $contrasena === '' || $confirmacion === '') {
+    if ($nombre === '' || $apellido === '' || $correo === '') {
         responderRegistro(false, 'Completa todos los campos requeridos.');
     }
     if (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {
         responderRegistro(false, 'Escribe un correo electrónico válido.');
-    }
-    if (strlen($contrasena) < 8 || !preg_match('/[A-Z]/', $contrasena) || !preg_match('/[0-9]/', $contrasena)) {
-        responderRegistro(false, 'La contraseña debe tener al menos 8 caracteres, una letra mayúscula y un número.');
-    }
-    if ($contrasena !== $confirmacion) {
-        responderRegistro(false, 'Las contraseñas no coinciden.');
     }
 
     require_once __DIR__ . '/src/php/config/conexion_BD.php';
@@ -64,9 +59,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     try {
-        $consultaCorreo = $pdo->prepare('SELECT COUNT(*) FROM usuarios WHERE correo = ?');
+        $consultaCorreo = $pdo->prepare(
+            'SELECT u.estado, v.id_usuario AS id_verificacion
+             FROM usuarios u
+             LEFT JOIN registro_verificaciones v ON v.id_usuario = u.id_usuario
+             WHERE u.correo = ? LIMIT 1'
+        );
         $consultaCorreo->execute([$correo]);
-        if ((int)$consultaCorreo->fetchColumn() > 0) {
+        $usuarioExistente = $consultaCorreo->fetch();
+        if ($usuarioExistente) {
+            if (strtolower((string)$usuarioExistente['estado']) === 'pendiente'
+                && $usuarioExistente['id_verificacion'] !== null) {
+                $_SESSION['registro_correo_pendiente'] = $correo;
+                $_SESSION['registro_notice'] = 'Este correo ya tiene una verificación pendiente. Puedes ingresar el código o solicitar otro.';
+                $_SESSION['registro_notice_type'] = 'success';
+                responderRegistro(
+                    false,
+                    'Este correo ya tiene una verificación pendiente. Puedes ingresar el código o solicitar otro.',
+                    'verificar-registro.php'
+                );
+            }
             responderRegistro(false, 'Este correo electrónico ya se encuentra registrado.');
         }
 
@@ -77,20 +89,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             responderRegistro(false, 'No fue posible completar el registro en este momento.');
         }
 
-        $insertar = $pdo->prepare("INSERT INTO usuarios (nombre, apellido, correo, password_hash, id_rol, estado) VALUES (?, ?, ?, ?, ?, 'ACTIVO')");
-        $insertar->execute([
-            $nombre,
-            $apellido,
-            $correo,
-            password_hash($contrasena, PASSWORD_DEFAULT),
-            $idRol,
-        ]);
+        require_once __DIR__ . '/src/php/servicios/EmailService.php';
+        $codigo = (string)random_int(10000000, 99999999);
+        $pdo->beginTransaction();
+        $insertar = $pdo->prepare("INSERT INTO usuarios (nombre, apellido, correo, password_hash, id_rol, estado) VALUES (?, ?, ?, NULL, ?, 'pendiente')");
+        $insertar->execute([$nombre, $apellido, $correo, $idRol]);
+        $idUsuario = (int)$pdo->lastInsertId();
+        $guardarCodigo = $pdo->prepare(
+            'INSERT INTO registro_verificaciones (id_usuario, codigo_hash, expira_en, enviado_en, ventana_envios_inicio, envios_en_ventana) '
+            . 'VALUES (?, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 10 MINUTE), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)'
+        );
+        $guardarCodigo->execute([$idUsuario, password_hash($codigo, PASSWORD_DEFAULT)]);
+        $pdo->commit();
 
+        $_SESSION['registro_correo_pendiente'] = $correo;
         unset($_SESSION['registro_terminos_abiertos']);
-        responderRegistro(true, '¡Cuenta creada exitosamente! Redirigiendo al inicio de sesión...', 'inicioSesion.php');
+        if (!EmailService::enviarCodigoVerificacion($correo, $nombre, $codigo)) {
+            error_log('KION registro: no se pudo enviar el código de verificación SMTP.');
+            $_SESSION['registro_notice'] = 'No se pudo enviar el correo. Puedes solicitar otro código desde esta pantalla.';
+            $_SESSION['registro_notice_type'] = 'error';
+            responderRegistro(false, 'La cuenta quedó pendiente, pero no se pudo enviar el código. Ve a verificación para solicitar otro.', 'verificar-registro.php');
+        }
+        $_SESSION['registro_notice'] = 'Te enviamos un código de verificación. Ingrésalo para continuar con la creación de tu cuenta.';
+        $_SESSION['registro_notice_type'] = 'success';
+        responderRegistro(true, 'Te enviamos un código de verificación. Ingrésalo para continuar con la creación de tu cuenta.', 'verificar-registro.php');
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         if ($e->getCode() === '23000') {
             responderRegistro(false, 'Este correo electrónico ya se encuentra registrado.');
+        }
+        error_log('KION registro: ' . $e->getMessage());
+        responderRegistro(false, 'No fue posible completar el registro. Inténtalo de nuevo.');
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
         }
         error_log('KION registro: ' . $e->getMessage());
         responderRegistro(false, 'No fue posible completar el registro. Inténtalo de nuevo.');
@@ -468,6 +502,7 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
         <div class="notice" id="registerNotice" data-no-i18n role="status" aria-live="polite"></div>
         <form id="registerForm" method="post" novalidate>
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="action" value="crear">
             <div class="name-row">
                 <div class="form-group">
                     <label for="nombre">Nombres</label>
@@ -482,33 +517,6 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
                 <label for="email">Correo electrónico</label>
                 <input id="email" name="email" type="email" placeholder="usuario@kion.com" autocomplete="email" required>
             </div>
-            <div class="form-group">
-                <label for="password">Contraseña</label>
-                <div class="input-wrapper">
-                    <input id="password" name="password" type="password" autocomplete="new-password" required>
-                    <button class="toggle-password" type="button" aria-label="Mostrar contraseña" aria-pressed="false">
-                        <i class="ph ph-eye" aria-hidden="true"></i><i class="ph ph-eye-slash" aria-hidden="true"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="password-help">
-                <p>La contraseña debe cumplir:</p>
-                <ul class="password-rules" aria-label="Requisitos de la contraseña">
-                    <li data-rule="length"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i>Mínimo 8</li>
-                    <li data-rule="uppercase"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i>1 mayúscula</li>
-                    <li data-rule="number"><i class="ph ph-circle rule-icon rule-icon-empty" aria-hidden="true"></i><i class="ph-bold ph-check rule-icon rule-icon-valid" aria-hidden="true"></i>1 número</li>
-                </ul>
-            </div>
-            <div class="form-group">
-                <label for="confirm_password">Confirmar contraseña</label>
-                <div class="input-wrapper">
-                    <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required>
-                    <button class="toggle-password" type="button" aria-label="Mostrar contraseña" aria-pressed="false">
-                        <i class="ph ph-eye" aria-hidden="true"></i><i class="ph ph-eye-slash" aria-hidden="true"></i>
-                    </button>
-                </div>
-            </div>
-            <small class="field-error" id="confirmPasswordError" aria-live="polite">Las contraseñas no coinciden.</small>
             <div class="check-row">
                 <input id="aceptoTerminos" name="acepto_terminos" type="checkbox" value="1" required disabled>
                 <div>
@@ -529,9 +537,6 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
 
     <script>
         const registerForm = document.getElementById('registerForm');
-        const passwordInput = document.getElementById('password');
-        const confirmPasswordInput = document.getElementById('confirm_password');
-        const confirmPasswordError = document.getElementById('confirmPasswordError');
         const registerNotice = document.getElementById('registerNotice');
         const registerButton = document.getElementById('btnRegistro');
         const termsCheckbox = document.getElementById('aceptoTerminos');
@@ -596,7 +601,10 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
             'La solicitud expiró o no es válida. Recarga la página e inténtalo de nuevo.': 'The request expired or is not valid. Reload the page and try again.',
             'No fue posible completar el registro en este momento.': 'We could not complete the registration right now.',
             'No fue posible completar el registro. Inténtalo de nuevo.': 'Could not complete the registration. Please try again.',
-            '¡Cuenta creada exitosamente! Redirigiendo al inicio de sesión...': 'Account created successfully! Redirecting to sign in...'
+            'Te enviamos un código de verificación. Ingrésalo para continuar con la creación de tu cuenta.': 'We sent you a verification code. Enter it to continue creating your account.',
+            'La cuenta quedó pendiente, pero no se pudo enviar el código. Ve a verificación para solicitar otro.': 'Your account is pending, but we could not send the code. Go to verification to request another one.',
+            'Este correo ya tiene una verificación pendiente. Puedes ingresar el código o solicitar otro.': 'This email already has a pending verification. Enter the code or request another one.',
+            'No fue posible conectar con el servidor. Inténtalo de nuevo.': 'Could not connect to the server. Please try again.'
         };
         let registerEN = petkoGet('petko_lang') === 'en';
         const t = (es) => (registerEN && Object.prototype.hasOwnProperty.call(registerI18n, es)) ? registerI18n[es] : es;
@@ -656,26 +664,11 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
 
 
         let previousFocus = null;
-        const passwordRules = {
-            length: (value) => value.length >= 8,
-            uppercase: (value) => /[A-Z]/.test(value),
-            number: (value) => /[0-9]/.test(value)
-        };
 
         function showNotice(message, type) {
             registerNotice.dataset.es = message;
             registerNotice.textContent = t(message);
             registerNotice.className = `notice visible ${type}`;
-        }
-        function updatePasswordRules() {
-            Object.entries(passwordRules).forEach(([rule, check]) => {
-                document.querySelector(`[data-rule="${rule}"]`).classList.toggle('valid', check(passwordInput.value));
-            });
-        }
-        function updatePasswordMatch() {
-            const mismatch = confirmPasswordInput.value.length > 0 && passwordInput.value !== confirmPasswordInput.value;
-            confirmPasswordError.classList.toggle('visible', mismatch);
-            confirmPasswordInput.setAttribute('aria-invalid', String(mismatch));
         }
         function updateRegisterButton() {
             termsCheckbox.disabled = !termsOpened;
@@ -684,21 +677,6 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
 
         updateRegisterButton();
         termsCheckbox.addEventListener('change', updateRegisterButton);
-        document.querySelectorAll('.toggle-password').forEach((button) => {
-            button.addEventListener('click', () => {
-                const input = button.parentElement.querySelector('input');
-                const show = input.type === 'password';
-                input.type = show ? 'text' : 'password';
-                button.dataset.esAria = show ? 'Ocultar contraseña' : 'Mostrar contraseña';
-                button.setAttribute('aria-label', t(button.dataset.esAria));
-                button.setAttribute('aria-pressed', String(show));
-            });
-        });
-        passwordInput.addEventListener('input', () => {
-            updatePasswordRules();
-            updatePasswordMatch();
-        });
-        confirmPasswordInput.addEventListener('input', updatePasswordMatch);
 
         function closeTermsModal(accepted = false) {
             if (!termsModal.classList.contains('visible')) return;
@@ -741,8 +719,6 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
         registerForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             registerNotice.className = 'notice';
-            updatePasswordRules();
-            updatePasswordMatch();
             const nombre = registerForm.elements.nombre.value.trim();
             const apellido = registerForm.elements.apellido.value.trim();
             const emailInput = registerForm.elements.email;
@@ -753,17 +729,6 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
             if (!emailInput.value.trim() || !emailInput.validity.valid) {
                 showNotice('Escribe un correo electrónico válido.', 'error');
                 emailInput.focus();
-                return;
-            }
-            if (!Object.values(passwordRules).every((check) => check(passwordInput.value))) {
-                showNotice('La contraseña necesita al menos 8 caracteres, una mayúscula y un número.', 'error');
-                passwordInput.focus();
-                return;
-            }
-            if (!confirmPasswordInput.value || passwordInput.value !== confirmPasswordInput.value) {
-                confirmPasswordError.classList.add('visible');
-                showNotice('Confirma la contraseña correctamente.', 'error');
-                confirmPasswordInput.focus();
                 return;
             }
             if (!termsOpened) {
@@ -785,6 +750,9 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
                 const result = await response.json();
                 if (!result.ok) {
                     showNotice(result.message || 'No fue posible crear la cuenta.', 'error');
+                    if (result.redirect) {
+                        window.setTimeout(() => { window.location.href = result.redirect; }, 2500);
+                    }
                     return;
                 }
                 showNotice(result.message || 'Cuenta creada correctamente.', 'success');

@@ -52,6 +52,68 @@ final class EmailService
         return self::enviar($destinatario, $nombre, '¡Bienvenido/a a PETKO!', $html);
     }
 
+    public static function enviarRecuperacion(string $destinatario, string $nombre, string $urlRecuperacion): bool
+    {
+        $html = self::plantilla(
+            '<p style="margin:0 0 16px;">Hola <strong>' . self::escape($nombre) . '</strong>, recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>'
+            . '<p style="margin:0 0 20px;">El enlace es de un solo uso y vence en una hora. Si no solicitaste este cambio, puedes ignorar este mensaje.</p>'
+            . '<p style="text-align:center;margin:26px 0;"><a href="' . self::escape($urlRecuperacion) . '" style="display:inline-block;background-color:#22C55E;color:#FFFFFF;text-decoration:none;padding:14px 22px;border-radius:6px;font-weight:bold;">Restablecer contraseña</a></p>',
+            null,
+            false
+        );
+        return self::enviar($destinatario, $nombre, 'Restablece tu contraseña - PETKO', $html);
+    }
+
+    public static function enviarCodigoVerificacion(string $destinatario, string $nombre, string $codigo): bool
+    {
+        $codigoSeguro = self::escape($codigo);
+        $html = self::plantilla(
+            '<p style="margin:0 0 16px;">Hola <strong>' . self::escape($nombre) . '</strong>, usa este código para verificar tu correo y continuar con la creación de tu cuenta:</p>'
+            . '<p style="margin:24px 0;text-align:center;font-size:30px;font-weight:bold;letter-spacing:8px;color:#0B2545;">' . $codigoSeguro . '</p>'
+            . '<p style="margin:0 0 16px;">El código vence en 10 minutos y solo puede utilizarse una vez. Si no solicitaste una cuenta, ignora este mensaje.</p>',
+            null,
+            false
+        );
+        return self::enviar($destinatario, $nombre, 'Verifica tu correo - PETKO', $html);
+    }
+
+    public static function urlAplicacion(): string
+    {
+        self::cargarEntorno();
+        $urlConfigurada = self::configuracion('KION_APP_URL');
+        if ($urlConfigurada !== null) {
+            $partes = parse_url($urlConfigurada);
+            if (!is_array($partes)
+                || !isset($partes['scheme'], $partes['host'])
+                || !in_array(strtolower($partes['scheme']), ['http', 'https'], true)
+                || array_key_exists('user', $partes)
+                || array_key_exists('pass', $partes)
+                || array_key_exists('query', $partes)
+                || array_key_exists('fragment', $partes)
+                || !preg_match('/\A[a-zA-Z0-9.-]+\z/', $partes['host'])
+                || (isset($partes['port']) && ($partes['port'] < 1 || $partes['port'] > 65535))) {
+                throw new RuntimeException('KION_APP_URL debe ser una URL base HTTP o HTTPS válida.');
+            }
+            if (strtolower($partes['scheme']) !== 'https'
+                && !in_array(strtolower($partes['host']), ['localhost', '127.0.0.1'], true)) {
+                throw new RuntimeException('KION_APP_URL debe usar HTTPS fuera del entorno local.');
+            }
+
+            return rtrim($urlConfigurada, '/');
+        }
+
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        $esHostLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)
+            && preg_match('/\A(?:localhost|127\.0\.0\.1)(?::\d{1,5})?\z/i', (string)$host) === 1;
+        if (!$esHostLocal) {
+            throw new RuntimeException('Configura KION_APP_URL para generar enlaces de correo fuera del entorno local.');
+        }
+
+        $protocolo = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $rutaAplicacion = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
+        return $protocolo . '://' . $host . $rutaAplicacion;
+    }
+
     public static function enviarPrueba(string $destinatario): bool
     {
         if (!filter_var($destinatario, FILTER_VALIDATE_EMAIL)) {
@@ -94,6 +156,7 @@ final class EmailService
             $mail->Password = $contrasena;
             $mail->SMTPSecure = $cifrado;
             $mail->Port = $puerto;
+            $mail->Timeout = 10;
             $mail->CharSet = 'UTF-8';
             $mail->setFrom($correoEmisor, $nombreEmisor);
             $mail->addAddress($destinatario, $nombre);
