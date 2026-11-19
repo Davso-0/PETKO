@@ -19,7 +19,10 @@ session_set_cookie_params([
 ]);
 
 session_start();
-define('DEV_MODE', filter_var(getenv('KION_DEV_MODE') ?: false, FILTER_VALIDATE_BOOL));
+$hostSolicitud = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
+$esSolicitudLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)
+    && preg_match('/\A(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\z/', $hostSolicitud) === 1;
+define('DEV_MODE', $esSolicitudLocal || filter_var(getenv('KION_DEV_MODE') ?: false, FILTER_VALIDATE_BOOL));
 $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 
 function responderInicioSesion(bool $ok, string $message, ?string $redirect = null): never
@@ -148,10 +151,10 @@ if ($metodoPost) {
     if ($pdo === null) {
         responderInicioSesion(false, $errorConexion ?? 'No fue posible conectar con la base de datos.');
     }
-
+    //a
     // =========================================================================
     // PROCESAMIENTO DE ACCESO RÁPIDO (MODO DEMO)
-    // =========================================================================
+
     if (isset($_POST['demo_login']) && DEV_MODE === true) {
         $idUsuarioDemo = (int)($_POST['id_usuario_demo'] ?? 0);
         
@@ -454,7 +457,9 @@ if ($metodoPost) {
         .dialog-submit { min-height: 38px; padding: 0 15px; border: 0; border-radius: 8px; background: linear-gradient(135deg, #e6c260, #c9a444); color: #17130a; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; }
         
         <?php if (DEV_MODE === true): ?>
-        .role-demo-link { display: inline-block; margin-top: 8px; color: var(--text-muted) !important; font-size: 10px; font-weight: 400 !important; cursor: pointer; }
+        .role-demo-link { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; margin-top: 10px; padding: 0 14px; border: 1px solid var(--field-border); border-radius: 999px; background: var(--field-bg); color: var(--green-hover) !important; font: inherit; font-size: 11px; font-weight: 700 !important; cursor: pointer; transition: border-color .2s, background-color .2s, transform .2s; }
+        .role-demo-link:hover { border-color: var(--green-primary); background: transparent; transform: translateY(-1px); }
+        .role-demo-link:focus-visible { outline: 2px solid var(--green-primary); outline-offset: 2px; }
         .role-overlay { position: fixed; inset: 0; z-index: 6; display: none; place-items: center; padding: 16px; background: rgba(0, 0, 0, .66); backdrop-filter: blur(6px); }
         .role-overlay.visible { display: grid; }
         .role-picker { position: relative; width: min(330px, 100%); padding: 22px; border: 1px solid rgba(201, 164, 68, .3); border-radius: 12px; background: #171717; }
@@ -541,7 +546,7 @@ if ($metodoPost) {
         .role-picker h2 { color: var(--success-green); }
         .role-option { border-radius: 10px; font-family: var(--font-main); }
         .role-option:hover { border-color: var(--green-primary); color: var(--success-green); background: rgba(34, 197, 94, .1); }
-        .role-demo-link { color: var(--text-muted) !important; }
+        .role-demo-link { color: var(--green-hover) !important; }
         .notice.error { border-color: rgba(248, 113, 113, .35); background: var(--error-bg); color: var(--error-red); }
         .notice.success { border-color: rgba(74, 222, 128, .35); background: var(--success-bg); color: var(--success-green); }
     
@@ -704,7 +709,7 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
         <div class="form-footer">
             ¿No tienes cuenta? <a href="registro.php">Regístrate</a>
             <?php if (DEV_MODE === true): ?>
-                <br><a class="role-demo-link" href="#seleccionar-rol" id="openRolePicker">Seleccionar rol (demostración)</a>
+                <br><button class="role-demo-link" type="button" id="openRolePicker" aria-haspopup="dialog" aria-controls="roleOverlay">Seleccionar rol (demostración)</button>
             <?php endif; ?>
         </div>
     </main>

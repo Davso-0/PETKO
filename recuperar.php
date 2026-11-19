@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $tokenHash = hash('sha256', $token);
-        $consultaToken = $pdo->prepare("SELECT id_usuario FROM usuarios WHERE recovery_token = ? AND recovery_expires_at > CURRENT_TIMESTAMP AND estado = 'ACTIVO' LIMIT 1");
+        $consultaToken = $pdo->prepare("SELECT id_usuario FROM usuarios WHERE recovery_token = ? AND recovery_expires_at > CURRENT_TIMESTAMP AND LOWER(estado) = 'activo' LIMIT 1");
         $consultaToken->execute([$tokenHash]);
         $idUsuario = $consultaToken->fetchColumn();
         if (!$idUsuario) {
@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $hashNuevo = password_hash($contrasena, PASSWORD_DEFAULT);
-        $actualizar = $pdo->prepare("UPDATE usuarios SET password_hash = ?, recovery_token = NULL, recovery_expires_at = NULL WHERE id_usuario = ? AND recovery_token = ? AND recovery_expires_at > CURRENT_TIMESTAMP AND estado = 'ACTIVO'");
+        $actualizar = $pdo->prepare("UPDATE usuarios SET password_hash = ?, recovery_token = NULL, recovery_expires_at = NULL WHERE id_usuario = ? AND recovery_token = ? AND recovery_expires_at > CURRENT_TIMESTAMP AND LOWER(estado) = 'activo'");
         $actualizar->execute([$hashNuevo, $idUsuario, $tokenHash]);
         if ($actualizar->rowCount() !== 1) {
             responderRecuperacion(false, 'El enlace de recuperación es inválido o ha expirado.');
@@ -90,7 +90,7 @@ if ($pdo === null) {
     $errorPagina = 'El enlace de recuperación es inválido o ha expirado.';
 } else {
     try {
-        $consultaToken = $pdo->prepare("SELECT id_usuario FROM usuarios WHERE recovery_token = ? AND recovery_expires_at > CURRENT_TIMESTAMP AND estado = 'ACTIVO' LIMIT 1");
+        $consultaToken = $pdo->prepare("SELECT id_usuario FROM usuarios WHERE recovery_token = ? AND recovery_expires_at > CURRENT_TIMESTAMP AND LOWER(estado) = 'activo' LIMIT 1");
         $consultaToken->execute([hash('sha256', $token)]);
         $usuarioRecuperacion = $consultaToken->fetch();
         if (!$usuarioRecuperacion) {

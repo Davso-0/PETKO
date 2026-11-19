@@ -1,8 +1,11 @@
 <?php
 declare(strict_types=1);
-
 session_start();
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    unset($_SESSION['registro_terminos_abiertos']);
+}
 $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
+
 
 function responderRegistro(bool $ok, string $message, ?string $redirect = null): never
 {
@@ -20,6 +23,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrfToken = $_POST['csrf_token'] ?? '';
     if (!is_string($csrfToken) || !hash_equals($_SESSION['csrf_token'], $csrfToken)) {
         responderRegistro(false, 'La solicitud expiró o no es válida. Recarga la página e inténtalo de nuevo.');
+    }
+
+    if (($_SESSION['registro_terminos_abiertos'] ?? false) !== true) {
+        responderRegistro(false, 'Debes abrir los Términos y Condiciones antes de aceptarlos.');
     }
 
     $nombre = $_POST['nombre'] ?? '';
@@ -79,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $idRol,
         ]);
 
+        unset($_SESSION['registro_terminos_abiertos']);
         responderRegistro(true, '¡Cuenta creada exitosamente! Redirigiendo al inicio de sesión...', 'inicioSesion.php');
     } catch (PDOException $e) {
         if ($e->getCode() === '23000') {
@@ -502,8 +510,11 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
             </div>
             <small class="field-error" id="confirmPasswordError" aria-live="polite">Las contraseñas no coinciden.</small>
             <div class="check-row">
-                <input id="aceptoTerminos" name="acepto_terminos" type="checkbox" value="1" required>
-                <label for="aceptoTerminos">Acepto los <a href="#" id="abrirModalTerminos">Términos y Condiciones y la Política de Privacidad</a>.</label>
+                <input id="aceptoTerminos" name="acepto_terminos" type="checkbox" value="1" required disabled>
+                <div>
+                    <label for="aceptoTerminos">Acepto los</label>
+                    <a href="#" id="abrirModalTerminos">Términos y Condiciones y la Política de Privacidad</a>.
+                </div>
             </div>
             <button class="btn-submit" type="submit" id="btnRegistro" disabled>Crear cuenta</button>
         </form>
@@ -527,6 +538,7 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
         const termsModal = document.getElementById('termsModal');
         const termsFrame = document.getElementById('termsFrame');
         const openTermsLink = document.getElementById('abrirModalTerminos');
+        let termsOpened = false;
 
         // =====================================================================
         // PETKO · MODO OSCURO + IDIOMA (comparte petko_dark / petko_lang con el home)
@@ -572,6 +584,7 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
             'La contraseña necesita al menos 8 caracteres, una mayúscula y un número.': 'Your password needs at least 8 characters, one uppercase letter and one number.',
             'Confirma la contraseña correctamente.': 'Confirm your password correctly.',
             'Debes aceptar los Términos y Condiciones y la Política de Privacidad.': 'You must accept the Terms and Conditions and the Privacy Policy.',
+            'Debes abrir los Términos y Condiciones antes de aceptarlos.': 'Open the Terms and Conditions before accepting them.',
             'No fue posible crear la cuenta.': 'We could not create the account.',
             'Cuenta creada correctamente.': 'Account created successfully.',
             'No fue posible conectar con el servidor. Inténtalo de nuevo.': 'Could not connect to the server. Please try again.',
@@ -665,7 +678,8 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
             confirmPasswordInput.setAttribute('aria-invalid', String(mismatch));
         }
         function updateRegisterButton() {
-            registerButton.disabled = !termsCheckbox.checked;
+            termsCheckbox.disabled = !termsOpened;
+            registerButton.disabled = !termsOpened || !termsCheckbox.checked;
         }
 
         updateRegisterButton();
@@ -715,9 +729,12 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
             if (event.origin !== window.location.origin
                 || event.source !== termsFrame.contentWindow
                 || !event.data
-                || !['kion-terms-accepted', 'kion-terms-dismissed'].includes(event.data.type)) {
+                || !['kion-terms-opened', 'kion-terms-accepted', 'kion-terms-dismissed'].includes(event.data.type)) {
                 return;
             }
+            termsOpened = true;
+            updateRegisterButton();
+            if (event.data.type === 'kion-terms-opened') return;
             closeTermsModal(event.data.type === 'kion-terms-accepted');
         });
 
@@ -747,6 +764,10 @@ body.dark-mode .btn-submit:disabled{opacity:.55}
                 confirmPasswordError.classList.add('visible');
                 showNotice('Confirma la contraseña correctamente.', 'error');
                 confirmPasswordInput.focus();
+                return;
+            }
+            if (!termsOpened) {
+                showNotice('Debes abrir los Términos y Condiciones antes de aceptarlos.', 'error');
                 return;
             }
             if (!termsCheckbox.checked) {

@@ -1,27 +1,21 @@
 <?php
 declare(strict_types=1);
 
-/* =====================================================
-   SEGURIDAD: SESIÓN
-===================================================== */
 $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['SERVER_PORT'] ?? '') === '443');
 
 if (session_status() === PHP_SESSION_NONE) {
-    ini_set('session.use_strict_mode', '1');   // rechaza IDs de sesión inventados
-    ini_set('session.use_only_cookies', '1');  // nunca aceptar el ID por la URL
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
-        'secure'   => $https,   // solo por HTTPS cuando el sitio lo use
-        'httponly' => true,     // JavaScript no puede leer la cookie
-        'samesite' => 'Lax',    // protege contra peticiones desde otros sitios
+        'secure'   => $https,
+        'httponly' => true,
+        'samesite' => 'Lax',
     ]);
     session_start();
 }
 
-/* =====================================================
-   CERRAR SESIÓN (integrado en este archivo: POST + token CSRF)
-===================================================== */
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['accion'] ?? '') === 'cerrar_sesion') {
     $token = $_POST['csrf'] ?? '';
     if (!is_string($token) || empty($_SESSION['csrf']) || !hash_equals((string)$_SESSION['csrf'], $token)) {
@@ -46,7 +40,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['accion'] ?? '') ==
     exit;
 }
 
-// Cierre de sesión por inactividad (30 minutos)
 const PETKO_IDLE_SECONDS = 1800;
 if (isset($_SESSION['usuario'])) {
     if (isset($_SESSION['ultima_actividad']) && (time() - (int)$_SESSION['ultima_actividad']) > PETKO_IDLE_SECONDS) {
@@ -57,24 +50,18 @@ if (isset($_SESSION['usuario'])) {
     }
 }
 
-// Token CSRF para el botón de cerrar sesión
 if (isset($_SESSION['usuario']) && empty($_SESSION['csrf'])) {
     $_SESSION['csrf'] = bin2hex(random_bytes(32));
 }
 
-/* =====================================================
-   SEGURIDAD: CABECERAS HTTP
-===================================================== */
 $nonce = base64_encode(random_bytes(16));
 
 header_remove('X-Powered-By');
-// Solo se ejecutan scripts y estilos marcados con el nonce de esta carga.
-// (style-src-attr permite los estilos en línea de las fotos; Google Fonts es el único sitio externo permitido)
-header("Content-Security-Policy: default-src 'self'; script-src 'nonce-$nonce'; style-src 'nonce-$nonce' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
+header("Content-Security-Policy: default-src 'self'; script-src 'nonce-$nonce' https://unpkg.com; style-src 'nonce-$nonce' https://fonts.googleapis.com https://unpkg.com https://cdnjs.cloudflare.com; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://tile.openstreetmap.org; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: strict-origin-when-cross-origin');
-header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=(self), payment=()');
 header('Cross-Origin-Opener-Policy: same-origin');
 if ($https) {
     header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
@@ -83,9 +70,6 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-/* =====================================================
-   DATOS DE LA VISTA
-===================================================== */
 function e(string $s): string
 {
     return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -96,7 +80,56 @@ $logueado = is_array($usuario) && !empty($usuario['nombre']);
 $nombre   = $logueado ? (string)$usuario['nombre'] : '';
 $csrf     = (string)($_SESSION['csrf'] ?? '');
 
-// Ruta del panel según el rol (cliente por defecto)
+$sucursalesMapa = [];
+$pdoMapa = null;
+try {
+    require_once __DIR__ . '/../../config/conexion.php';
+    if ($pdo instanceof PDO) {
+        $pdoMapa = $pdo;
+        $consultaSucursales = $pdoMapa->query("SELECT id_sucursal, nombre, direccion, estado FROM sucursales WHERE estado = 'ACTIVA' ORDER BY id_sucursal ASC");
+        foreach ($consultaSucursales->fetchAll() as $sucursal) {
+            $sucursalesMapa[] = [
+                'id' => (int)$sucursal['id_sucursal'],
+                'nombre' => (string)$sucursal['nombre'],
+                'direccion' => (string)$sucursal['direccion'],
+                'zona' => (string)$sucursal['direccion'],
+            ];
+        }
+    }
+} catch (Throwable $errorMapa) {
+    error_log('PETKO mapa: no fue posible consultar sucursales: ' . $errorMapa->getMessage());
+}
+$totalSucursalesMapa = count($sucursalesMapa);
+
+$productosHome = [];
+try {
+    if ($pdoMapa instanceof PDO) {
+        $consultaProductos = $pdoMapa->query("
+            SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.precio,
+                   p.imagen_url, c.nombre AS categoria
+            FROM productos p
+            LEFT JOIN categorias c ON c.id_categoria = p.id_categoria
+            WHERE p.estado = 'ACTIVO'
+            ORDER BY p.id_producto DESC
+            LIMIT 12
+        ");
+        $productosHome = $consultaProductos->fetchAll();
+    }
+} catch (Throwable $errorProductos) {
+    error_log('PETKO carrusel: no fue posible consultar productos: ' . $errorProductos->getMessage());
+}
+
+if (empty($productosHome)) {
+    $productosHome = [
+        ['id_producto'=>19, 'codigo'=>'VET-001', 'nombre'=>'Collar para Gato Fancy Pets', 'descripcion'=>'Elástico, varios colores, 1 pieza', 'precio'=>40.00, 'imagen_url'=>'https://i5-mx.walmartimages.com/asr/45ed35ce-37f6-4d2c-9601-c25c852c9957.da4ffa3fcebe067a1afb4818b0305b89.jpeg?odnHeight=612&odnWidth=612&odnBg=FFFFFF', 'categoria'=>'Accesorios'],
+        ['id_producto'=>20, 'codigo'=>'VET-002', 'nombre'=>'Collar Antipulgas Fancy Pets', 'descripcion'=>'Para razas chicas y cachorros, 39 cm', 'precio'=>831.00, 'imagen_url'=>'https://i5-mx.walmartimages.com/asr/09fb1284-f1bb-4a33-bb0d-23255fb9d797.53594044031eac76085e79d5d76e1b9f.jpeg?odnHeight=612&odnWidth=612&odnBg=FFFFFF', 'categoria'=>'Accesorios'],
+        ['id_producto'=>21, 'codigo'=>'VET-003', 'nombre'=>'Cama Para Mascota Wow Pets', 'descripcion'=>'Cama cómoda y resistente para mascotas', 'precio'=>810.00, 'imagen_url'=>'https://http2.mlstatic.com/D_NQ_NP_2X_832418-MLM98168453444_112025-F.webp', 'categoria'=>'Accesorios'],
+        ['id_producto'=>22, 'codigo'=>'VET-004', 'nombre'=>'Croquetas Hill’s Science Diet para gato senior', 'descripcion'=>'Sabor pollo, contenido 7.3 kg', 'precio'=>1530.00, 'imagen_url'=>'https://http2.mlstatic.com/D_NQ_NP_2X_948672-MLA99338544644_112025-F.webp', 'categoria'=>'Alimentos'],
+        ['id_producto'=>24, 'codigo'=>'VET-006', 'nombre'=>'Shampoo de Zábila para Caballo', 'descripcion'=>'Sábila, 1 litro, Aranda', 'precio'=>230.00, 'imagen_url'=>'https://http2.mlstatic.com/D_NQ_NP_2X_672876-MLA99821792583_112025-F.webp', 'categoria'=>'Higiene'],
+        ['id_producto'=>26, 'codigo'=>'VET-008', 'nombre'=>'Credelio 3 tabletas antipulgas', 'descripcion'=>'Antiparasitario para mascotas', 'precio'=>999.00, 'imagen_url'=>'https://http2.mlstatic.com/D_NQ_NP_2X_633810-MLM112748042869_062026-F.webp', 'categoria'=>'Antiparasitarios'],
+    ];
+}
+
 $rutaDashboard = 'dashboard_usuario.php';
 if ($logueado) {
     $rolSesion = mb_strtolower((string)($usuario['rol'] ?? ''), 'UTF-8');
@@ -106,8 +139,23 @@ if ($logueado) {
         $rutaDashboard = 'dashboard_gerente.php';
     }
 }
-// Los botones "Comenzar" llevan al panel si ya inició sesión, o al login si no
-$ctaHref = $logueado ? $rutaDashboard : '../../../../inicioSesion.php';
+$petkoProjectRoot = realpath(dirname(__DIR__, 4));
+$petkoDocumentRoot = realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
+$appBaseUrl = '';
+if ($petkoProjectRoot && $petkoDocumentRoot) {
+    $rootNormalized = rtrim(str_replace(DIRECTORY_SEPARATOR, '/', $petkoProjectRoot), '/');
+    $docNormalized = rtrim(str_replace(DIRECTORY_SEPARATOR, '/', $petkoDocumentRoot), '/');
+    if (stripos($rootNormalized, $docNormalized . '/') === 0) {
+        $relativeRoot = trim(substr($rootNormalized, strlen($docNormalized)), '/');
+        $appBaseUrl = $relativeRoot === '' ? '' : '/' . $relativeRoot;
+    }
+}
+$rutaCatalogo = $appBaseUrl . '/src/php/componentes/catalogo.php';
+$rutaLogin = $appBaseUrl . '/inicioSesion.php';
+$rutaTerminos = $appBaseUrl . '/terminos.php';
+$rutaAccesoCatalogo = $logueado ? $rutaCatalogo : $rutaLogin;
+
+$ctaHref = $logueado ? $rutaDashboard : $rutaLogin;
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -123,11 +171,14 @@ body.dark-mode{--bg:#071225;--bg2:#040b18;--card:#0b1d3a;--ink:#eaf3ff;--muted:#
 body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg2);color:var(--ink);overflow-x:hidden;transition:background .3s,color .3s}
 a{text-decoration:none}
 
-/* NAVBAR */
 .navbar{width:100%;height:82px;display:flex;align-items:center;justify-content:space-between;padding:0 6.5%;background:rgba(8,18,38,.96);border-bottom:1px solid rgba(124,196,255,.16);backdrop-filter:blur(18px);position:sticky;top:0;z-index:1000}
 .logo{font-size:30px;font-weight:800;letter-spacing:3px;color:#f2f8ff}.logo span{color:#5cc8ff}
 .menu{display:flex;align-items:center;gap:clamp(12px,1.7vw,27px)}
 .menu a{color:#d6e6fb;font-size:13px;transition:color .25s}.menu a:hover{color:#5cc8ff}
+.menu>a:not(.btn-login):not(.profile-link){display:inline-flex;align-items:center;gap:7px;padding:10px 2px}
+.menu>a:not(.btn-login):not(.profile-link) i{font-size:12px;color:#75ceff}
+.profile-link{width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(200,225,255,.36);border-radius:50%;background:linear-gradient(145deg,#5cc8ff,#2f80ed);color:#fff!important;font-size:21px;transition:transform .2s,box-shadow .2s}
+.profile-link:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(47,128,237,.35)}
 .menu .btn-login{background:#5cc8ff;color:#04142e;border-radius:999px;padding:12px 19px;font-weight:800;transition:.25s}
 .menu .btn-login:hover{background:#9adcff;color:#04142e;transform:translateY(-2px)}
 .dark-mode-btn,.language-btn{border:1px solid rgba(200,225,255,.3);background:transparent;color:#f2f8ff;height:42px;cursor:pointer;font-weight:700;transition:.3s}
@@ -138,7 +189,6 @@ body.dark-mode .navbar{background:rgba(2,6,14,.97)}
 body.dark-mode .ps-wrap{background:#030710}
 body.dark-mode .ps-sticky{background:linear-gradient(120deg,#030710,#071430 60%,#02050c)}
 
-/* SECCIONES */
 .sec{padding:110px 7%;scroll-margin-top:82px;background:var(--bg2)}.alt{background:var(--bg)}.c{text-align:center}
 .label{color:var(--acc);font-size:13px;font-weight:800;letter-spacing:2px;margin-bottom:14px}
 .title{font-size:clamp(32px,4vw,54px);line-height:1.08;letter-spacing:-.045em;margin-bottom:18px}
@@ -152,7 +202,7 @@ body.dark-mode .ps-sticky{background:linear-gradient(120deg,#030710,#071430 60%,
 .split{display:flex;align-items:center;gap:80px}.split>div{flex:1}
 .split h2{font-size:clamp(30px,3.6vw,46px);line-height:1.12;letter-spacing:-.04em;margin-bottom:20px}
 .split p{color:var(--muted);font-size:17px;line-height:1.8;margin-bottom:24px}
-.check{list-style:none}.check li{margin:14px 0;font-size:15px}.check li:before{content:'✓  ';color:var(--acc);font-weight:800}
+.check{list-style:none}.check li{margin:14px 0;font-size:15px}.check li:before{content:'  ';color:var(--acc);font-weight:800}
 .panel{min-height:360px;border-radius:26px;display:flex;align-items:center;justify-content:center;padding:30px}
 .p1{background:linear-gradient(135deg,#0f2f66,#2f80ed)}.p2{background:#0a1a38}
 .mini{width:84%;background:#f4f9ff;color:#14305a;border-radius:18px;padding:25px;box-shadow:0 18px 40px rgba(0,10,40,.3)}
@@ -169,7 +219,6 @@ body.dark-mode .ps-sticky{background:linear-gradient(120deg,#030710,#071430 60%,
 .cta h2{font-size:clamp(32px,4vw,46px);margin-bottom:18px}.cta p{color:#c4d8f2;font-size:17px;margin-bottom:30px}
 footer{padding:55px 7%;background:#060e1f;color:#a9bfdc;display:flex;justify-content:space-between;align-items:center;font-size:14px}
 
-/* NUEVO: mascotas, huellas y animales flotantes */
 .pet{text-align:center;padding:26px 12px}
 .pet b{display:block;font-size:54px;line-height:1;margin-bottom:12px;transition:transform .3s}
 .pet:hover b{transform:scale(1.18) rotate(-6deg)}
@@ -182,10 +231,9 @@ footer{padding:55px 7%;background:#060e1f;color:#a9bfdc;display:flex;justify-con
 @keyframes fl{50%{transform:translateY(-16px) rotate(6deg)}}
 
 @media(max-width:1000px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}.g6{grid-template-columns:repeat(3,1fr)}.split{flex-direction:column;gap:40px}.split>div{width:100%}}
-@media(max-width:860px){.navbar{padding:0 4%}.menu{gap:10px}.menu a:not(.btn-login){display:none}.logo{font-size:26px}}
+@media(max-width:860px){.navbar{padding:0 4%}.menu{gap:10px}.menu a:not(.btn-login):not(.profile-link){display:none}.logo{font-size:26px}}
 @media(max-width:600px){.g4{grid-template-columns:1fr}.g6{grid-template-columns:repeat(2,1fr)}.sec{padding:80px 6%}footer{flex-direction:column;gap:15px;text-align:center}}
 
-/* HERO */
 .ps-wrap { position: relative; height: 480vh; background: #0a1428; }
 .ps-sticky {
     --mx: 72%; --my: 50%;
@@ -235,7 +283,7 @@ footer{padding:55px 7%;background:#060e1f;color:#a9bfdc;display:flex;justify-con
 .ps-hint { margin-top: 16px; font-size: 12.5px; color: #7f9bc0; }
 .ps-list { list-style: none; margin-top: 22px; padding: 0; }
 .ps-list li { padding: 8px 0; font-size: 15px; color: #d6e6fb; border-bottom: 1px solid rgba(200,225,255,.12); max-width: 420px; }
-.ps-list li:before { content: '✓  '; color: #5cc8ff; font-weight: 700; }
+.ps-list li:before { content: '  '; color: #5cc8ff; font-weight: 700; }
 .ps-rail { position: absolute; left: 1.6%; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 4px; z-index: 3; }
 .ps-rail button { background: none; border: 0; padding: 5px 10px; cursor: pointer; }
 .ps-rail button:before { content: ''; display: block; width: 4px; height: 22px; border-radius: 4px; background: rgba(200,225,255,.22); transition: background .3s, height .3s; }
@@ -300,7 +348,6 @@ button.ps-row.off span:first-child { text-decoration: line-through; }
     .ps-pets span, .cta .fl { animation: none; }
 }
 
-/* ===== MODO CLARO (por defecto) ===== */
 body:not(.dark-mode) .navbar{background:rgba(255,255,255,.92);border-bottom:1px solid #d9e6f7}
 body:not(.dark-mode) .logo{color:#0d2548}body:not(.dark-mode) .logo span{color:#2f80ed}
 body:not(.dark-mode) .menu a{color:#36557f}body:not(.dark-mode) .menu a:hover{color:#2f80ed}
@@ -336,7 +383,6 @@ body:not(.dark-mode) .cta{background:linear-gradient(125deg,#2f6fe0,#4aa3ff)}
 body:not(.dark-mode) .cta p{color:#eaf3ff}
 body:not(.dark-mode) footer{background:#e4effd;color:#36557f}
 
-/* ===== MODO OSCURO ===== */
 body.dark-mode .ps-card{background:#0d2145;color:#eaf3ff;box-shadow:0 30px 60px rgba(0,0,0,.55)}
 body.dark-mode .ps-card h3,body.dark-mode .ps-total{color:#8fd6ff}
 body.dark-mode .ps-row{border-bottom-color:#1c3a68}
@@ -352,7 +398,6 @@ body.dark-mode .tot{color:#8fd6ff}
 body.dark-mode .cta{background:linear-gradient(125deg,#050d1f,#14408a)}
 body.dark-mode footer{background:#02060e;color:#a9bfdc}
 
-/* ===== LETRAS MÁS GRANDES Y VISIBLES ===== */
 :root{--muted:#44628a}
 body.dark-mode{--muted:#c2d3ea}
 .menu a{font-size:15px;font-weight:500}
@@ -399,7 +444,6 @@ body.dark-mode .ps-tip{color:#a9c0de}
 }
 @media(max-width:860px) and (max-height:720px){.ps-world-box{transform:scale(.5)}}
 
-/* ===== CAPA VINTAGE (modo claro): papel crema, serif, polaroids y sellos ===== */
 :root{--serif:'Playfair Display','Cormorant Garamond',Georgia,'Times New Roman',serif}
 .title,.split h2,.ps-step h2,.ps-step h1,.cta h2,.card h3,.benefit strong{font-family:var(--serif)}
 .label{font-family:var(--serif);font-style:italic;letter-spacing:1.5px;font-weight:600}
@@ -412,10 +456,9 @@ body:not(.dark-mode) .ps-sticky{background:linear-gradient(120deg,#f6faff,#e4f0f
 body:not(.dark-mode) .ps-card{background:#fff;border:1.5px solid #a9c8ee}
 body:not(.dark-mode) footer{background:#e4effd}
 
-/* Sello circular */
 .sello{position:absolute;right:5%;top:-34px;width:112px;height:112px;border-radius:50%;border:2px dashed #2f80ed;color:#2f80ed;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:var(--serif);font-style:italic;font-size:13px;line-height:1.25;transform:rotate(12deg);background:var(--bg2);z-index:2}
 .sello b{font-size:26px;font-style:normal}
-/* Galería de polaroids */
+
 .galeria{position:relative}
 .pols{display:flex;flex-wrap:wrap;justify-content:center;gap:34px 30px;margin-top:60px}
 .pol{width:230px;background:#fff;padding:12px 12px 16px;box-shadow:0 14px 30px rgba(30,80,160,.25);transform:rotate(var(--r,0deg));transition:transform .35s,box-shadow .35s;position:relative}
@@ -426,12 +469,12 @@ body:not(.dark-mode) footer{background:#e4effd}
 .pol figcaption{font-family:var(--serif);font-style:italic;font-size:16px;color:#1f4a85;margin-top:12px;text-align:center}
 body.dark-mode .pol{background:#10244a}body.dark-mode .pol figcaption{color:#cfe0f7}body.dark-mode .ph{background:linear-gradient(135deg,#17315e,#0c1c3a)}
 body.dark-mode .sello{background:var(--bg2);border-color:#5cc8ff;color:#5cc8ff}
-/* Estante de la botica */
+
 .botica{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;margin-top:46px}
 .botica span{font-family:var(--serif);font-style:italic;font-size:17px;padding:12px 20px;border:1.5px solid #a9c8ee;border-radius:8px;background:#fff;color:#1f4a85;box-shadow:3px 3px 0 #cfe1f8}
 .botica span b{font-style:normal;margin-right:6px}
 body.dark-mode .botica span{background:#0d2145;color:#eaf3ff;border-color:#1c3a68;box-shadow:3px 3px 0 #16305a}
-/* Polaroids flotando en el hero */
+
 .ps-pols{position:absolute;inset:0;pointer-events:none;z-index:0}
 .ps-pols .pol{position:absolute;width:120px;padding:6px 6px 8px;opacity:.9;animation:fl 8s ease-in-out infinite}
 .ps-pols .pol:before{width:44px;height:14px;margin-left:-22px;top:-8px}
@@ -439,7 +482,6 @@ body.dark-mode .botica span{background:#0d2145;color:#eaf3ff;border-color:#1c3a6
 @media(max-width:860px){.ps-pols{display:none}.sello{display:none}.pol{width:190px}}
 @media(prefers-reduced-motion:reduce){.ps-pols .pol{animation:none}}
 
-/* ===== FONDO DEL HERO: aurora azul, huellas, anillo y huellitas caminando ===== */
 .ps-sticky:after{content:'';position:absolute;right:-6%;top:50%;width:min(62vw,820px);aspect-ratio:1;margin-top:calc(min(62vw,820px)/-2);border-radius:50%;border:2px dashed rgba(47,128,237,.30);box-shadow:inset 0 0 0 28px rgba(47,128,237,.04),inset 0 0 0 29px rgba(47,128,237,.16),inset 0 0 0 96px rgba(92,200,255,.06),0 0 120px rgba(92,200,255,.25);animation:spin 90s linear infinite;pointer-events:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 .ps-bg{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cg fill='%232f80ed' fill-opacity='.10'%3E%3Cg transform='translate(36 40) rotate(-20) scale(.9)'%3E%3Cellipse cx='0' cy='8' rx='11' ry='9'/%3E%3Cellipse cx='-12' cy='-6' rx='4.5' ry='6'/%3E%3Cellipse cx='-4' cy='-13' rx='4.5' ry='6'/%3E%3Cellipse cx='5' cy='-13' rx='4.5' ry='6'/%3E%3Cellipse cx='13' cy='-6' rx='4.5' ry='6'/%3E%3C/g%3E%3Cg transform='translate(124 126) rotate(24) scale(.7)'%3E%3Cellipse cx='0' cy='8' rx='11' ry='9'/%3E%3Cellipse cx='-12' cy='-6' rx='4.5' ry='6'/%3E%3Cellipse cx='-4' cy='-13' rx='4.5' ry='6'/%3E%3Cellipse cx='5' cy='-13' rx='4.5' ry='6'/%3E%3Cellipse cx='13' cy='-6' rx='4.5' ry='6'/%3E%3C/g%3E%3Cg transform='translate(128 36) rotate(40)'%3E%3Crect x='-16' y='-3' width='32' height='6' rx='3'/%3E%3Ccircle cx='-17' cy='-4' r='4.5'/%3E%3Ccircle cx='-17' cy='4' r='4.5'/%3E%3Ccircle cx='17' cy='-4' r='4.5'/%3E%3Ccircle cx='17' cy='4' r='4.5'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") 0 0/170px 170px;animation:tile 60s linear infinite}
@@ -460,12 +502,12 @@ body.dark-mode .ps-bg .b3{background:radial-gradient(circle,rgba(92,200,255,.18)
 body.dark-mode .ps-trail b{background:#5cc8ff}
 @media(max-width:860px){.ps-sticky:after{right:-45%;width:130vw;margin-top:-65vw}.ps-bg .b1,.ps-bg .b2{width:380px;height:380px}}
 @media(prefers-reduced-motion:reduce){.ps-sticky:after,.ps-bg,.ps-bg i.b,.ps-trail b{animation:none}.ps-trail b{opacity:.4}}
-/* ===== HERO A PANTALLA COMPLETA + MENÚ DISCRETO ===== */
+
 .navbar{position:fixed;left:0;right:0;top:0;height:64px;transition:transform .35s ease,background .3s}
 .navbar.hide{transform:translateY(-100%)}
 .navbar .logo{font-size:24px}
 .menu a{font-size:14px}.menu .btn-login{padding:9px 16px;font-size:14px}
-.dark-mode-btn,.language-btn{height:36px}.dark-mode-btn{width:36px;font-size:16px}
+.dark-mode-btn,.language-btn{height:36px}.dark-mode-btn{width:36px;font-size:15px}
 body:not(.dark-mode) .navbar{background:rgba(255,255,255,.45);border-bottom-color:transparent}
 body.dark-mode .navbar{background:rgba(2,6,14,.4);border-bottom-color:transparent}
 body:not(.dark-mode) .navbar.solid{background:rgba(255,255,255,.93);border-bottom:1px solid #c9dcf3}
@@ -478,10 +520,10 @@ body.dark-mode .navbar.solid{background:rgba(2,6,14,.96)}
 @media(min-width:861px){.ps-world-box{transform:scale(1.14)}}
 @media(max-width:860px){.ps-sticky{padding-top:84px}}
 @media(prefers-reduced-motion:reduce){.ps-sticky{height:auto;min-height:100vh}}
-/* Collage de fotos del hero (con parallax del mouse) */
+
 .ps-pols .pol{width:var(--w,160px);padding:8px 8px 10px;opacity:.97;translate:calc(var(--px,0) * var(--k,12) * -1px) calc(var(--py,0) * var(--k,12) * -1px);transition:translate .5s ease-out}
 .ps-pols .ph{height:calc(var(--w,160px) * .98)}
-/* ===== ESCENARIO DE FOTOS DEL HERO (una escena por paso) ===== */
+
 .ps-set{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(.94) translateY(28px);transition:opacity .6s ease,transform .7s cubic-bezier(.2,.8,.2,1);pointer-events:none}
 .ps-set.on{opacity:1;transform:none}
 .ps-set .pol{position:absolute;width:var(--w);padding:10px 10px 12px;translate:calc(var(--px,0) * var(--k,14) * -1px) calc(var(--py,0) * var(--k,14) * -1px);transition:translate .5s ease-out}
@@ -535,11 +577,112 @@ body.dark-mode .ptabs button.on{background:#2f80ed;border-color:#2f80ed}
 .logout-link{background:none;border:0;cursor:pointer;font:inherit;font-size:14px;font-weight:700;color:#c0392b;transition:.25s}
 .logout-link:hover{text-decoration:underline}
 body.dark-mode .logout-link{color:#ff9a8d}
-.logo{line-height:0}.logo img{height:46px;width:auto;display:block;transition:transform .3s}.logo:hover img{transform:scale(1.06) rotate(-2deg)}.navbar .logo img{height:50px}@media(max-width:860px){.navbar .logo img{height:40px}}
 
+.navbar,.navbar.hide{position:fixed!important;top:0!important;transform:none!important;min-height:64px;height:auto;z-index:2000}
+.navbar{padding-top:10px;padding-bottom:10px;gap:14px}
+body{padding-top:0}
+.menu{flex-wrap:wrap}
+.menu .logout-form{display:inline-flex}
+.logout-link{border:1px solid rgba(200,225,255,.3);background:transparent;color:inherit;border-radius:50%;width:42px;height:42px;display:grid;place-items:center;padding:0;cursor:pointer;font:inherit;font-size:18px;transition:.2s}
+.logout-link:hover{background:rgba(92,200,255,.18);border-color:#5cc8ff;transform:translateY(-1px)}
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.quick-access{padding:36px 7%;background:var(--bg);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.quick-access a,.quick-access button{display:flex;align-items:center;gap:13px;padding:18px;border-radius:16px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;text-align:left;cursor:pointer;transition:.25s}
+.quick-access a:hover,.quick-access button:hover{transform:translateY(-3px);border-color:var(--acc);box-shadow:0 12px 25px rgba(47,128,237,.12)}
+.quick-access .qa-icon{width:44px;height:44px;display:grid;place-items:center;border-radius:13px;background:rgba(92,200,255,.18);font-size:23px;flex-shrink:0}
+.quick-access small{display:block;color:var(--muted);margin-top:4px;font-size:12px}
+.products-section{padding:80px 7%;background:var(--bg2);scroll-margin-top:95px}
+.product-head{display:flex;align-items:end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.product-track{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;margin-top:32px}
+.product-card{overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:20px;transition:.25s}
+.product-card:hover{transform:translateY(-5px);box-shadow:0 18px 38px rgba(30,90,200,.13)}
+.product-image{height:180px;display:grid;place-items:center;background:linear-gradient(135deg,#eaf3ff,#cfe4ff);font-size:64px}
+body.dark-mode .product-image{background:linear-gradient(135deg,#10264a,#071225)}
+.product-info{padding:20px}
+.product-info h3{font-size:17px;margin-bottom:8px}
+.product-info p{font-size:13px;color:var(--muted);line-height:1.5;min-height:40px}
+.product-bottom{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:17px}
+.product-price{font-size:20px;font-weight:800;color:var(--acc)}
+.product-link{display:inline-block;background:var(--acc);color:#fff;padding:10px 13px;border-radius:10px;font-size:13px;font-weight:700}
+.section-note{font-size:12px;color:var(--muted);margin-top:18px}
+.config-section{padding:35px 7%;background:var(--bg)}
+.config-box{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:25px;border:1px dashed var(--line);border-radius:18px;background:var(--card)}
+.config-box p{color:var(--muted);margin-top:6px}
+.config-button{padding:12px 18px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);font-weight:700}
+.petko-footer{padding:72px 7% 30px;background:linear-gradient(125deg,#06152f 0%,#0d3972 55%,#1268ad 100%);color:#f2f8ff;border-top:6px solid #5cc8ff;box-shadow:0 -16px 45px rgba(7,35,76,.12)}
+.footer-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:48px}.petko-footer .logo{font-size:40px}.petko-footer strong{font-size:18px;display:block;margin-bottom:6px}.petko-footer .footer-links a{font-size:15px;padding:3px 0}.petko-footer p{font-size:15px;max-width:390px}
+.petko-footer .logo{margin-bottom:14px}
+.petko-footer p{line-height:1.7;color:#a9bfdc;font-size:14px}
+.footer-links{display:flex;flex-direction:column;gap:11px}
+.footer-links a{color:#d7e6fa;font-size:14px}
+.footer-links a:hover{color:#5cc8ff}
+.footer-bottom{border-top:1px solid rgba(200,225,255,.3);margin-top:42px;padding-top:24px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;color:#a9bfdc;font-size:13px}
+
+.branches-section{padding:90px 5%;display:grid;grid-template-columns:.68fr 1.75fr;gap:30px;align-items:center;background:var(--bg)}
+.branches-copy .desc{margin:0;text-align:left}.branch-counter{display:inline-flex;align-items:center;gap:14px;margin-top:28px;padding:16px 22px;border-radius:18px;background:var(--card);border:1px solid var(--line);box-shadow:0 10px 28px rgba(20,70,130,.08)}
+.counter-icon{width:48px;height:48px;border-radius:15px;background:#e2f2ff;display:grid;place-items:center;font-size:27px}.branch-counter strong{display:block;font-size:28px;color:var(--acc);line-height:1.1}.branch-counter small{color:var(--muted);font-size:12px}.branch-hint{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.6}
+.map-shell{position:relative;padding:12px;border:1px solid rgba(123,174,228,.3);border-radius:26px;background:var(--card);box-shadow:0 22px 60px rgba(15,54,105,.15);min-width:0;width:100%;overflow:hidden}.map-toolbar{position:absolute;z-index:500;top:26px;left:26px;right:26px;display:flex;gap:10px;align-items:center;pointer-events:none}.map-search{display:flex;align-items:center;gap:11px;max-width:440px;width:min(100%,440px);padding:0 16px;height:50px;border-radius:17px;background:rgba(255,255,255,.97);box-shadow:0 8px 24px rgba(18,49,88,.2);color:#2869a7;pointer-events:auto}.map-search input{width:100%;border:0;outline:0;background:transparent;color:#17365c;font-family:inherit;font-size:14px;font-weight:600}.map-search input::placeholder{color:#7c91a9}.map-locate{width:48px;height:48px;border:0;border-radius:16px;background:#fff;color:#2678d8;box-shadow:0 8px 24px rgba(18,49,88,.2);font-size:18px;cursor:pointer;pointer-events:auto}.map-locate:hover{background:#edf6ff;transform:translateY(-1px)}#petkoMap{height:590px;width:100%;border:0;border-radius:19px;z-index:1;background:#eaf3f8;overflow:hidden}.map-legend{position:absolute;z-index:500;bottom:24px;left:24px;background:rgba(255,255,255,.96);color:#17365c;padding:10px 14px;border-radius:14px;box-shadow:0 5px 18px #17365c25;font-size:13px;font-weight:700}.paw-marker-wrap{background:transparent;border:0}.paw-marker{display:grid;place-items:center;width:38px;height:38px;border:3px solid #fff;border-radius:50% 50% 50% 9px;transform:rotate(-45deg);background:linear-gradient(145deg,#48b8ff,#1970dc);color:#fff;box-shadow:0 5px 16px #17365c55;transition:transform .18s}.paw-marker i{font-size:16px;transform:rotate(45deg)}.leaflet-marker-icon:hover .paw-marker{transform:rotate(-45deg) scale(1.1)}.leaflet-tile{filter:saturate(.78) contrast(.98) brightness(1.04)}.leaflet-container{font-family:inherit;outline:none}.leaflet-control-attribution{font-size:10px!important;background:rgba(255,255,255,.88)!important}.petko-map-popup{min-width:170px;color:#17365c}.petko-map-popup strong{display:block;font-size:14px;margin-bottom:5px}.petko-map-popup span,.petko-map-popup small{display:block;line-height:1.45;color:#627994}.petko-map-popup a{display:inline-flex;margin-top:9px;color:#1673cf;font-weight:700;text-decoration:none}
+.product-head{align-items:center}.carousel-controls{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}.carousel-arrow{width:42px;height:42px;border:0;border-radius:50%;background:var(--acc);color:white;font-size:28px;line-height:1;cursor:pointer;box-shadow:0 5px 15px #2f80ed44}.carousel-arrow:hover{transform:translateY(-2px);background:#1769d2}.product-track{display:flex;overflow-x:auto;gap:20px;padding:8px 2px 20px;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:thin}.product-card{flex:0 0 calc(25% - 15px);scroll-snap-align:start}.product-image{border-bottom:1px solid var(--line)}
+@media(max-width:1000px){.branches-section{grid-template-columns:1fr}.product-card{flex-basis:calc(50% - 10px)}}
+@media(max-width:650px){.branches-section{padding:60px 6%}.product-card{flex-basis:85%}.map-shell{padding:8px;border-radius:19px}#petkoMap{height:470px;border-radius:14px}.map-toolbar{top:18px;left:18px;right:18px}.map-search{height:46px}.map-locate{height:44px;width:44px}.map-legend{bottom:17px;left:17px}.petko-footer{padding:54px 6% 24px}.footer-grid{gap:28px}}
+
+@media(max-width:1000px){.quick-access{grid-template-columns:repeat(2,minmax(0,1fr))}.product-track{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.navbar{align-items:center;height:auto;min-height:64px}.menu{justify-content:flex-end;gap:7px}.menu a:not(.btn-login):not(.profile-link),.menu .logout-form{display:none}.quick-access,.product-track,.footer-grid{grid-template-columns:1fr}.products-section{padding:60px 6%}.product-image{height:160px}.footer-bottom{flex-direction:column}}
+
+.products-section .product-track{display:flex!important;flex-wrap:nowrap;overflow-x:auto;gap:20px;margin-top:32px;padding:8px 2px 20px;scroll-snap-type:x mandatory;scroll-behavior:smooth}
+.products-section .product-card{display:flex;flex-direction:column;flex:0 0 calc(25% - 15px);min-width:240px;scroll-snap-align:start}
+.products-section .product-image{height:180px;min-height:180px;overflow:hidden}
+.products-section .product-image img{display:block;max-width:100%;max-height:100%}
+@media(max-width:1000px){.products-section .product-card{flex-basis:calc(50% - 10px)}}
+@media(max-width:650px){.products-section .product-card{flex-basis:85%}}
+
+#productTrack{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden;scroll-behavior:smooth;scroll-snap-type:x mandatory;gap:20px}
+#productTrack .product-card{flex:0 0 calc(25% - 15px);min-width:230px;scroll-snap-align:start}
+#productTrack::-webkit-scrollbar{height:8px}
+#productTrack::-webkit-scrollbar-thumb{background:#8ab9ed;border-radius:20px}
+@media(max-width:1000px){#productTrack .product-card{flex-basis:calc(50% - 10px)}}
+@media(max-width:650px){#productTrack .product-card{flex-basis:85%}}
+.logo{line-height:0}.logo img{height:46px;width:auto;display:block;transition:transform .3s}.logo:hover img{transform:scale(1.06) rotate(-2deg)}
+
+.navbar{display:flex;flex-wrap:nowrap;align-items:center;height:64px!important;min-height:64px!important;padding:0 clamp(12px,4vw,64px)!important;gap:clamp(8px,1.4vw,22px)}
+.navbar .logo{display:flex;align-items:center;flex:0 0 auto;min-width:0}
+.navbar .logo img{height:clamp(36px,3vw,50px);width:auto;max-width:min(17vw,220px);object-fit:contain}
+.navbar .menu{display:flex;flex:1 1 auto;min-width:0;flex-wrap:nowrap;align-items:center;justify-content:flex-end;gap:clamp(7px,.9vw,16px);white-space:nowrap}
+.navbar .menu>a:not(.btn-login):not(.profile-link){padding:8px 0;font-size:clamp(12px,.82vw,15px)}
+.navbar .menu>a:not(.btn-login):not(.profile-link) i{font-size:12px}
+.navbar .profile-link,.navbar .dark-mode-btn,.navbar .language-btn,.navbar .logout-link{flex:0 0 40px;width:40px;min-width:40px;height:40px}
+.navbar .logout-form{display:flex;flex:0 0 auto;align-items:center;margin:0}
+@media(max-width:1100px){.navbar .menu>a:not(.btn-login):not(.profile-link){display:none}}
+@media(max-width:650px){.navbar{padding-inline:12px!important;gap:8px}.navbar .logo img{height:38px;max-width:128px}.navbar .menu{gap:7px}.navbar .profile-link,.navbar .dark-mode-btn,.navbar .language-btn,.navbar .logout-link{flex-basis:36px;width:36px;min-width:36px;height:36px}.navbar .menu .logout-form{display:flex}.navbar .language-btn{padding:0;font-size:12px}}
+.petko-footer{display:block;width:100%;box-sizing:border-box;padding:clamp(44px,6vw,72px) clamp(20px,7vw,100px) 28px;background:linear-gradient(125deg,#06152f 0%,#0d3972 55%,#1268ad 100%);color:#f2f8ff;border-top:5px solid #5cc8ff;box-shadow:0 -16px 45px rgba(7,35,76,.12)}
+.petko-footer .footer-grid{width:min(100%,1240px);margin:0 auto;display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:clamp(24px,4vw,52px);align-items:start}
+.petko-footer .logo{display:inline-flex;align-items:center;justify-content:center;margin:0 0 16px;padding:0;background:transparent;border-radius:0;line-height:0}
+.petko-footer .logo img{height:42px;width:auto;max-width:100%;display:block}
+.petko-footer strong{font-size:17px;display:block;margin-bottom:6px;color:inherit}
+.petko-footer p{max-width:390px;margin:0;line-height:1.75;color:#c1d4eb;font-size:14px}
+.petko-footer .footer-links{display:flex;flex-direction:column;gap:10px;margin-top:15px}
+.petko-footer .footer-links a{color:#e1edfb;font-size:14px;line-height:1.5;transition:color .2s ease}
+.petko-footer .footer-links a:hover,.petko-footer .footer-links a:focus-visible{color:#7ed4ff}
+.petko-footer .footer-links a i{width:18px;color:#75ceff;font-size:13px}
+.petko-footer .footer-heading{display:block;color:inherit;font-size:17px;font-weight:800;line-height:1.4;text-decoration:none}
+.petko-footer .footer-heading i{margin-right:8px;color:#75ceff;font-size:14px}
+.petko-footer .footer-heading:hover,.petko-footer .footer-heading:focus-visible{color:#7ed4ff}
+.petko-footer .footer-bottom{width:min(100%,1240px);margin:34px auto 0;padding-top:20px;border-top:1px solid rgba(200,225,255,.28);display:flex;justify-content:space-between;gap:12px 24px;flex-wrap:wrap;color:#c1d4eb;font-size:13px}
+.card#citas{scroll-margin-top:100px}
+body:not(.dark-mode) .petko-footer{background:linear-gradient(125deg,#f5f9ff 0%,#e4effd 55%,#d4e7fb 100%);color:#0d2548;border-top-color:#2f80ed;box-shadow:0 -14px 40px rgba(30,90,200,.09)}
+body:not(.dark-mode) .petko-footer .logo{background:transparent}
+body:not(.dark-mode) .petko-footer p,body:not(.dark-mode) .petko-footer .footer-bottom{color:#425d80}
+body:not(.dark-mode) .petko-footer .footer-links a{color:#23446f}
+body:not(.dark-mode) .petko-footer .footer-links a:hover,body:not(.dark-mode) .petko-footer .footer-links a:focus-visible{color:#1769d2}
+body:not(.dark-mode) .petko-footer .footer-bottom{border-color:rgba(30,90,200,.2)}
+@media(max-width:760px){.petko-footer .footer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.petko-footer .footer-brand{grid-column:1/-1}}
+@media(max-width:520px){.petko-footer{padding:46px 6% 22px}.petko-footer .footer-grid{grid-template-columns:1fr;gap:25px}.petko-footer .footer-brand{grid-column:auto}.petko-footer .footer-bottom{flex-direction:column;gap:8px;margin-top:28px}}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,800;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
+<script nonce="<?= e($nonce) ?>" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
 </head>
 <body>
 <script nonce="<?= e($nonce) ?>">
@@ -553,25 +696,25 @@ body.dark-mode .logout-link{color:#ff9a8d}
 <header class="navbar">
     <a class="logo" href="#inicio" aria-label="PETKO"><img src="../../../img/petko/logo_amarillo.png" alt="PETKO Veterinaria y Ganadería"></a>
     <nav class="menu">
-        <a href="#inicio">Inicio</a>
-        <a href="#funciones">Funciones</a>
-        <a href="#mascotas">Mascotas</a>
-        <a href="#ventas">Ventas</a>
-        <a href="#inventario">Inventario</a>
-        <a href="#sucursales">Sucursales</a>
-        <a href="#nosotros">Nosotros</a>
+        <a href="#inicio"><i class="fa-solid fa-house" aria-hidden="true"></i>Inicio</a>
+        <a href="#funciones"><i class="fa-solid fa-grip" aria-hidden="true"></i>Funciones</a>
+        <a href="#mascotas"><i class="fa-solid fa-paw" aria-hidden="true"></i>Mascotas</a>
+        <a href="#ventas"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>Ventas</a>
+        <a href="#inventario"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>Inventario</a>
+        <a href="#sucursales"><i class="fa-solid fa-location-dot" aria-hidden="true"></i>Sucursales</a>
+        <a href="#nosotros"><i class="fa-solid fa-heart" aria-hidden="true"></i>Nosotros</a>
         <?php if ($logueado): ?>
-            <a href="<?= e($rutaDashboard) ?>" class="btn-login"><span data-i18n><?= e($nombre) ?></span></a>
-            <!-- Cerrar sesión: formulario POST con token CSRF (lo procesa este mismo archivo) -->
+            <a href="<?= e($rutaDashboard) ?>" class="profile-link" title="Ir al dashboard de <?= e($nombre) ?>" aria-label="Ir al dashboard de <?= e($nombre) ?>"><i class="fa-solid fa-circle-user" aria-hidden="true"></i></a>
+            
             <form method="post" action="<?= e(basename((string)($_SERVER['SCRIPT_NAME'] ?? 'home.php'))) ?>" class="logout-form">
                 <input type="hidden" name="accion" value="cerrar_sesion">
                 <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-                <button type="submit" class="logout-link">Cerrar sesión</button>
+                <button type="submit" class="logout-link" title="Cerrar sesión" aria-label="Cerrar sesión"><i class="fa-solid fa-door-open" aria-hidden="true"></i><span class="sr-only">Cerrar sesión</span></button>
             </form>
         <?php else: ?>
-            <a href="../../../../inicioSesion.php" class="btn-login">Iniciar sesión</a>
+            <a href="<?= e($rutaLogin) ?>" class="btn-login">Iniciar sesión</a>
         <?php endif; ?>
-        <button id="darkModeBtn" class="dark-mode-btn" title="Cambiar modo">🌙</button>
+        <button id="darkModeBtn" class="dark-mode-btn" title="Cambiar modo" aria-label="Cambiar modo"><i id="darkModeIcon" class="fa-solid fa-moon" aria-hidden="true"></i></button>
         <button id="languageToggle" class="language-btn" type="button" aria-label="Cambiar idioma">EN</button>
     </nav>
 </header>
@@ -579,7 +722,7 @@ body.dark-mode .logout-link{color:#ff9a8d}
 <section class="ps-wrap" id="inicio" aria-label="PETKO: gestión para veterinarias">
     <div class="ps-sticky">
 
-        <!-- Fondo decorativo -->
+        
         <div class="ps-bg" aria-hidden="true"><i class="b b1"></i><i class="b b2"></i><i class="b b3"></i><div class="ps-trail"><b style="left:4.0%;bottom:36px;animation-delay:0.0s"></b><b style="left:11.4%;bottom:14px;animation-delay:0.8s"></b><b style="left:18.8%;bottom:36px;animation-delay:1.6s"></b><b style="left:26.2%;bottom:14px;animation-delay:2.4s"></b><b style="left:33.6%;bottom:36px;animation-delay:3.2s"></b><b style="left:41.0%;bottom:14px;animation-delay:4.0s"></b><b style="left:48.4%;bottom:36px;animation-delay:4.8s"></b><b style="left:55.8%;bottom:14px;animation-delay:5.6s"></b><b style="left:63.2%;bottom:36px;animation-delay:6.4s"></b><b style="left:70.6%;bottom:14px;animation-delay:7.2s"></b><b style="left:78.0%;bottom:36px;animation-delay:8.0s"></b><b style="left:85.4%;bottom:14px;animation-delay:8.8s"></b><b style="left:92.8%;bottom:36px;animation-delay:9.6s"></b></div></div>
 
         <div class="ps-rail">
@@ -590,16 +733,16 @@ body.dark-mode .logout-link{color:#ff9a8d}
 
         <div class="ps-text">
             <div class="ps-step on">
-                <div class="ps-tag">PETKO · CONTROL INTELIGENTE PARA VETERINARIAS</div>
-                <h1>Tu veterinaria, <em>en otro nivel.</em></h1>
-                <p>Consultas, vacunas, ventas, inventario y sucursales bajo control. Perros, gatos, aves y conejos: cada mascota con su ficha y tu negocio siempre en orden.</p>
+                <div class="ps-tag"><i class="fa-solid fa-paw" aria-hidden="true"></i> PETKO · TODO PARA EL CUIDADO DE TUS ANIMALES</div>
+                <h1>Cuida a quienes <em>más quieres.</em></h1>
+                <p>Encuentra productos veterinarios y agropecuarios, elige tu sucursal y solicita una cita para tu mascota. Todo lo que necesitas, más cerca de ti.</p>
                 <div class="ps-btns">
-                    <a href="<?= e($ctaHref) ?>" class="ps-b1">Comenzar ahora</a>
-                    <a href="#funciones" class="ps-b2">Explorar PETKO</a>
+                    <a href="#productos" class="ps-b1">Explorar catálogo</a>
+                    <a href="#citas" class="ps-b2">Agendar una cita</a>
                 </div>
                 <div class="ps-chips">
-                    <button data-go="1">🛒 Punto de venta</button><button data-go="2">📦 Inventario</button>
-                    <button data-go="3">📅 Citas</button><button data-go="3">🐾 Mascotas</button>
+                    <button data-go="1"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Punto de venta</button><button data-go="2"><i class="fa-solid fa-box" aria-hidden="true"></i> Inventario</button>
+                    <button data-go="3"><i class="fa-regular fa-calendar-days" aria-hidden="true"></i> Citas</button><button data-go="3"><i class="fa-solid fa-paw" aria-hidden="true"></i> Mascotas</button>
                 </div>
             </div>
 
@@ -660,7 +803,7 @@ body.dark-mode .logout-link{color:#ff9a8d}
 </section>
 
 <section class="intro">Una solución pensada para <strong>veterinarias que quieren tener el control de su negocio.</strong>
-    <div class="paws" aria-hidden="true">🐾 🐾 🐾 🐾 🐾</div>
+    <div class="paws" aria-hidden="true"><i class="fa-solid fa-paw" aria-hidden="true"></i> <i class="fa-solid fa-paw" aria-hidden="true"></i> <i class="fa-solid fa-paw" aria-hidden="true"></i> <i class="fa-solid fa-paw" aria-hidden="true"></i> <i class="fa-solid fa-paw" aria-hidden="true"></i></div>
 </section>
 
 <section class="sec c" id="funciones">
@@ -668,14 +811,14 @@ body.dark-mode .logout-link{color:#ff9a8d}
     <h2 class="title">Todo lo que tu veterinaria necesita</h2>
     <p class="desc">PETKO reúne las herramientas necesarias para atender a tus pacientes y administrar tu negocio de manera sencilla y organizada.</p>
     <div class="grid g4">
-        <div class="card"><div class="ico">🩺</div><h3>Consultas y ficha clínica</h3><p>Guarda el historial de cada mascota: consultas, diagnósticos, peso y tratamientos.</p></div>
-        <div class="card"><div class="ico">💉</div><h3>Vacunas y desparasitación</h3><p>Lleva el control de cada aplicación y sabe cuándo toca la siguiente.</p></div>
-        <div class="card"><div class="ico">📅</div><h3>Citas y recordatorios</h3><p>Organiza la agenda del día y recuerda a los dueños la visita de su mascota.</p></div>
-        <div class="card"><div class="ico">🛁</div><h3>Estética y baño</h3><p>Registra los servicios de baño, corte y estética junto con el resto de la cuenta.</p></div>
-        <div class="card"><div class="ico">🛒</div><h3>Punto de venta</h3><p>Registra las ventas de alimentos, medicamentos, accesorios y servicios de manera rápida.</p></div>
-        <div class="card"><div class="ico">📦</div><h3>Inventario</h3><p>Mantén controladas las existencias de los productos de tu veterinaria.</p></div>
-        <div class="card"><div class="ico">🏪</div><h3>Sucursales</h3><p>Administra diferentes sucursales desde un mismo sistema.</p></div>
-        <div class="card"><div class="ico">👥</div><h3>Usuarios</h3><p>Gestiona los accesos y funciones de gerentes y cajeros.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-stethoscope" aria-hidden="true"></i></div><h3>Consultas y ficha clínica</h3><p>Guarda el historial de cada mascota: consultas, diagnósticos, peso y tratamientos.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-syringe" aria-hidden="true"></i></div><h3>Vacunas y desparasitación</h3><p>Lleva el control de cada aplicación y sabe cuándo toca la siguiente.</p></div>
+        <div class="card" id="citas"><div class="ico"><i class="fa-regular fa-calendar-days" aria-hidden="true"></i></div><h3>Citas y recordatorios</h3><p>Organiza la agenda del día y recuerda a los dueños la visita de su mascota.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-bath" aria-hidden="true"></i></div><h3>Estética y baño</h3><p>Registra los servicios de baño, corte y estética junto con el resto de la cuenta.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i></div><h3>Punto de venta</h3><p>Registra las ventas de alimentos, medicamentos, accesorios y servicios de manera rápida.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-box" aria-hidden="true"></i></div><h3>Inventario</h3><p>Mantén controladas las existencias de los productos de tu veterinaria.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-shop" aria-hidden="true"></i></div><h3>Sucursales</h3><p>Administra diferentes sucursales desde un mismo sistema.</p></div>
+        <div class="card"><div class="ico"><i class="fa-solid fa-users" aria-hidden="true"></i></div><h3>Usuarios</h3><p>Gestiona los accesos y funciones de gerentes y cajeros.</p></div>
     </div>
 </section>
 
@@ -692,53 +835,10 @@ body.dark-mode .logout-link{color:#ff9a8d}
     <div class="ppanel" id="pp-agro" role="tabpanel"><div class="pgal"><figure class="pol" style="--r:-4deg"><div class="ph"><i class="im im-caballos"></i></div></figure><figure class="pol" style="--r:3deg"><div class="ph"><i class="im im-revision-ganado"></i></div></figure><figure class="pol" style="--r:-2deg"><div class="ph"><i class="im im-laboratorio"></i></div></figure></div><div class="ptxt"><h3>Agropecuario</h3><p>Ganado, caballos y animales de granja</p><ul class="check"><li>Revisión con ultrasonido</li><li>Análisis de laboratorio</li><li>Visitas a campo y control del hato</li></ul></div></div>
 </section>
 
-<section class="sec c galeria" id="galeria">
-    <div class="sello"><b>🐾</b>cuidado<br>animal</div>
-    <div class="label">NUESTRO ÁLBUM</div>
-    <h2 class="title">Cada mascota tiene su historia</h2>
-    <p class="desc">Fotos, recuerdos y cuidados: en PETKO cada paciente es parte de la familia.</p>
-    <div class="pols">
-        <figure class="pol" style="--r:-4deg"><div class="ph"><i class="im im-salchicha" role="img" aria-label="Perro salchicha"></i>🐶</div><figcaption>Dulce compañero</figcaption></figure>
-        <figure class="pol" style="--r:3deg"><div class="ph"><i class="im im-gatito" role="img" aria-label="Gatito"></i>🐱</div><figcaption>Gatito curioso</figcaption></figure>
-        <figure class="pol" style="--r:-2deg"><div class="ph"><i class="im im-conejo-gris" role="img" aria-label="Conejo"></i>🐰</div><figcaption>Orejitas caídas</figcaption></figure>
-        <figure class="pol" style="--r:5deg"><div class="ph"><i class="im im-perico" role="img" aria-label="Perico"></i>🦜</div><figcaption>Perico coqueto</figcaption></figure>
-        <figure class="pol" style="--r:-5deg"><div class="ph"><i class="im im-perro-clasico" role="img" aria-label="Perro"></i>🐶</div><figcaption>Mirada tierna</figcaption></figure>
-        <figure class="pol" style="--r:2deg"><div class="ph"><i class="im im-gato-adulto" role="img" aria-label="Gato"></i>🐱</div><figcaption>Elegante y atento</figcaption></figure>
-        <figure class="pol" style="--r:-3deg"><div class="ph"><i class="im im-conejo-blanco" role="img" aria-label="Conejo blanco"></i>🐰</div><figcaption>Entre flores</figcaption></figure>
-        <figure class="pol" style="--r:4deg"><div class="ph"><i class="im im-pajaros" role="img" aria-label="Aves"></i>🐦</div><figcaption>Dúo de aves</figcaption></figure>
-        <figure class="pol" style="--r:-2deg"><div class="ph"><i class="im im-rata" role="img" aria-label="Rata"></i>🐭</div><figcaption>Pequeño explorador</figcaption></figure>
-        <figure class="pol" style="--r:3deg"><div class="ph"><i class="im im-caballos" role="img" aria-label="Caballos y ganado"></i>🐴</div><figcaption>Campo y ganado</figcaption></figure>
-        <figure class="pol" style="--r:-4deg"><div class="ph"><i class="im im-revision-ganado" role="img" aria-label="Revisión de ganado"></i>🩺</div><figcaption>Revisión con ultrasonido</figcaption></figure>
-        <figure class="pol" style="--r:2deg"><div class="ph"><i class="im im-laboratorio" role="img" aria-label="Muestras de laboratorio"></i>🧪</div><figcaption>Análisis de laboratorio</figcaption></figure>
-    </div>
-    <div class="botica">
-        <span><b>🩺</b>Estetoscopio</span><span><b>💉</b>Vacunas</span><span><b>💊</b>Tónicos y vitaminas</span>
-        <span><b>🦴</b>Huesitos</span><span><b>🧴</b>Shampoo medicado</span><span><b>🌡️</b>Termómetro</span><span><b>🧸</b>Juguetes</span>
-    </div>
-</section>
-
-<section class="sec" id="nosotros">
-    <div class="split">
-        <div>
-            <div class="label">PENSADO PARA VETERINARIAS</div>
-            <h2>Tu veterinaria necesita más que una caja.</h2>
-            <p>Administrar una veterinaria implica mucho más que realizar ventas. También necesitas conocer a cada paciente, controlar productos, existencias, sucursales y usuarios.</p>
-            <ul class="check"><li>Ficha clínica de cada mascota</li><li>Control de vacunas y desparasitación</li><li>Registro de ventas</li><li>Inventario actualizado</li><li>Administración de sucursales</li></ul>
-        </div>
-        <div class="panel p1"><div class="mini">
-            <h3>🐶 Luna · Labrador · 3 años</h3>
-            <div class="r"><span>Antirrábica</span><strong class="good">Al día</strong></div>
-            <div class="r"><span>Parvovirus</span><strong class="good">Al día</strong></div>
-            <div class="r"><span>Desparasitación</span><strong class="bad">Vence en 5 días</strong></div>
-            <div class="r"><span>Próxima cita</span><strong>24 nov · 10:30</strong></div>
-        </div></div>
-    </div>
-</section>
-
 <section class="sec alt" id="ventas">
     <div class="split">
         <div class="panel p2"><div class="mini">
-            <h3>🐱 Cuenta de Michi</h3>
+            <h3><i class="fa-solid fa-cat" aria-hidden="true"></i> Cuenta de Michi</h3>
             <div class="r"><span>Consulta general</span><strong>$350</strong></div>
             <div class="r"><span>Medicamento</span><strong>$280</strong></div>
             <div class="r"><span>Arenero y accesorio</span><strong>$190</strong></div>
@@ -764,42 +864,23 @@ body.dark-mode .logout-link{color:#ff9a8d}
         <div class="tbl">
             <h3>Inventario de productos</h3>
             <div class="tr th"><span>Producto</span><span>Existencia</span><span>Estado</span></div>
-            <div class="tr"><span>🍖 Alimento</span><span>125</span><span class="good">Disponible</span></div>
-            <div class="tr"><span>💊 Medicamentos</span><span>48</span><span class="good">Disponible</span></div>
-            <div class="tr"><span>🦴 Accesorios</span><span>73</span><span class="good">Disponible</span></div>
-            <div class="tr"><span>💉 Vacunas</span><span>8</span><span class="bad">Bajo</span></div>
+            <div class="tr"><span><i class="fa-solid fa-bone" aria-hidden="true"></i> Alimento</span><span>125</span><span class="good">Disponible</span></div>
+            <div class="tr"><span><i class="fa-solid fa-pills" aria-hidden="true"></i> Medicamentos</span><span>48</span><span class="good">Disponible</span></div>
+            <div class="tr"><span><i class="fa-solid fa-bone" aria-hidden="true"></i> Accesorios</span><span>73</span><span class="good">Disponible</span></div>
+            <div class="tr"><span><i class="fa-solid fa-syringe" aria-hidden="true"></i> Vacunas</span><span>8</span><span class="bad">Bajo</span></div>
         </div>
     </div>
 </section>
 
-<section class="sec alt" id="citas">
-    <div class="split">
-        <div class="tbl">
-            <h3>📅 Citas de hoy</h3>
-            <div class="tr th"><span>Paciente</span><span>Hora</span><span>Servicio</span></div>
-            <div class="tr"><span>🐶 Luna</span><span>09:00</span><span class="good">Vacuna</span></div>
-            <div class="tr"><span>🐱 Michi</span><span>10:30</span><span class="good">Consulta</span></div>
-            <div class="tr"><span>🐰 Toby</span><span>12:00</span><span class="good">Revisión</span></div>
-            <div class="tr"><span>🦜 Kiwi</span><span>16:00</span><span class="good">Control</span></div>
-        </div>
-        <div>
-            <div class="label">CITAS Y RECORDATORIOS</div>
-            <h2>Cada mascota llega a su cita.</h2>
-            <p>Organiza la agenda de consultas, vacunas y estética, y no dejes pasar ninguna fecha importante de tus pacientes.</p>
-            <ul class="check"><li>Agenda diaria y semanal</li><li>Recordatorios de vacunas</li><li>Historial por mascota</li></ul>
-        </div>
+<section class="branches-section" id="sucursales">
+    <div class="branches-copy">
+        <div class="label">ENCUENTRA PETKO CERCA DE TI</div>
+        <h2 class="title">Nuestras sucursales por zona</h2>
+        <p class="desc">Consulta en el mapa dónde se encuentran los puntos de atención PETKO y selecciona la sucursal que te quede mejor.</p>
+        <div class="branch-counter"><span class="counter-icon"><i class="fa-solid fa-paw" aria-hidden="true"></i></span><span><strong id="branchCount"><?= (int)$totalSucursalesMapa ?></strong><small>sucursales registradas</small></span></div>
+        <p class="branch-hint" id="branchHint">Las ubicaciones aparecerán aquí cuando se conecte el listado de sucursales activas de PETKO.</p>
     </div>
-</section>
-
-<section class="sec c" id="sucursales">
-    <div class="label">MULTI-SUCURSAL</div>
-    <h2 class="title">Una sola plataforma para todas tus sucursales</h2>
-    <p class="desc">Centraliza la información y facilita la administración de cada punto de venta de tu negocio veterinario.</p>
-    <div class="grid g3">
-        <div class="card"><div class="ico">🏪</div><h3>Sucursal</h3><p>Administra los productos y operaciones correspondientes a cada sucursal.</p></div>
-        <div class="card"><div class="ico">👨‍💼</div><h3>Gerentes</h3><p>Los responsables de cada sede pueden gestionar las operaciones de su sucursal.</p></div>
-        <div class="card"><div class="ico">👩‍💻</div><h3>Cajeros</h3><p>Realizan las ventas y consultan la información necesaria para trabajar.</p></div>
-    </div>
+    <div class="map-shell"><div class="map-toolbar"><label class="map-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input id="branchSearch" type="search" placeholder="Buscar una sucursal o zona" aria-label="Buscar una sucursal o zona"></label><button class="map-locate" id="mapLocate" type="button" aria-label="Mostrar mi ubicación" title="Mostrar mi ubicación"><i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i></button></div><div id="petkoMap" role="application" aria-label="Mapa interactivo de sucursales PETKO"></div><div class="map-legend"><span><i class="fa-solid fa-paw" aria-hidden="true"></i></span> Sucursales PETKO</div></div>
 </section>
 
 <section class="sec alt c">
@@ -817,26 +898,89 @@ body.dark-mode .logout-link{color:#ff9a8d}
     <div class="label">¿POR QUÉ PETKO?</div>
     <h2 class="title">Menos complicaciones. Más control.</h2>
     <div class="grid g4">
-        <div class="benefit"><strong>🐾 Especializado</strong><p>Diseñado pensando en las necesidades de negocios veterinarios.</p></div>
-        <div class="benefit"><strong>⚡ Sencillo</strong><p>Una interfaz pensada para facilitar las operaciones diarias.</p></div>
-        <div class="benefit"><strong>📦 Organizado</strong><p>Mantén tus productos e información organizada.</p></div>
-        <div class="benefit"><strong>🏪 Centralizado</strong><p>Gestiona las diferentes sucursales desde un mismo sistema.</p></div>
+        <div class="benefit"><strong><i class="fa-solid fa-paw" aria-hidden="true"></i> Especializado</strong><p>Diseñado pensando en las necesidades de negocios veterinarios.</p></div>
+        <div class="benefit"><strong><i class="fa-solid fa-bolt" aria-hidden="true"></i> Sencillo</strong><p>Una interfaz pensada para facilitar las operaciones diarias.</p></div>
+        <div class="benefit"><strong><i class="fa-solid fa-box" aria-hidden="true"></i> Organizado</strong><p>Mantén tus productos e información organizada.</p></div>
+        <div class="benefit"><strong><i class="fa-solid fa-shop" aria-hidden="true"></i> Centralizado</strong><p>Gestiona las diferentes sucursales desde un mismo sistema.</p></div>
     </div>
 </section>
 
 <section class="cta">
-    <span class="fl" style="left:6%;top:14%" aria-hidden="true">🐶</span>
-    <span class="fl" style="right:7%;top:18%;animation-delay:1.5s" aria-hidden="true">🐱</span>
-    <span class="fl" style="left:12%;bottom:10%;animation-delay:3s" aria-hidden="true">🐰</span>
-    <span class="fl" style="right:12%;bottom:12%;animation-delay:2s" aria-hidden="true">🦜</span>
+    <span class="fl" style="left:6%;top:14%" aria-hidden="true"><i class="fa-solid fa-dog" aria-hidden="true"></i></span>
+    <span class="fl" style="right:7%;top:18%;animation-delay:1.5s" aria-hidden="true"><i class="fa-solid fa-cat" aria-hidden="true"></i></span>
+    <span class="fl" style="left:12%;bottom:10%;animation-delay:3s" aria-hidden="true"><i class="fa-solid fa-paw" aria-hidden="true"></i></span>
+    <span class="fl" style="right:12%;bottom:12%;animation-delay:2s" aria-hidden="true"><i class="fa-solid fa-dove" aria-hidden="true"></i></span>
     <h2>Tu veterinaria necesita control.</h2>
     <p>Pacientes, ventas, inventario y sucursales en un solo lugar.</p>
     <a href="<?= e($ctaHref) ?>" class="ps-b1">Comenzar con PETKO</a>
 </section>
 
-<footer>
-    <a class="logo" href="#inicio" aria-label="PETKO"><img src="../../../img/petko/logo_amarillo.png" alt="PETKO Veterinaria y Ganadería"></a>
-    <p>© 2026 PETKO · Punto de Venta e Inventario para Veterinarias</p>
+<section class="quick-access" aria-label="Accesos principales">
+    <a href="<?= e($ctaHref) ?>"><span class="qa-icon"><i class="fa-solid fa-user" aria-hidden="true"></i></span><span><strong>Mi perfil / Dashboard</strong><small>Accede a tu panel según tu cuenta</small></span></a>
+    <a href="#productos"><span class="qa-icon"><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i></span><span><strong>Catálogo</strong><small>Explora productos veterinarios y agropecuarios</small></span></a>
+    <a href="#sucursales"><span class="qa-icon"><i class="fa-solid fa-shop" aria-hidden="true"></i></span><span><strong>Elegir sucursal</strong><small>Consulta la información de sucursales</small></span></a>
+</section>
+
+<section class="products-section" id="productos">
+    <div class="product-head">
+        <div><div class="label">CATÁLOGO PETKO</div><h2 class="title">Productos para cuidar y producir mejor</h2>
+        <p class="desc" style="margin:0;max-width:700px;text-align:left">Productos reales del catálogo PETKO, con sus fotografías y precios registrados.</p></div>
+        <a class="ps-b1" href="<?= e($rutaAccesoCatalogo) ?>">Ver catálogo completo</a>
+    </div>
+    <div class="carousel-controls"><button type="button" class="carousel-arrow" id="productPrev" aria-label="Productos anteriores">‹</button><button type="button" class="carousel-arrow" id="productNext" aria-label="Productos siguientes">›</button></div>
+    <div class="product-track" id="productTrack">
+        <?php if (!empty($productosHome)): ?>
+            <?php foreach ($productosHome as $producto): ?>
+                <?php
+                    $imagenProducto = trim((string)($producto['imagen_url'] ?? ''));
+                    $nombreProducto = (string)($producto['nombre'] ?? 'Producto PETKO');
+                    $descripcionProducto = trim((string)($producto['descripcion'] ?? ''));
+                    if ($descripcionProducto === '') {
+                        $descripcionProducto = (string)($producto['categoria'] ?? 'Producto disponible en PETKO');
+                    }
+                ?>
+                <article class="product-card">
+                    <div class="product-image">
+                        <?php if ($imagenProducto !== ''): ?>
+                            <img src="<?= e($imagenProducto) ?>" alt="<?= e($nombreProducto) ?>" loading="lazy" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:contain;padding:12px">
+                        <?php else: ?>
+                            <i class="fa-solid fa-paw" aria-hidden="true"></i>
+                        <?php endif; ?>
+                    </div>
+                    <div class="product-info">
+                        <h3><?= e($nombreProducto) ?></h3>
+                        <p><?= e(function_exists('mb_strimwidth') ? mb_strimwidth($descripcionProducto, 0, 88, '...', 'UTF-8') : substr($descripcionProducto, 0, 88)) ?></p>
+                        <div class="product-bottom">
+                            <span class="product-price">$<?= number_format((float)($producto['precio'] ?? 0), 2) ?></span>
+                            <a class="product-link" href="<?= e($rutaAccesoCatalogo) ?>">Consultar</a>
+                        </div>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        <?php else: ?>
+            <article class="product-card">
+                <div class="product-image"><i class="fa-solid fa-paw" aria-hidden="true"></i></div>
+                <div class="product-info">
+                    <h3>Catálogo PETKO</h3>
+                    <p>Consulta los productos disponibles para mascotas y el sector agropecuario.</p>
+                    <div class="product-bottom">
+                        <span class="product-price">Ver catálogo</span>
+                        <a class="product-link" href="<?= e($rutaAccesoCatalogo) ?>">Consultar</a>
+                    </div>
+                </div>
+            </article>
+        <?php endif; ?>
+    </div>
+    <p class="section-note">Productos, fotografías y precios cargados directamente desde el catálogo de PETKO.</p>
+</section>
+
+<footer class="petko-footer" id="nosotros">
+    <div class="footer-grid">
+        <div class="footer-brand"><a class="logo" href="#inicio" aria-label="PETKO"><img src="../../../img/petko/logo_amarillo.png" alt="PETKO Veterinaria y Ganadería"></a><p>Soluciones para el cuidado veterinario y agropecuario. Consulta productos, encuentra tu sucursal y solicita atención desde PETKO.</p></div>
+        <div><strong>Enlaces importantes</strong><div class="footer-links"><a href="#inicio">Inicio</a><a href="#productos">Catálogo de productos</a><a href="#sucursales">Sucursales</a><a href="<?= e($ctaHref) ?>">Solicitar atención</a><a href="<?= e($ctaHref) ?>">Mi perfil / Dashboard</a></div></div>
+        <div><a class="footer-heading" href="<?= e($rutaTerminos) ?>#terminos-y-condiciones"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i>Información legal</a><div class="footer-links"><a href="<?= e($rutaTerminos) ?>#terminos-y-condiciones"><i class="fa-regular fa-file-lines" aria-hidden="true"></i> Términos y condiciones</a><a href="<?= e($rutaTerminos) ?>#aviso-de-privacidad"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Aviso de privacidad</a></div></div>
+    </div>
+    <div class="footer-bottom"><span>Plataforma de productos veterinarios y agropecuarios.</span><span>© <?= date('Y') ?> PETKO. Todos los derechos reservados.</span></div>
 </footer>
 
 <script nonce="<?= e($nonce) ?>">
@@ -870,7 +1014,6 @@ body.dark-mode .logout-link{color:#ff9a8d}
     addEventListener('scroll', onScroll, { passive: true });
     addEventListener('resize', onScroll);
 
-    // Mouse: luz y movimiento suave de las fotos
     if (!reduce) {
         sticky.addEventListener('pointermove', ev => {
             if (ev.pointerType === 'touch') return;
@@ -881,7 +1024,6 @@ body.dark-mode .logout-link{color:#ff9a8d}
         sticky.addEventListener('pointerleave', () => { sticky.style.setProperty('--px', 0); sticky.style.setProperty('--py', 0); });
     }
 
-    // Clic en riel y chips: saltar al paso
     wrap.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => {
         const total = wrap.offsetHeight - sticky.offsetHeight;
         const top = wrap.getBoundingClientRect().top + scrollY;
@@ -893,7 +1035,6 @@ body.dark-mode .logout-link{color:#ff9a8d}
 </script>
 
 <script nonce="<?= e($nonce) ?>">
-    // ===== MENÚ: se oculta al bajar y vuelve al subir o acercar el mouse =====
     const nav = document.querySelector('.navbar');
     let lastY = scrollY;
     addEventListener('scroll', () => {
@@ -905,21 +1046,18 @@ body.dark-mode .logout-link{color:#ff9a8d}
     }, { passive: true });
     addEventListener('pointermove', e => { if (e.clientY < 70) nav.classList.remove('hide'); });
 
-    // ===== PESTAÑAS DE MASCOTAS =====
     document.querySelectorAll('.ptabs button').forEach(b => b.addEventListener('click', () => {
         document.querySelectorAll('.ptabs button').forEach(x => x.classList.toggle('on', x === b));
         document.querySelectorAll('.ppanel').forEach(p => p.classList.toggle('on', p.id === 'pp-' + b.dataset.p));
     }));
 
-    // ===== ALMACENAMIENTO (no falla si el navegador lo bloquea) =====
     function petkoGet(k) { try { return localStorage.getItem(k); } catch (err) { return null; } }
     function petkoSet(k, v) { try { localStorage.setItem(k, v); } catch (err) {} }
 
-    // ===== MODO OSCURO (persistente) =====
     const darkModeBtn = document.getElementById("darkModeBtn");
     function updateDarkLabels() {
         const dark = document.body.classList.contains("dark-mode");
-        darkModeBtn.textContent = dark ? "☀️" : "🌙";
+        document.getElementById("darkModeIcon").className = dark ? "fa-solid fa-sun" : "fa-solid fa-moon";
         const t = (typeof homeInEnglish !== "undefined" && homeInEnglish)
             ? (dark ? "Switch to light mode" : "Switch to dark mode")
             : (dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro");
@@ -933,15 +1071,41 @@ body.dark-mode .logout-link{color:#ff9a8d}
         updateDarkLabels();
     });
 
-    // ===== IDIOMA ES / EN =====
     const homeTranslations = {
+        'Cuida a quienes': 'Care for those', 'más quieres.': 'you love most.',
+        ' PETKO · TODO PARA EL CUIDADO DE TUS ANIMALES': ' PETKO · EVERYTHING FOR YOUR ANIMALS',
+        'Encuentra productos veterinarios y agropecuarios, elige tu sucursal y solicita una cita para tu mascota. Todo lo que necesitas, más cerca de ti.': 'Find veterinary and agricultural products, choose your branch and book an appointment for your pet. Everything you need, closer to you.',
+        'Explorar catálogo': 'Explore catalog', 'Agendar una cita': 'Book an appointment',
+        'ENCUENTRA PETKO CERCA DE TI': 'FIND PETKO NEAR YOU', 'Nuestras sucursales por zona': 'Our branches by area',
+        'Consulta en el mapa dónde se encuentran los puntos de atención PETKO y selecciona la sucursal que te quede mejor.': 'See PETKO locations on the map and choose the branch that works best for you.',
+        'sucursales registradas': 'registered branches', 'Las ubicaciones aparecerán aquí cuando se conecte el listado de sucursales activas de PETKO.': 'Locations will appear here once PETKO active branches are connected.',
+        'Productos, fotografías y precios cargados directamente desde el catálogo de PETKO.': 'Explore available categories. Products, photos and prices will be connected to the real PETKO catalog.',
+        'Mi perfil / Dashboard': 'My profile / Dashboard',
+        'Accede a tu panel según tu cuenta': 'Access your account dashboard',
+        'Catálogo': 'Catalog', 'Explora productos veterinarios y agropecuarios': 'Explore veterinary and agricultural products',
+        'Elegir sucursal': 'Choose a branch', 'Consulta la información de sucursales': 'View branch information',
+        'CATÁLOGO PETKO': 'PETKO CATALOG', 'Productos para cuidar y producir mejor': 'Products for better care and production',
+        'Productos reales del catálogo PETKO, con sus fotografías y precios registrados.': 'Explore veterinary and agricultural product categories. Prices are design examples and must be replaced with real catalog prices.',
+        'Soluciones para el cuidado veterinario y agropecuario. Consulta productos, encuentra tu sucursal y solicita atención desde PETKO.': 'Solutions for veterinary and agricultural care. Browse products, find your branch and request service through PETKO.',
+        'Solicitar atención': 'Request service',
+        'Ver catálogo completo': 'View full catalog', 'Alimento para mascotas': 'Pet food',
+        'Opciones de alimentación para perros y gatos.': 'Food options for dogs and cats.',
+        'Medicamentos veterinarios': 'Veterinary medicines', 'Productos para el cuidado y bienestar animal.': 'Products for animal care and wellbeing.',
+        'Vacunas y prevención': 'Vaccines and prevention', 'Artículos para programas de prevención y cuidado.': 'Items for prevention and care programs.',
+        'Productos agropecuarios': 'Agricultural products', 'Soluciones para el cuidado de animales de producción.': 'Solutions for farm animal care.',
+        'Consultar': 'View', 'Nota: tarjetas de demostración. Conecta estas tarjetas a la base de datos y a las rutas reales del catálogo para mostrar productos, fotografías, existencias y precios actualizados.': 'Note: demo cards. Connect them to the database and actual catalog routes to display updated products, photos, stock and prices.',
+        'Próximamente': 'Coming soon', 'Enlaces importantes': 'Important links', 'Inicio': 'Home', 'Catálogo de productos': 'Product catalog',
+        'Solicitud de citas': 'Appointment request', 'Información legal': 'Legal information', 'Términos y condiciones': 'Terms and conditions',
+        'Aviso de privacidad': 'Privacy notice', 'Todos los derechos reservados.': 'All rights reserved.',
+        'Plataforma de productos veterinarios y agropecuarios.': 'Veterinary and agricultural products platform.',
+
         'Inicio': 'Home', 'Funciones': 'Features', 'Mascotas': 'Pets', 'Ventas': 'Sales', 'Inventario': 'Inventory',
         'Sucursales': 'Branches', 'Nosotros': 'About us', 'Iniciar sesión': 'Sign in', 'Cerrar sesión': 'Sign out',
-        'PETKO · CONTROL INTELIGENTE PARA VETERINARIAS': '🐾 SOFTWARE FOR VETERINARY CLINICS',
+        'PETKO · CONTROL INTELIGENTE PARA VETERINARIAS': ' SOFTWARE FOR VETERINARY CLINICS',
         'Tu veterinaria,': 'Your veterinary clinic,', 'en otro nivel.': 'on another level.',
         'Consultas, vacunas, ventas, inventario y sucursales bajo control. Perros, gatos, aves y conejos: cada mascota con su ficha y tu negocio siempre en orden.': 'Visits, vaccines, sales, inventory and branches under control. Dogs, cats, birds and rabbits: every pet with its own record and your business always in order.',
         'Comenzar ahora': 'Get started', 'Explorar PETKO': 'Discover PETKO', 'Comenzar con PETKO': 'Get started with PETKO',
-        '🛒 Punto de venta': '🛒 Point of sale', '📦 Inventario': '📦 Inventory', '📅 Citas': '📅 Appointments', '🐾 Mascotas': '🐾 Pets',
+        ' Punto de venta': ' Point of sale', ' Inventario': ' Inventory', ' Citas': ' Appointments', ' Mascotas': ' Pets',
         'Prueba las tarjetas: quita servicios de la cuenta o repón las vacunas.': 'Try the cards: remove services from the bill or restock the vaccines.',
         'Cobra la consulta y la vacuna.': 'Charge the visit and the vaccine.',
         'Cobra servicios, medicamentos y alimento en una sola cuenta por mascota, y descuenta el inventario al instante.': 'Charge services, medicine and food in a single bill per pet, and update your inventory instantly.',
@@ -955,10 +1119,10 @@ body.dark-mode .logout-link{color:#ff9a8d}
         'Todo junto': 'All together', 'en PETKO.': 'in PETKO.',
         'Pacientes, ventas, inventario y sucursales en un solo lugar.': 'Patients, sales, inventory and branches in one place.',
         'Ver funciones': 'See features',
-        '🐶 Cuenta de Luna': "🐶 Luna's bill", 'Consulta general': 'General checkup', 'Vacuna antirrábica': 'Rabies vaccine',
+        ' Cuenta de Luna': " Luna's bill", 'Consulta general': 'General checkup', 'Vacuna antirrábica': 'Rabies vaccine',
         'Desparasitante': 'Dewormer', 'Alimento premium': 'Premium food',
         'Toca un concepto para quitarlo o agregarlo.': 'Tap an item to remove or add it.',
-        'Vacunas': 'Vaccines', '📅 Citas': '📅 Appointments', 'Consultas': 'Visits', 'Vacunaciones': 'Vaccinations',
+        'Vacunas': 'Vaccines', ' Citas': ' Appointments', 'Consultas': 'Visits', 'Vacunaciones': 'Vaccinations',
         'Hoy': 'Today', 'Semana': 'Week',
         'Una solución pensada para': 'A solution designed for',
         'veterinarias que quieren tener el control de su negocio.': 'veterinary clinics that want control of their business.',
@@ -994,7 +1158,7 @@ body.dark-mode .logout-link{color:#ff9a8d}
         'Luna · Labrador · 3 años': 'Luna · Labrador · 3 years old',
         'Antirrábica': 'Rabies', 'Parvovirus': 'Parvovirus', 'Desparasitación': 'Deworming',
         'Al día': 'Up to date', 'Vence en 5 días': 'Due in 5 days', 'Próxima cita': 'Next appointment', '24 nov · 10:30': 'Nov 24 · 10:30 AM',
-        'PUNTO DE VENTA': 'POINT OF SALE', '🐱 Cuenta de Michi': "🐱 Michi's bill",
+        'PUNTO DE VENTA': 'POINT OF SALE', ' Cuenta de Michi': " Michi's bill",
         'Medicamento': 'Medicine', 'Arenero y accesorio': 'Litter box and accessory', 'Total': 'Total',
         'Cobra servicios y productos en una sola cuenta.': 'Charge services and products in a single bill.',
         'Registra cada operación desde el punto de venta, ligada a la mascota que atendiste, y mantén la información de tu negocio organizada.': 'Record every transaction at the point of sale, linked to the pet you treated, and keep your business information organized.',
@@ -1005,7 +1169,7 @@ body.dark-mode .logout-link{color:#ff9a8d}
         'Actualización después de una venta': 'Updated after every sale',
         'Inventario de productos': 'Product inventory', 'Producto': 'Product', 'Existencia': 'Stock', 'Estado': 'Status',
         'Disponible': 'Available', 'Bajo': 'Low', 'Alimento': 'Food', 'Medicamentos': 'Medicine', 'Accesorios': 'Accessories',
-        '📅 Citas de hoy': "📅 Today's appointments", 'Paciente': 'Patient', 'Hora': 'Time', 'Servicio': 'Service',
+        ' Citas de hoy': " Today's appointments", 'Paciente': 'Patient', 'Hora': 'Time', 'Servicio': 'Service',
         'Vacuna': 'Vaccine', 'Consulta': 'Visit', 'Revisión': 'Checkup', 'Control': 'Follow-up',
         'CITAS Y RECORDATORIOS': 'APPOINTMENTS AND REMINDERS', 'Cada mascota llega a su cita.': 'Every pet makes it to its appointment.',
         'Organiza la agenda de consultas, vacunas y estética, y no dejes pasar ninguna fecha importante de tus pacientes.': 'Organize the schedule for visits, vaccines and grooming, and never miss an important date for your patients.',
@@ -1023,7 +1187,7 @@ body.dark-mode .logout-link{color:#ff9a8d}
         'Controla inventario, citas y operaciones de cada sucursal.': 'Control inventory, appointments and every branch operation.',
         'Registra las ventas y mantén actualizado tu inventario.': 'Record sales and keep your inventory updated.',
         '¿POR QUÉ PETKO?': 'WHY PETKO?', 'Menos complicaciones. Más control.': 'Less hassle. More control.',
-        '🐾 Especializado': '🐾 Specialized', '⚡ Sencillo': '⚡ Simple', '📦 Organizado': '📦 Organized', '🏪 Centralizado': '🏪 Centralized',
+        ' Especializado': ' Specialized', ' Sencillo': ' Simple', ' Organizado': ' Organized', ' Centralizado': ' Centralized',
         'Diseñado pensando en las necesidades de negocios veterinarios.': 'Designed for the needs of veterinary businesses.',
         'Una interfaz pensada para facilitar las operaciones diarias.': 'An interface designed to simplify daily operations.',
         'Mantén tus productos e información organizada.': 'Keep your products and information organized.',
@@ -1072,6 +1236,14 @@ body.dark-mode .logout-link{color:#ff9a8d}
         langBtn.textContent = homeInEnglish ? 'ES' : 'EN';
         langBtn.title = lt;
         langBtn.setAttribute('aria-label', lt);
+        const logoutBtn = document.querySelector('.logout-link');
+        if (logoutBtn) {
+            const logoutLabel = homeInEnglish ? 'Sign out' : 'Cerrar sesión';
+            logoutBtn.title = logoutLabel;
+            logoutBtn.setAttribute('aria-label', logoutLabel);
+            const srLabel = logoutBtn.querySelector('.sr-only');
+            if (srLabel) srLabel.textContent = logoutLabel;
+        }
         document.title = homeInEnglish ? 'PETKO | Veterinary Clinic Management' : 'PETKO | Gestión para Veterinarias';
         updateDarkLabels();
     }
@@ -1082,9 +1254,116 @@ body.dark-mode .logout-link{color:#ff9a8d}
         toggleHomeLanguage();
     });
 
-    // Aplicar el idioma y el modo guardados
     homeInEnglish = petkoGet('petko_lang') === 'en';
     toggleHomeLanguage();
+
+(function(){
+    const track = document.getElementById('productTrack');
+    const previous = document.getElementById('productPrev');
+    const next = document.getElementById('productNext');
+    if (!track) return;
+
+    function moveCarousel(direction) {
+        const card = track.querySelector('.product-card');
+        if (!card) return;
+        const styles = window.getComputedStyle(track);
+        const gap = parseFloat(styles.columnGap || styles.gap) || 20;
+        const distance = card.getBoundingClientRect().width + gap;
+        track.scrollBy({left: direction * distance, behavior:'smooth'});
+    }
+
+    previous?.addEventListener('click', () => moveCarousel(-1));
+    next?.addEventListener('click', () => moveCarousel(1));
+})();
+
+(function(){
+    const mapElement = document.getElementById('petkoMap');
+    const count = document.getElementById('branchCount');
+    const hint = document.getElementById('branchHint');
+    const branches = <?= json_encode($sucursalesMapa, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_AMP|JSON_HEX_QUOT) ?>;
+    const search = document.getElementById('branchSearch');
+    const locate = document.getElementById('mapLocate');
+
+    if (count) count.textContent = String(branches.length);
+    if (!mapElement) return;
+    if (typeof L === 'undefined') {
+        if (hint) hint.textContent = 'No se pudo cargar el mapa. Revisa tu conexión a internet y vuelve a actualizar.';
+        return;
+    }
+
+    const center = [19.13, -104.02];
+    const map = L.map(mapElement, {scrollWheelZoom:false, zoomControl:false, preferCanvas:true}).setView(center, 9);
+    L.control.zoom({position:'bottomright'}).addTo(map);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        updateWhenIdle:true,
+        keepBuffer:2,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>'
+    }).addTo(map);
+
+    const pawIcon = L.divIcon({
+        className:'paw-marker-wrap',
+        html:'<span class="paw-marker" aria-hidden="true"><i class="fa-solid fa-paw"></i></span>',
+        iconSize:[38,42], iconAnchor:[19,39], popupAnchor:[0,-36]
+    });
+    const markers = [];
+    const safe = value => String(value || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    function approximateCoords(branch, index) {
+        const text = (String(branch.nombre||'')+' '+String(branch.direccion||'')).toLowerCase();
+        if (text.includes('colima')) return [19.2433 + (index * 0.0012), -103.7250 + (index * 0.0012)];
+        if (text.includes('manzanillo')) return [19.0522 + (index * 0.0012), -104.3158 + (index * 0.0012)];
+        return [19.0522 + (index * 0.0015), -104.3158 + (index * 0.0015)];
+    }
+
+    function popupContent(branch, approximate) {
+        return '<div class="petko-map-popup"><strong>'+safe(branch.nombre||'Sucursal PETKO')+
+            '</strong><br><span>'+safe(branch.direccion||'Dirección no registrada')+
+            '</span>'+(approximate?'<small>Zona aproximada a partir de la ciudad registrada.</small>':'')+
+            '<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(String(branch.direccion||branch.nombre||''))+'" target="_blank" rel="noopener noreferrer">Ver indicaciones <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div>';
+    }
+
+    branches.forEach((branch, index) => {
+        const marker = L.marker(approximateCoords(branch,index), {icon:pawIcon}).addTo(map);
+        marker.bindPopup(popupContent(branch,true));
+        markers.push({branch,marker,index});
+    });
+
+    if (!branches.length) {
+        if (hint) hint.textContent = 'Aún no hay sucursales activas registradas. Cuando el administrador agregue una, aparecerá aquí.';
+        setTimeout(()=>map.invalidateSize(),250);
+        return;
+    }
+
+    const bounds = L.latLngBounds(markers.map(item => item.marker.getLatLng()));
+    map.fitBounds(bounds,{padding:[55,55],maxZoom:12});
+    if (hint) hint.textContent = 'Mostrando '+branches.length+' sucursal(es) activa(s). Busca por nombre o zona, selecciona una huellita o usa tu ubicación.';
+
+    search?.addEventListener('input',()=>{
+        const query=search.value.trim().toLocaleLowerCase('es');
+        const visible=[];
+        markers.forEach(item=>{
+            const text=(String(item.branch.nombre||'')+' '+String(item.branch.direccion||'')).toLocaleLowerCase('es');
+            if(!query||text.includes(query)){item.marker.addTo(map);visible.push(item.marker)}else{map.removeLayer(item.marker)}
+        });
+        if(visible.length===1){map.flyTo(visible[0].getLatLng(),14,{duration:.7});visible[0].openPopup()}
+        else if(visible.length>1){map.flyToBounds(L.latLngBounds(visible.map(marker=>marker.getLatLng())),{padding:[60,60],maxZoom:13,duration:.7})}
+        if(hint)hint.textContent=visible.length?('Se '+(visible.length===1?'encontró ':'encontraron ')+visible.length+' sucursal(es).'):'No hay sucursales que coincidan con esa búsqueda.';
+    });
+
+    locate?.addEventListener('click',()=>{
+        if(!navigator.geolocation){if(hint)hint.textContent='Este navegador no permite consultar tu ubicación.';return}
+        if(hint)hint.textContent='Buscando tu ubicación…';
+        navigator.geolocation.getCurrentPosition(position=>{
+            const point=[position.coords.latitude,position.coords.longitude];
+            map.flyTo(point,14,{duration:.8});
+            L.circleMarker(point,{radius:9,color:'#fff',weight:4,fillColor:'#2387ed',fillOpacity:1}).addTo(map)
+                .bindPopup('<div class="petko-map-popup"><strong>Estás aquí</strong><span>Tu ubicación actual</span></div>').openPopup();
+            if(hint)hint.textContent='Mapa centrado en tu ubicación. Elige una huellita para ver la sucursal.';
+        },()=>{if(hint)hint.textContent='No pudimos acceder a tu ubicación. Revisa el permiso del navegador.'},{enableHighAccuracy:true,timeout:10000,maximumAge:60000});
+    });
+    setTimeout(()=>map.invalidateSize(),300);
+})();
 </script>
 
 </body>
