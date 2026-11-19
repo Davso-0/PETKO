@@ -60,6 +60,11 @@ $hostSolicitud = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
 $esSolicitudLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)
     && preg_match('/\A(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\z/', $hostSolicitud) === 1;
 define('DEV_MODE', $esSolicitudLocal || filter_var(getenv('KION_DEV_MODE') ?: false, FILTER_VALIDATE_BOOL));
+const KION_DEMO_EMAILS = [
+    'admin' => 'admin_demo@kion.com',
+    'gerente' => 'gerentemanzanillo@gmail.com',
+    'usuario' => 'usuariocomun@gmail.com',
+];
 $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 
 function responderInicioSesion(bool $ok, string $message, ?string $redirect = null): never
@@ -71,6 +76,25 @@ function responderInicioSesion(bool $ok, string $message, ?string $redirect = nu
     );
     exit;
 }   
+
+function cuentaDemoPublicaPermitida(array $usuario): bool
+{
+    $correo = strtolower(trim((string)($usuario['correo'] ?? '')));
+    $rol = strtolower(trim((string)($usuario['rol'] ?? '')));
+    $rolEsperado = array_search($correo, KION_DEMO_EMAILS, true);
+
+    if (!is_string($rolEsperado)) {
+        return false;
+    }
+
+    if ($rolEsperado === 'admin') {
+        return strpos($rol, 'admin') !== false;
+    }
+    if ($rolEsperado === 'gerente') {
+        return strpos($rol, 'gerente') !== false;
+    }
+    return strpos($rol, 'usuario') !== false || strpos($rol, 'cliente') !== false;
+}
 
 function destinoDespuesDeAutenticacion(string $modulo, string $destinoEscritorio): string
 {
@@ -136,37 +160,49 @@ $accion = $_POST['action'] ?? '';
 $accion = is_string($accion) ? $accion : '';
 
 require_once __DIR__ . '/src/php/config/conexion_BD.php';
+require_once __DIR__ . '/src/php/servicios/EmailService.php';
 
 // =========================================================================
 // API AJAX: OBTENER LISTA DE USUARIOS POR ROL (MODO DEMO)
 // =========================================================================
-if (isset($_GET['action']) && $_GET['action'] === 'get_usuarios_por_rol' && DEV_MODE === true) {
-    $rolBuscado = trim($_GET['rol'] ?? '');
-    if (!in_array($rolBuscado, ['admin', 'gerente', 'usuario'], true)) {
+if (isset($_GET['action']) && $_GET['action'] === 'get_usuarios_por_rol') {
+    $rolParametro = $_GET['rol'] ?? '';
+    $rolBuscado = is_string($rolParametro) ? trim($rolParametro) : '';
+    if (!array_key_exists($rolBuscado, KION_DEMO_EMAILS)) {
         http_response_code(400);
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['ok' => false, 'message' => 'Rol de demostración no válido.']);
         exit;
     }
+    if ($pdo === null) {
+        http_response_code(503);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'message' => 'El servicio de demostración no está disponible.']);
+        exit;
+    }
 
     try {
-        $sql = "SELECT u.id_usuario, u.nombre, u.apellido, u.correo, COALESCE(s.nombre, 'Sin sucursal') AS sucursal 
+        $sql = "SELECT u.id_usuario, u.nombre, u.apellido, u.correo, r.nombre AS rol, COALESCE(s.nombre, 'Sin sucursal') AS sucursal
                 FROM usuarios u 
                 LEFT JOIN roles r ON r.id_rol = u.id_rol 
                 LEFT JOIN sucursales s ON s.id_sucursal = u.id_sucursal 
-                WHERE u.estado = 'ACTIVO'";
+                WHERE LOWER(TRIM(u.estado)) = 'activo' AND LOWER(TRIM(u.correo)) = ?";
 
         if ($rolBuscado === 'admin') {
-            $sql .= " AND r.nombre LIKE '%admin%'";
+            $sql .= " AND LOWER(TRIM(r.nombre)) LIKE '%admin%'";
         } elseif ($rolBuscado === 'gerente') {
-            $sql .= " AND r.nombre LIKE '%gerente%'";
+            $sql .= " AND LOWER(TRIM(r.nombre)) LIKE '%gerente%'";
         } else {
-            $sql .= " AND (r.nombre LIKE '%usuario%' OR r.nombre LIKE '%cliente%')";
+            $sql .= " AND (LOWER(TRIM(r.nombre)) LIKE '%usuario%' OR LOWER(TRIM(r.nombre)) LIKE '%cliente%')";
         }
         $sql .= " ORDER BY u.nombre ASC";
         
-        $stmt = $pdo->query($sql);
-        $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([KION_DEMO_EMAILS[$rolBuscado]]);
+        $usuarios = array_values(array_filter(
+            $stmt->fetchAll(PDO::FETCH_ASSOC),
+            'cuentaDemoPublicaPermitida'
+        ));
 
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['ok' => true, 'data' => $usuarios]);
@@ -223,7 +259,7 @@ if ($metodoPost) {
     // =========================================================================
     // PROCESAMIENTO DE ACCESO RÁPIDO (MODO DEMO)
 
-    if (isset($_POST['demo_login']) && DEV_MODE === true) {
+    if (isset($_POST['demo_login'])) {
         $idUsuarioDemo = (int)($_POST['id_usuario_demo'] ?? 0);
         
         try {
@@ -231,10 +267,10 @@ if ($metodoPost) {
             $consulta->execute([$idUsuarioDemo]);
             $usuario = $consulta->fetch();
 
-            if (!$usuario) {
-                responderInicioSesion(false, 'El usuario seleccionado no existe en la base de datos.');
+            if (!$usuario || !cuentaDemoPublicaPermitida($usuario)) {
+                responderInicioSesion(false, 'La cuenta seleccionada no está habilitada para demostración.');
             }
-            if ($usuario['estado'] !== 'ACTIVO') {
+            if (strtoupper(trim((string)$usuario['estado'])) !== 'ACTIVO') {
                 responderInicioSesion(false, 'Esta cuenta se encuentra inactiva.');
             }
 
@@ -297,29 +333,12 @@ if ($metodoPost) {
                     );
                 }
 
-                $nombreHtml = htmlspecialchars((string)$usuarioRec['nombre'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-                $enlaceHtml = htmlspecialchars($enlaceRecuperacion, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-                $asunto = 'Restablece tu contraseña - PETKO / KION';
-                $cabeceras = [
-                    'MIME-Version: 1.0',
-                    'Content-type: text/html; charset=UTF-8',
-                    'From: PETKO Vet & Agro <no-reply@kion.com>',
-                    'Reply-To: soporte@kion.com',
-                    'X-Mailer: PHP/' . PHP_VERSION,
-                ];
-                $mensajeHtml = '<!doctype html><html lang="es"><body style="font-family:Arial,sans-serif;background-color:#f8fafc;padding:20px;color:#0f172a;">'
-                    . '<div style="max-width:480px;margin:0 auto;background:#ffffff;padding:30px;border-radius:16px;border:1px solid #cbd5e1;box-shadow:0 4px 12px rgba(0,0,0,0.05);">'
-                    . '<h2 style="color:#16a34a;margin-top:0;">PETKO Vet &amp; Agro</h2>'
-                    . '<p>Hola <strong>' . $nombreHtml . '</strong>,</p>'
-                    . '<p>Recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>'
-                    . '<p>Haz clic en el siguiente botón para ingresar tu nueva contraseña. Este enlace caduca en <strong>1 hora</strong>:</p>'
-                    . '<div style="text-align:center;margin:28px 0;"><a href="' . $enlaceHtml . '" style="background:#16a34a;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;display:inline-block;">Restablecer contraseña</a></div>'
-                    . '<p style="font-size:12px;color:#64748b;">Si no realizaste esta solicitud, puedes ignorar este mensaje de manera segura.</p>'
-                    . '</div></body></html>';
-
-                $mailEnviado = @mail($correoRecuperacion, $asunto, $mensajeHtml, implode("\r\n", $cabeceras));
-                if (!$mailEnviado) {
-                    error_log('KION recuperación: el servicio mail() no está configurado o no pudo enviar el correo.');
+                if (!EmailService::enviarRecuperacion(
+                    $correoRecuperacion,
+                    (string)$usuarioRec['nombre'],
+                    $enlaceRecuperacion
+                )) {
+                    error_log('KION recuperación: SMTP no pudo enviar el enlace de restablecimiento.');
                 }
             }
             responderInicioSesion(true, 'Si el correo está registrado, recibirás un enlace de recuperación en tu bandeja de entrada.');
@@ -525,7 +544,6 @@ if ($metodoPost) {
         .btn-secondary:hover { border-color: var(--gold); color: var(--text-main); }
         .dialog-submit { min-height: 38px; padding: 0 15px; border: 0; border-radius: 8px; background: linear-gradient(135deg, #e6c260, #c9a444); color: #17130a; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; }
         
-        <?php if (DEV_MODE === true): ?>
         .role-demo-link { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; margin-top: 10px; padding: 0 14px; border: 1px solid var(--field-border); border-radius: 999px; background: var(--field-bg); color: var(--green-hover) !important; font: inherit; font-size: 11px; font-weight: 700 !important; cursor: pointer; transition: border-color .2s, background-color .2s, transform .2s; }
         .role-demo-link:hover { border-color: var(--green-primary); background: transparent; transform: translateY(-1px); }
         .role-demo-link:focus-visible { outline: 2px solid var(--green-primary); outline-offset: 2px; }
@@ -538,7 +556,6 @@ if ($metodoPost) {
         .role-option { display: block; width: 100%; padding: 9px; border: 1px solid var(--field-border); border-radius: 7px; color: var(--text-main); font-size: 12px; text-align: center; text-decoration: none; background: transparent; cursor: pointer; transition: all 0.2s ease; }
         .role-option:hover { border-color: var(--gold); color: var(--gold-light); background: rgba(201, 164, 68, .1); }
         .role-picker-close { position: absolute; top: 6px; right: 8px; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 22px; }
-        <?php endif; ?>
         
         @keyframes pageEnter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pageExit { to { opacity: 0; transform: translateY(-5px); } }
@@ -777,9 +794,7 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
         <div class="google-login" id="googleLoginButton" aria-label="Continuar con Google"></div>
         <div class="form-footer">
             ¿No tienes cuenta? <a href="registro.php">Regístrate</a>
-            <?php if (DEV_MODE === true): ?>
-                <br><button class="role-demo-link" type="button" id="openRolePicker" aria-haspopup="dialog" aria-controls="roleOverlay">Seleccionar rol (demostración)</button>
-            <?php endif; ?>
+            <br><button class="role-demo-link" type="button" id="openRolePicker" aria-haspopup="dialog" aria-controls="roleOverlay">Seleccionar rol (demostración)</button>
         </div>
     </main>
 
@@ -808,7 +823,6 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
     </div>
 
     <!-- Modal Roles (2 Pasos) -->
-    <?php if (DEV_MODE === true): ?>
         <div class="role-overlay" id="roleOverlay">
             <section class="role-picker" role="dialog" aria-modal="true" aria-labelledby="rolePickerTitle">
                 <button class="role-picker-close" id="closeRolePicker" type="button" aria-label="Cerrar">&times;</button>
@@ -832,7 +846,6 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
                 </div>
             </section>
         </div>
-    <?php endif; ?>
 
     <script>
         // Protección estricta anti-bfcache: si se navega hacia atrás desde una sesión previa, fuerza recarga limpia
@@ -842,6 +855,9 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
             }
         });
 
+        const escapeDemoText = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+        })[character]);
         const loginForm = document.getElementById('loginForm');
         const loginNotice = document.getElementById('loginNotice');
         const recoveryForm = document.getElementById('recoveryForm');
@@ -908,7 +924,7 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
             'Acceso de prueba correcto.': 'Demo access granted.',
             'Error de conexión con el servidor.': 'Server connection error.',
             'Demasiados intentos fallidos. Inténtalo en 15 minutos.': 'Too many failed attempts. Try again in 15 minutes.',
-            'El usuario seleccionado no existe en la base de datos.': 'The selected user does not exist in the database.',
+            'La cuenta seleccionada no está habilitada para demostración.': 'The selected account is not enabled for demo access.',
             'Error de BD al procesar rol de prueba.': 'Database error while processing the demo role.',
             'Esta cuenta se encuentra inactiva.': 'This account is inactive.',
             'La contraseña o correo electrónico no son correctos.': 'The email or password is incorrect.',
@@ -1098,7 +1114,6 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
         // =====================================================================
         // LÓGICA DE ROLES: 2 PASOS (JS)
         // =====================================================================
-        <?php if (DEV_MODE === true): ?>
         const roleOverlay = document.getElementById('roleOverlay');
         const stepRoles = document.getElementById('stepRoles');
         const stepUsuarios = document.getElementById('stepUsuarios');
@@ -1163,10 +1178,10 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
 
                         stepUsuarios.innerHTML = res.data.map(u => `
                             <button type="button" class="role-option btn-seleccionar-usuario" 
-                                    data-id="${u.id_usuario}" 
-                                    data-correo="${u.correo}">
-                                <div style="font-weight: bold; margin-bottom:3px;">${u.nombre} ${u.apellido}</div>
-                                <div style="font-size: 10px; opacity: 0.7;">${u.correo} <br> ${u.sucursal}</div>
+                                    data-id="${Number(u.id_usuario)}"
+                                    data-correo="${escapeDemoText(u.correo)}">
+                                <div style="font-weight: bold; margin-bottom:3px;">${escapeDemoText(u.nombre)} ${escapeDemoText(u.apellido)}</div>
+                                <div style="font-size: 10px; opacity: 0.7;">${escapeDemoText(u.correo)} <br> ${escapeDemoText(u.sucursal)}</div>
                             </button>
                         `).join('');
                     })
@@ -1210,7 +1225,6 @@ body{padding-top:calc(68px + env(safe-area-inset-top))}
             })
             .catch(() => showNotice(loginNotice, 'Error de conexión con el servidor.', 'error'));
         });
-        <?php endif; ?>
 
         applyLoginLanguage();
 

@@ -36,17 +36,17 @@ KION_DB_PASSWORD=CONTRASENA_DE_LA_BASE
 KION_SMTP_HOST=smtp.gmail.com
 KION_SMTP_PORT=587
 KION_SMTP_ENCRYPTION=tls
-KION_SMTP_USER=tu_correo@gmail.com
+KION_SMTP_USER=petkosupport@gmail.com
 KION_SMTP_PASSWORD=CONTRASENA_DE_APLICACION
-KION_MAIL_FROM=tu_correo@gmail.com
-KION_MAIL_FROM_NAME="PETKO Vet & Agropecuario"
+KION_MAIL_FROM=petkosupport@gmail.com
+KION_MAIL_FROM_NAME="PETKO Support"
 
 GOOGLE_CLIENT_ID=tu-client-id.apps.googleusercontent.com
 ```
 
 - Usa los datos de MySQL del panel, incluidos los prefijos que InfinityFree agregue al nombre de la base o del usuario. No uses `root` ni la contraseña vacía de XAMPP.
-- Para Gmail, `KION_SMTP_PASSWORD` debe ser una contraseña de aplicación, no la contraseña normal de Gmail. Si usas otro proveedor, sustituye host, puerto, cifrado y credenciales por los valores de ese proveedor.
-- No configures `KION_DEV_MODE=true` en el hosting. La opción de acceso de demostración debe permanecer desactivada en producción.
+- Para Gmail, usa `petkosupport@gmail.com` como cuenta SMTP y dirección `From`; `KION_SMTP_PASSWORD` debe ser una contraseña de aplicación de esa cuenta, no su contraseña normal. Si usas otro proveedor, sustituye host, puerto, cifrado y credenciales por los valores de ese proveedor.
+- No configures `KION_DEV_MODE=true` en el hosting. El selector público de demostración está limitado en el servidor a las tres cuentas demo configuradas.
 - `.env.example` contiene valores de ejemplo; no es la configuración activa. PHP carga `.env` desde la raíz.
 
 ### Proteger `.env`
@@ -85,7 +85,7 @@ El formulario actual envía la credencial a `google-callback.php`. El archivo `l
 
 - Usa siempre `https://petko.site.je` para probar el sitio. No reemplaces todas las apariciones de `localhost` del código: se usan para detectar el entorno local y habilitar funciones de desarrollo; en el dominio público no deben activarse.
 - El callback principal construye sus enlaces usando el dominio de la solicitud. Confirma que el navegador y el hosting estén usando HTTPS para que las sesiones y enlaces trabajen con el dominio seguro.
-- El envío de bienvenida de Google y los correos de activación del personal usan SMTP (`KION_SMTP_*`). La recuperación de contraseña en `inicioSesion.php` usa la función PHP `mail()`; configurar SMTP no garantiza que esa función esté habilitada por el hosting. Pruébala también y, si no entrega el mensaje, revisa las opciones de correo de InfinityFree o habrá que adaptar ese flujo a SMTP.
+- Los correos de bienvenida de Google, activación de personal y recuperación de contraseña usan SMTP (`KION_SMTP_*`). Configura y prueba SMTP desde el hosting para confirmar que los tres flujos puedan entregar mensajes.
 - No publiques `probar-correo.php` como herramienta web: está limitado a ejecución por consola. Si tienes acceso a CLI, puede usarse para probar SMTP con `KION_TEST_EMAIL` configurado o indicando un destinatario al ejecutar el script.
 
 ## 6. Pruebas después de subir

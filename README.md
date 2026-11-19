@@ -644,6 +644,10 @@ Configura `KION_SMTP_HOST`, `KION_SMTP_PORT`, `KION_SMTP_ENCRYPTION`,
 `KION_SMTP_USER`, `KION_SMTP_PASSWORD` y `KION_MAIL_FROM`. En Gmail y otros
 proveedores que requieren verificación en dos pasos, `KION_SMTP_PASSWORD` debe
 ser una contraseña de aplicación, no la contraseña habitual de la cuenta.
+Para enviar desde `petkosupport@gmail.com`, usa esa misma cuenta en
+`KION_SMTP_USER` y `KION_MAIL_FROM`.
+Este servicio envía los correos de recuperación de contraseña y de activación
+de cuentas de personal, además de los mensajes de bienvenida de Google.
 También pueden definirse directamente como variables de entorno de Apache/PHP.
 El archivo `.env` está excluido de Git y nunca debe contener credenciales
 publicadas en el repositorio.
@@ -675,6 +679,8 @@ INSERT IGNORE INTO roles (id_rol, nombre) VALUES (4, 'Usuario');
 -- 2. Columnas usadas por el código y ausentes en el volcado
 ALTER TABLE usuarios
     ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) NULL AFTER correo,
+    ADD COLUMN IF NOT EXISTS reset_token VARCHAR(64) NULL,
+    ADD COLUMN IF NOT EXISTS token_expira DATETIME NULL,
     ADD UNIQUE KEY IF NOT EXISTS uq_usuarios_google_id (google_id);
 
 ALTER TABLE productos

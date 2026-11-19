@@ -52,6 +52,26 @@ final class EmailService
         return self::enviar($destinatario, $nombre, '¡Bienvenido/a a PETKO!', $html);
     }
 
+    public static function enviarRecuperacion(
+        string $destinatario,
+        string $nombre,
+        string $urlRestablecimiento
+    ): bool {
+        $html = self::plantilla(
+            '<p style="margin:0 0 16px;">Hola <strong>' . self::escape($nombre) . '</strong>,</p>'
+            . '<p style="margin:0 0 20px;">Recibimos una solicitud para restablecer la contraseña de tu cuenta PETKO.</p>'
+            . '<p style="margin:0 0 20px;">El enlace es personal y caduca en una hora. Si no solicitaste el cambio, puedes ignorar este mensaje.</p>'
+            . '<p style="text-align:center;margin:26px 0;"><a href="' . self::escape($urlRestablecimiento) . '" style="display:inline-block;background-color:#22C55E;color:#FFFFFF;text-decoration:none;padding:14px 22px;border-radius:6px;font-weight:bold;">Restablecer contraseña</a></p>'
+        );
+
+        return self::enviar(
+            $destinatario,
+            $nombre,
+            'Restablece tu contraseña - PETKO / KION',
+            $html
+        );
+    }
+
     public static function enviarPrueba(string $destinatario): bool
     {
         if (!filter_var($destinatario, FILTER_VALIDATE_EMAIL)) {
@@ -163,13 +183,17 @@ final class EmailService
 
     private static function plantilla(string $contenido, ?string $urlTerminos = null, bool $mostrarEnlaceTerminos = true): string
     {
+        self::cargarEntorno();
+        $correoSoporte = self::escape(
+            self::configuracion('KION_MAIL_FROM') ?? 'petkosupport@gmail.com'
+        );
         $urlTerminos = $urlTerminos ?? self::baseUrl() . '/terminos.php';
         return '<!doctype html><html lang="es"><body style="margin:0;background-color:#F3F6F8;color:#142033;font-family:Arial,sans-serif;">'
             . '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;background-color:#F3F6F8;padding:24px 0;"><tr><td align="center">'
             . '<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="border-collapse:collapse;max-width:600px;background-color:#FFFFFF;border-radius:8px;box-shadow:0 2px 10px rgba(7,26,50,.12);overflow:hidden;">'
             . '<tr><td style="padding:22px;background-color:#0B2545;color:#FFFFFF;font-size:26px;font-weight:bold;">PET<span style="color:#22C55E;">KO</span></td></tr>'
             . '<tr><td style="padding:28px 26px;font-size:15px;line-height:1.55;">' . $contenido . '</td></tr>'
-            . '<tr><td style="padding:18px 26px;background-color:#071A32;color:#FFFFFF;font-size:12px;line-height:1.5;">Soporte: soporte@vetko.com<br>&copy; ' . date('Y') . ' PETKO. Todos los derechos reservados.' . ($mostrarEnlaceTerminos ? '<br><a href="' . self::escape($urlTerminos) . '" style="color:#22C55E;">Consulta nuestros Términos y Condiciones</a>' : '') . '</td></tr>'
+            . '<tr><td style="padding:18px 26px;background-color:#071A32;color:#FFFFFF;font-size:12px;line-height:1.5;">Soporte: <a href="mailto:' . $correoSoporte . '" style="color:#22C55E;">' . $correoSoporte . '</a><br>&copy; ' . date('Y') . ' PETKO. Todos los derechos reservados.' . ($mostrarEnlaceTerminos ? '<br><a href="' . self::escape($urlTerminos) . '" style="color:#22C55E;">Consulta nuestros Términos y Condiciones</a>' : '') . '</td></tr>'
             . '</table></td></tr></table></body></html>';
     }
 

@@ -23,6 +23,12 @@ if ($credential === '') {
     exit;
 }
 
+function googleCallbackBaseUrl(): string
+{
+    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    return ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+}
+
 try {
     $client = new Google_Client(['client_id' => $googleClientId]);
     $payload = $client->verifyIdToken($credential);
@@ -49,18 +55,12 @@ try {
         $insertar->execute([$nombre, $apellido, $correo, $googleId, $rol]);
         $idUsuario = (int)$pdo->lastInsertId();
         $usuario = ['id_usuario' => $idUsuario, 'nombre' => $nombre, 'apellido' => $apellido, 'correo' => $correo, 'id_rol' => $rol, 'id_sucursal' => null, 'estado' => 'activo', 'rol' => 'Usuario'];
-        EmailService::enviarBienvenidaGoogle($correo, $nombre, baseUrl() . '/src/php/componentes/catalogo.php');
+        EmailService::enviarBienvenidaGoogle($correo, $nombre, googleCallbackBaseUrl() . '/src/php/componentes/catalogo.php');
     } elseif (strtolower((string)$usuario['estado']) !== 'activo') {
         throw new RuntimeException('Esta cuenta se encuentra inactiva.');
     } else {
         $vincular = $pdo->prepare('UPDATE usuarios SET google_id = ? WHERE id_usuario = ? AND (google_id IS NULL OR google_id = ?)');
         $vincular->execute([$googleId, $usuario['id_usuario'], $googleId]);
-    }
-
-    function baseUrl(): string
-    {
-        $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-        return ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
     }
 
     session_regenerate_id(true);
